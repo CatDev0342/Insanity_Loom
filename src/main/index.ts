@@ -2,8 +2,12 @@
 
 import { app, BrowserWindow, dialog, Menu } from 'electron';
 import { join } from 'node:path';
+import { Assistant } from './assistant';
+import { answerAssistantRequests, answerJournalRequests, refuseAssistantRequests, sendToPages } from './channels';
 import { listenForCommands } from './commands';
-import { dataFoldersIn, findProgramFolder, prepareDataFolders } from './portable';
+import { Journal } from './journal';
+import { dataFoldersIn, findProgramFolder, prepareDataFolders, type DataFolders } from './portable';
+import { loadSettings } from './settings';
 import { PAGE_PREFERENCES, restrictEveryPage } from './security';
 
 // The window's opening size, in screen points, and the smallest it may be made. The minimum keeps the page usable,
@@ -24,7 +28,7 @@ const EXIT_CODE_CANNOT_START = 1;
  * Everything is kept in Data, beside the program. This must happen before Electron is ready: Chromium decides where
  * its own files go as it starts, and the single-instance lock below lives in the settings folder too.
  */
-function keepEverythingBesideTheProgram(): void {
+function keepEverythingBesideTheProgram(): DataFolders {
   const programFolder = findProgramFolder({
     isPackaged: app.isPackaged,
     executablePath: process.execPath,
@@ -38,6 +42,24 @@ function keepEverythingBesideTheProgram(): void {
   app.setPath('sessionData', folders.session);
   app.setPath('crashDumps', folders.crashReports);
   app.setAppLogsPath(folders.logs);
+  return folders;
+}
+
+/** The journal, and the assistant as the settings describe it — or, when they cannot be read, why not. */
+function startServices(folders: DataFolders): void {
+  const journal = new Journal(folders.data);
+  answerJournalRequests(journal);
+
+  let assistant: Assistant;
+  try {
+    const settings = loadSettings(folders.data);
+    assistant = new Assistant(settings.assistant, journal, folders.logs, sendToPages);
+  } catch (problem) {
+    refuseAssistantRequests(problem instanceof Error ? problem : new Error(String(problem)));
+    return;
+  }
+  answerAssistantRequests(assistant);
+  app.on('before-quit', () => assistant.disconnect());
 }
 
 function openMainWindow(): void {
@@ -68,8 +90,9 @@ function openMainWindow(): void {
 }
 
 function start(): void {
+  let folders: DataFolders;
   try {
-    keepEverythingBesideTheProgram();
+    folders = keepEverythingBesideTheProgram();
   } catch (problem) {
     // Before Electron is ready, a plain error box is the one dialog that may be shown.
     dialog.showErrorBox('Insanity_Loom cannot start', problem instanceof Error ? problem.message : String(problem));
@@ -95,6 +118,7 @@ function start(): void {
   void app.whenReady().then(() => {
     restrictEveryPage();
     listenForCommands();
+    startServices(folders);
     // No native menu: Insanity_Loom draws its own menu bar in the page (src/renderer/src/menu), so it looks and
     // behaves the same on Windows and Linux, square-cornered, and follows the classic Windows keyboard conventions.
     Menu.setApplicationMenu(null);

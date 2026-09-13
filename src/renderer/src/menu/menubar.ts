@@ -7,7 +7,7 @@
 // - with a menu open, pointing at another menu's name opens that one instead.
 // Leaving the menu bar returns focus to exactly where the author was, so Edit ▸ Copy copies what they had selected.
 
-import type { CommandId } from '../../../shared/commands';
+import type { AnyCommandId } from '../commands';
 import { parseLabel } from './labels';
 import type { MenuCommand, TopMenu } from './model';
 import { matchesShortcut, parseShortcut, type Shortcut } from './shortcuts';
@@ -32,7 +32,7 @@ const CLASS_IN_USE = 'is-in-use';
 const CLASS_SHOW_ACCESS_KEYS = 'shows-access-keys';
 const CLASS_CURRENT = 'is-current';
 
-type RunCommand = (command: CommandId) => Promise<void>;
+type RunCommand = (command: AnyCommandId) => Promise<void>;
 
 interface DrawnMenu {
   readonly button: HTMLButtonElement;
@@ -58,7 +58,7 @@ function drawLabel(into: HTMLElement, label: string): string {
 export class MenuBar {
   private readonly bar: HTMLElement;
   private readonly menus: DrawnMenu[] = [];
-  private readonly shortcuts: { readonly shortcut: Shortcut; readonly command: CommandId }[] = [];
+  private readonly shortcuts: { readonly shortcut: Shortcut; readonly command: AnyCommandId }[] = [];
 
   /** The menu whose name has focus, while the menu bar is in use. */
   private currentMenu = NOTHING;

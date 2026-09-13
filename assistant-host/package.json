@@ -1,0 +1,13 @@
+{
+  "name": "insanity-loom-assistant-host",
+  "version": "0.0.1",
+  "description": "Runs beside the assistant (in its Docker container, say) and speaks the Agent Client Protocol to Insanity_Loom over standard input and output.",
+  "license": "Apache-2.0",
+  "private": true,
+  "engines": {
+    "node": ">=24"
+  },
+  "dependencies": {
+    "@agentclientprotocol/claude-agent-acp": "0.76.0"
+  }
+}

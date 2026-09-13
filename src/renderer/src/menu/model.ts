@@ -1,12 +1,12 @@
 // What Insanity_Loom's menus hold. One list, in order; the menu bar is drawn from it.
 
-import type { CommandId } from '../../../shared/commands';
+import type { AnyCommandId } from '../commands';
 
 export interface MenuCommand {
   readonly kind: 'command';
   /** The label, with its access key marked by '&' ("&Copy"). */
   readonly label: string;
-  readonly command: CommandId;
+  readonly command: AnyCommandId;
   /** The shortcuts shown beside the label; the first is the one displayed. */
   readonly shortcuts: readonly string[];
   /**
@@ -31,7 +31,7 @@ const SEPARATOR: MenuSeparator = { kind: 'separator' };
 
 function command(
   label: string,
-  commandId: CommandId,
+  commandId: AnyCommandId,
   shortcuts: readonly string[] = [],
   handledBySystem = false,
 ): MenuCommand {
@@ -65,6 +65,18 @@ export const MENUS: readonly TopMenu[] = [
       command('&Actual Size', 'view.zoomReset', ['Ctrl+0']),
       SEPARATOR,
       command('&Full Screen', 'view.toggleFullScreen', ['F11']),
+    ],
+  },
+  {
+    label: '&Assistant',
+    entries: [
+      command('&New Conversation', 'assistant.newConversation'),
+      command('Resume &Conversation…', 'assistant.resumeConversation'),
+      SEPARATOR,
+      // Esc is handled by the page itself, so that it can still close a dialog when one is open (src/renderer/src/loom/page.ts).
+      command('&Stop Reply', 'assistant.stop', ['Esc'], true),
+      SEPARATOR,
+      command('&Reconnect', 'assistant.reconnect'),
     ],
   },
   {

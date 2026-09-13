@@ -13,11 +13,15 @@ test('opens a window, through the bridge only, keeping its data beside itself', 
   try {
     const page = await application.firstWindow();
 
-    await expect(page).toHaveTitle('Insanity_Loom');
-    await expect(page.locator('h1')).toHaveText('Insanity_Loom');
+    await expect(page).toHaveTitle(/Insanity_Loom/);
+    await expect(page.locator('#menubar')).toBeVisible();
+    await expect(page.getByRole('textbox', { name: 'Write here' })).toBeVisible();
 
-    // The bridge answered: the page shows the engine's versions, which only the preload can read.
-    await expect(page.locator('#engine')).toContainText('Electron');
+    // The bridge answered: the engine's versions can only have come from the preload.
+    const electronVersion = await page.evaluate(
+      () => (globalThis as unknown as { insanityLoom: { versions: { electron: string } } }).insanityLoom.versions.electron,
+    );
+    expect(electronVersion).toMatch(/^\d+\.\d+\.\d+/);
 
     // The page itself cannot reach Node.js.
     const pageCanReachNode = await page.evaluate(() => typeof (globalThis as { require?: unknown }).require !== 'undefined');

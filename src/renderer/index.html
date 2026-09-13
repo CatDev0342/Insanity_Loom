@@ -13,11 +13,20 @@
   </head>
   <body>
     <nav id="menubar" class="menubar"></nav>
-    <main id="loom">
-      <h1>Insanity_Loom</h1>
-      <p class="tagline">A text editor for one author and an AI assistant, working in the same document.</p>
-      <p id="engine" class="engine"></p>
+    <main id="loom" class="loom">
+      <div id="conversation" class="conversation" aria-label="Conversation" aria-live="polite"></div>
+      <textarea
+        id="compose"
+        class="compose"
+        aria-label="Write here"
+        placeholder="Write here. A line with only --- (then Enter) sends everything above it. Ctrl+Enter sends it all."
+      ></textarea>
     </main>
+    <footer class="status">
+      <span id="status-text" class="status-text" role="status">Starting…</span>
+      <button id="reconnect" class="status-action" type="button" hidden>Reconnect</button>
+    </footer>
+    <dialog id="resume-dialog" class="resume-dialog" aria-label="Resume a conversation"></dialog>
     <script type="module" src="./src/main.ts"></script>
   </body>
 </html>

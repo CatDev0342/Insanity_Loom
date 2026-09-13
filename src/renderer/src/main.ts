@@ -1,5 +1,7 @@
-// The page. It draws the menu bar and, for now, proves the chain page → bridge → the layer underneath works.
+// The page: the menu bar, and the loom beneath it.
 
+import { isPageCommand } from './commands';
+import { Loom } from './loom/page';
 import { MenuBar } from './menu/menubar';
 import { MENUS } from './menu/model';
 
@@ -9,7 +11,22 @@ function required<T extends Element>(selector: string): T {
   return element;
 }
 
-new MenuBar(required<HTMLElement>('#menubar'), MENUS, (command) => window.insanityLoom.runCommand(command));
+const bridge = window.insanityLoom;
 
-const { electron, chromium, node } = window.insanityLoom.versions;
-required<HTMLParagraphElement>('#engine').textContent = `Electron ${electron} · Chromium ${chromium} · Node.js ${node}`;
+const loom = new Loom(
+  {
+    conversation: required<HTMLElement>('#conversation'),
+    compose: required<HTMLTextAreaElement>('#compose'),
+    statusText: required<HTMLElement>('#status-text'),
+    reconnect: required<HTMLButtonElement>('#reconnect'),
+    resumeDialog: required<HTMLDialogElement>('#resume-dialog'),
+  },
+  bridge.assistant,
+  bridge.journal,
+);
+
+new MenuBar(required<HTMLElement>('#menubar'), MENUS, (command) =>
+  isPageCommand(command) ? loom.run(command) : bridge.runCommand(command),
+);
+
+void loom.start();

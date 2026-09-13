@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { parseLabel } from '../../src/renderer/src/menu/labels';
 import { MENUS } from '../../src/renderer/src/menu/model';
 import { matchesShortcut, parseShortcut, type KeyPress } from '../../src/renderer/src/menu/shortcuts';
+import { PAGE_COMMANDS } from '../../src/renderer/src/commands';
 import { COMMANDS } from '../../src/shared/commands';
 
 function press(key: string, modifiers: Partial<Omit<KeyPress, 'key'>> = {}): KeyPress {
@@ -56,7 +57,7 @@ describe('the menus', () => {
     for (const menu of MENUS) {
       for (const entry of menu.entries) {
         if (entry.kind !== 'command') continue;
-        expect(COMMANDS).toContain(entry.command);
+        expect([...COMMANDS, ...PAGE_COMMANDS]).toContain(entry.command);
         for (const shortcut of entry.shortcuts) expect(() => parseShortcut(shortcut)).not.toThrow();
       }
     }

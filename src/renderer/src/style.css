@@ -8,6 +8,10 @@
   --menu-edge: #45454d;
   --highlight: #3b4a66;
   --menu-shadow: rgb(0 0 0 / 45%);
+  --ink-reply: #cfd8e6;
+  --attention: #b08a3e;
+  --problem: #e0826f;
+  --focus: #6f93d6;
   color-scheme: dark;
 }
 
@@ -25,29 +29,171 @@ body {
   flex-direction: column;
 }
 
-#loom {
+/* The loom: the conversation above, filling the window, and the author's writing area below it. */
+.loom {
   flex: 1;
-  display: grid;
-  place-content: center;
-  text-align: center;
-  padding-inline: 1.5rem;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
 }
 
-h1 {
+.conversation {
+  flex: 1;
+  overflow-y: auto;
+  padding-block: 1.5rem;
+  padding-inline: max(1.5rem, calc((100% - 46rem) / 2));
+  line-height: 1.55;
+}
+
+.whisper {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.by-assistant {
+  color: var(--ink-reply);
+}
+
+.loom-divider {
+  border: 0;
+  border-top: 1px solid var(--menu-edge);
+  margin-block: 1.25rem;
+}
+
+.reply-tools:empty {
+  display: none;
+}
+
+.reply-tool,
+.reply-thinking,
+.reply-ending {
+  margin: 0 0 0.35rem;
+  color: var(--ink-quiet);
+  font-size: 0.85rem;
+  white-space: normal;
+}
+
+.permission {
+  margin-block: 0.75rem;
+  padding: 0.6rem 0.8rem;
+  border: 1px solid var(--attention);
+  white-space: normal;
+}
+
+.permission p {
   margin: 0 0 0.5rem;
-  font-weight: 600;
-  letter-spacing: 0.02em;
 }
 
-.tagline {
-  margin: 0;
+.permission-choices {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+button {
+  font: inherit;
   color: var(--ink);
+  background: var(--menu);
+  border: 1px solid var(--menu-edge);
+  border-radius: 0;
+  padding: 0.3rem 0.8rem;
 }
 
-.engine {
-  margin-top: 2rem;
+button:hover {
+  background: var(--highlight);
+}
+
+button:focus-visible,
+.compose:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: -2px;
+}
+
+.loom-problem {
+  color: var(--problem);
+  white-space: pre-wrap;
+}
+
+.compose {
+  flex: none;
+  height: 9rem;
+  resize: vertical;
+  margin: 0;
+  padding-block: 0.9rem;
+  padding-inline: max(1.5rem, calc((100% - 46rem) / 2));
+  font: inherit;
+  line-height: 1.55;
+  color: var(--ink);
+  background: var(--bar);
+  border: 0;
+  border-top: 1px solid var(--menu-edge);
+  border-radius: 0;
+}
+
+.compose::placeholder {
+  color: var(--ink-quiet);
+}
+
+.status {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.2rem 0.75rem;
+  background: var(--bar);
+  border-top: 1px solid var(--menu-edge);
   color: var(--ink-quiet);
   font-size: 0.8rem;
+}
+
+.status-text {
+  white-space: pre-wrap;
+}
+
+.status-text[data-state='failed'] {
+  color: var(--problem);
+}
+
+.status-action {
+  padding: 0.1rem 0.6rem;
+}
+
+.resume-dialog {
+  min-width: min(32rem, 90vw);
+  color: var(--ink);
+  background: var(--menu);
+  border: 1px solid var(--menu-edge);
+  border-radius: 0;
+  padding: 1rem;
+}
+
+.resume-dialog::backdrop {
+  background: rgb(0 0 0 / 45%);
+}
+
+.resume-dialog h2 {
+  margin: 0 0 0.75rem;
+  font-size: 1rem;
+}
+
+.resume-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  max-height: 60vh;
+  overflow-y: auto;
+  margin-bottom: 0.75rem;
+}
+
+.resume-choice {
+  display: flex;
+  justify-content: space-between;
+  gap: 1.5rem;
+  text-align: left;
+}
+
+.resume-date {
+  color: var(--ink-quiet);
   font-variant-numeric: tabular-nums;
 }
 

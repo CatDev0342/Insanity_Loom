@@ -21,7 +21,7 @@ The author steers; the assistant builds. Each milestone ends in something the au
 
 ## Milestones
 
-### 0. Foundation
+### 0. Foundation — done
 An empty Insanity_Loom window that opens on Windows and Linux.
 - Electron with its security settings on from day one: the window that shows the page cannot touch files; only the
   layer underneath can.
@@ -32,7 +32,7 @@ An empty Insanity_Loom window that opens on Windows and Linux.
 - **A license check on every build**: any GPL or AGPL part is refused, and the third-party notices file is generated
   automatically.
 
-### 1. Walking skeleton — the channel works
+### 1. Walking skeleton — the channel works (in progress)
 A plain editor with the assistant connected. From here on, the author talks to the assistant through Insanity_Loom.
 - The author writes and marks a section finished (the `---` line).
 - A small host where the assistant runs passes the section on and streams the reply back into the document as it is
