@@ -11,9 +11,9 @@ import type { AssistantEvent } from '../../src/shared/assistant';
 const FAKE_ASSISTANT = join(__dirname, '..', 'fixtures', 'fake-assistant.mjs');
 
 const running: { assistant: Assistant; folder: string }[] = [];
-afterEach(() => {
+afterEach(async () => {
   for (const { assistant, folder } of running.splice(0)) {
-    assistant.disconnect();
+    await assistant.close();
     rmSync(folder, { recursive: true, force: true });
   }
 });

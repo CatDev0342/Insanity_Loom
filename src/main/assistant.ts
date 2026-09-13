@@ -87,7 +87,7 @@ export class Assistant {
 
   /** Starts the host, shakes hands, and resumes the last conversation (or begins one). */
   async connect(): Promise<void> {
-    this.disconnect();
+    await this.disconnect();
     const place = describePlace(this.settings);
     this.status('connecting', `Connecting to the assistant ${place}…`);
 
@@ -146,7 +146,7 @@ export class Assistant {
       ]);
       this.agentTitle = greeting.agentInfo?.title ?? greeting.agentInfo?.name ?? 'the assistant';
     } catch (cause) {
-      this.disconnect();
+      await this.disconnect();
       this.status('failed', cause instanceof Error ? cause.message : String(cause));
       return;
     } finally {
@@ -307,13 +307,24 @@ export class Assistant {
     this.host = undefined;
   }
 
-  /** Ends the connection and stops the host. Closing the host's input is what tells it to finish. */
-  disconnect(): void {
+  /**
+   * Ends the connection and stops the host, resolving once it has actually stopped: until then it still holds its
+   * working folder, and on Windows a folder in use cannot be moved or deleted. Closing the host's input is what tells
+   * it to finish.
+   */
+  disconnect(): Promise<void> {
     const host = this.host;
     this.dropConnection();
-    if (host !== undefined) {
-      host.stdin?.end();
-      host.kill();
-    }
+    if (host === undefined || host.exitCode !== null || host.signalCode !== null) return Promise.resolve();
+    const stopped = new Promise<void>((resolve) => host.once('exit', () => resolve()));
+    host.stdin?.end();
+    host.kill();
+    return stopped;
+  }
+
+  /** Disconnects and closes the host's log file. The Assistant is not used again after this. */
+  async close(): Promise<void> {
+    await this.disconnect();
+    await new Promise<void>((resolve) => this.log.end(resolve));
   }
 }

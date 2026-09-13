@@ -59,7 +59,7 @@ function startServices(folders: DataFolders): void {
     return;
   }
   answerAssistantRequests(assistant);
-  app.on('before-quit', () => assistant.disconnect());
+  app.on('before-quit', () => void assistant.close());
 }
 
 function openMainWindow(): void {
