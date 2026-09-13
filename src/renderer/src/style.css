@@ -1,0 +1,42 @@
+/* The page's ground matches the window's own background color (src/main/index.ts), so nothing flashes on opening. */
+:root {
+  --ground: #1e1e22;
+  --ink: #e8e6e3;
+  --ink-quiet: #9a978f;
+  color-scheme: dark;
+}
+
+html,
+body {
+  margin: 0;
+  height: 100%;
+  background: var(--ground);
+  color: var(--ink);
+  font-family: system-ui, 'Segoe UI', Ubuntu, Cantarell, 'Noto Sans', sans-serif;
+}
+
+#loom {
+  display: grid;
+  place-content: center;
+  height: 100%;
+  text-align: center;
+  padding-inline: 1.5rem;
+}
+
+h1 {
+  margin: 0 0 0.5rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+
+.tagline {
+  margin: 0;
+  color: var(--ink);
+}
+
+.engine {
+  margin-top: 2rem;
+  color: var(--ink-quiet);
+  font-size: 0.8rem;
+  font-variant-numeric: tabular-nums;
+}

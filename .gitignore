@@ -141,3 +141,16 @@ dist
 vite.config.js.timestamp-*
 vite.config.ts.timestamp-*
 .vite/
+
+# Insanity_Loom
+# Build output: electron-vite writes the compiled application to out/, electron-builder the portable packages to dist/.
+out/
+dist/
+# The portable Data folder. A development run keeps its settings in Data/ at the repository root, as a packaged copy
+# keeps them beside its executable; neither belongs in the repository.
+Data/
+# Playwright's results and reports from end-to-end runs.
+test-results/
+playwright-report/
+# Generated on every build from the dependencies actually shipped.
+THIRD_PARTY_NOTICES.txt

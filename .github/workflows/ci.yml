@@ -1,0 +1,71 @@
+# Every change is checked on Windows and on Linux. A change that fails on either is not finished.
+# The portable packages built here are kept as downloads on the run's page, so the author can try each change.
+name: CI
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    strategy:
+      # Both systems finish even if one fails, so a failure on one never hides the state of the other.
+      fail-fast: false
+      matrix:
+        os: [windows-latest, ubuntu-latest]
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install
+        run: npm ci
+
+      - name: Type check
+        run: npm run typecheck
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Unit tests
+        run: npm test
+
+      - name: Licenses
+        run: npm run licenses
+
+      - name: Build
+        run: npm run build
+
+      # Ubuntu blocks the unprivileged namespaces Chromium's sandbox is built on, so Electron cannot start its sandbox
+      # on a stock build machine. Allowing them here keeps the sandbox on in every test rather than switching it off.
+      - name: Allow Chromium's sandbox (Linux)
+        if: runner.os == 'Linux'
+        run: sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
+
+      - name: End-to-end tests (Linux, on a virtual display)
+        if: runner.os == 'Linux'
+        run: xvfb-run --auto-servernum npx playwright test
+
+      - name: End-to-end tests (Windows)
+        if: runner.os == 'Windows'
+        run: npx playwright test
+
+      - name: Package (portable)
+        run: npx electron-builder --publish never
+
+      - name: Keep the portable package
+        uses: actions/upload-artifact@v4
+        with:
+          name: Insanity_Loom-${{ runner.os }}
+          path: |
+            dist/*.zip
+            dist/*.AppImage
+          if-no-files-found: error

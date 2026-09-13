@@ -1,0 +1,22 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <!-- The page may load only its own scripts and styles, and reach nothing outside itself. Styles allow inline use
+         because the development server injects them; scripts never do. -->
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; object-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'"
+    />
+    <title>Insanity_Loom</title>
+    <link rel="stylesheet" href="./src/style.css" />
+  </head>
+  <body>
+    <main id="loom">
+      <h1>Insanity_Loom</h1>
+      <p class="tagline">A text editor for one author and an AI assistant, working in the same document.</p>
+      <p id="engine" class="engine"></p>
+    </main>
+    <script type="module" src="./src/main.ts"></script>
+  </body>
+</html>

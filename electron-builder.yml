@@ -1,0 +1,48 @@
+# Packages Insanity_Loom as a portable program: no installer. The author unzips it anywhere (Windows) or puts the
+# AppImage anywhere (Linux), double-clicks, and it keeps everything in a Data folder beside itself (src/main/portable.ts).
+
+appId: io.github.catdev0342.insanityloom
+productName: Insanity_Loom
+copyright: Copyright 2026 CatDev0342
+
+directories:
+  output: dist
+
+files:
+  - out/**/*
+  - package.json
+
+# Shipped beside the executable, where anyone who receives a copy can read them.
+extraFiles:
+  - LICENSE
+  - NOTICE
+  - THIRD_PARTY_NOTICES.txt
+
+asar: true
+
+# Electron's fuses switch off, inside the built program itself, ways it could be turned into something else: run as a
+# plain Node.js interpreter, steered by environment variables or debugging switches, or made to load code from outside
+# its own sealed archive.
+electronFuses:
+  runAsNode: false
+  enableCookieEncryption: true
+  enableNodeOptionsEnvironmentVariable: false
+  enableNodeCliInspectArguments: false
+  enableEmbeddedAsarIntegrityValidation: true
+  onlyLoadAppFromAsar: true
+
+win:
+  target:
+    - target: zip
+      arch: [x64]
+  artifactName: ${productName}-${version}-windows-${arch}.${ext}
+
+linux:
+  target:
+    - target: AppImage
+      arch: [x64]
+  category: Office
+  # The desktop's taskbar and window switcher match the running window to Insanity_Loom by this name (package.json
+  # desktopName), so the window shows as Insanity_Loom rather than as an unknown program.
+  syncDesktopName: true
+  artifactName: ${productName}-${version}-linux-${arch}.${ext}
