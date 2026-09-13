@@ -40,6 +40,14 @@ A plain editor with the assistant connected. From here on, the author talks to t
 - Approve / Deny in the application for anything the assistant needs permission for.
 - **Nothing typed is ever lost.** Every keystroke is journaled to disk first; after a crash or a power cut the
   application reopens where the author was.
+- **Connecting is one click, and after the first time, none.** The application starts or reuses wherever the
+  assistant runs (a Docker container, say), signs in, and trusts the author's alcoves itself. The author signs in once
+  and trusts a folder once; both are remembered.
+- **Credentials are kept the way browsers keep them.** Stored encrypted with the operating system's own protection —
+  Electron's `safeStorage`, which is Chromium's own mechanism: Windows' data protection tied to the user account, the
+  desktop keyring on Linux. The encrypted file lives in the portable `Data` folder, so a copied folder on another
+  machine or account signs in again. On Linux with no keyring, the application says so rather than storing
+  credentials weakly.
 
 ### 2. Real editing
 Rich text on ProseMirror and Tiptap, held to the standard of the best word processors.
@@ -74,7 +82,10 @@ Insanity_Loom talks to an assistant in two directions, as a code editor's AI int
 The assistant may run somewhere else — in a Docker container, say — so the host sits beside it and the application
 connects to the host.
 
-## Open decisions
+## How whispers are stored
 
-- **How whispers are stored on disk.** Under discussion: Markdown, or an XML format (see the discussion in the
-  author's notes). Must hold rich text without loss, stay readable, and open anywhere.
+**Each whisper is one XHTML file** — the XML form of a web page, limited to a strict set of elements Insanity_Loom
+defines. Real XML, so it is checked on every load and a damaged file is reported, never half-read. It opens in any
+browser as it is, which is local and web interop done by the file itself. ProseMirror reads and writes it natively.
+Sections carry IDs, so a link to `other-whisper.xhtml#section-id` is an ordinary web link. Markdown export is kept for
+other tools.
