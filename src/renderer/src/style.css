@@ -3,6 +3,11 @@
   --ground: #1e1e22;
   --ink: #e8e6e3;
   --ink-quiet: #9a978f;
+  --bar: #26262b;
+  --menu: #2b2b31;
+  --menu-edge: #45454d;
+  --highlight: #3b4a66;
+  --menu-shadow: rgb(0 0 0 / 45%);
   color-scheme: dark;
 }
 
@@ -15,10 +20,15 @@ body {
   font-family: system-ui, 'Segoe UI', Ubuntu, Cantarell, 'Noto Sans', sans-serif;
 }
 
+body {
+  display: flex;
+  flex-direction: column;
+}
+
 #loom {
+  flex: 1;
   display: grid;
   place-content: center;
-  height: 100%;
   text-align: center;
   padding-inline: 1.5rem;
 }
@@ -39,4 +49,77 @@ h1 {
   color: var(--ink-quiet);
   font-size: 0.8rem;
   font-variant-numeric: tabular-nums;
+}
+
+/* The menu bar: square corners throughout, as classic desktop menus are. */
+.menubar {
+  display: flex;
+  flex: none;
+  background: var(--bar);
+  border-bottom: 1px solid var(--menu-edge);
+  font-size: 0.8125rem;
+  user-select: none;
+}
+
+.menubar-menu {
+  position: relative;
+}
+
+.menubar-name {
+  font: inherit;
+  color: var(--ink);
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+  padding: 0.3rem 0.65rem;
+  cursor: default;
+}
+
+.menubar-name:hover,
+.menubar-name.is-current,
+.menubar.is-in-use .menubar-name:focus {
+  background: var(--highlight);
+  outline: none;
+}
+
+.menu-popup {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  z-index: 10;
+  min-width: 14rem;
+  padding-block: 0.2rem;
+  background: var(--menu);
+  border: 1px solid var(--menu-edge);
+  border-radius: 0;
+  box-shadow: 2px 2px 6px var(--menu-shadow);
+}
+
+.menu-entry {
+  display: flex;
+  justify-content: space-between;
+  gap: 2rem;
+  padding: 0.3rem 0.9rem 0.3rem 1.6rem;
+  color: var(--ink);
+  cursor: default;
+  outline: none;
+}
+
+.menu-entry.is-current {
+  background: var(--highlight);
+}
+
+.menu-entry-shortcut {
+  color: var(--ink-quiet);
+}
+
+.menu-separator {
+  height: 1px;
+  margin: 0.2rem 0.4rem;
+  background: var(--menu-edge);
+}
+
+/* Access letters are underlined only while the keyboard is in use, as Windows itself does. */
+.menubar.shows-access-keys .access-key {
+  text-decoration: underline;
 }

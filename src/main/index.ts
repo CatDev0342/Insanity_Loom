@@ -1,7 +1,8 @@
 // Insanity_Loom's layer underneath: it starts first, decides where everything is kept, and opens the window.
 
-import { app, BrowserWindow, dialog } from 'electron';
+import { app, BrowserWindow, dialog, Menu } from 'electron';
 import { join } from 'node:path';
+import { listenForCommands } from './commands';
 import { dataFoldersIn, findProgramFolder, prepareDataFolders } from './portable';
 import { PAGE_PREFERENCES, restrictEveryPage } from './security';
 
@@ -93,6 +94,10 @@ function start(): void {
 
   void app.whenReady().then(() => {
     restrictEveryPage();
+    listenForCommands();
+    // No native menu: Insanity_Loom draws its own menu bar in the page (src/renderer/src/menu), so it looks and
+    // behaves the same on Windows and Linux, square-cornered, and follows the classic Windows keyboard conventions.
+    Menu.setApplicationMenu(null);
     openMainWindow();
   });
 }
