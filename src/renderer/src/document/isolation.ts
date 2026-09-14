@@ -12,6 +12,7 @@ import { Extension } from '@tiptap/core';
 import { TextSelection } from '@tiptap/pm/state';
 import type { EditorState, Selection } from '@tiptap/pm/state';
 import type { Node as ProseMirrorNode } from '@tiptap/pm/model';
+import type { EditorView } from '@tiptap/pm/view';
 
 /** What divides one section from the next: the line that closes a turn, and the assistant's reply. */
 const DIVIDES = new Set(['horizontalRule', 'reply']);
@@ -41,9 +42,29 @@ export function sectionAround(doc: ProseMirrorNode, position: number): { readonl
 }
 
 /** What Select All takes with isolation on: the writing of the section the caret is in. */
-export function isolatedSelection(state: EditorState): Selection {
-  const { from, to } = sectionAround(state.doc, state.selection.from);
+export function isolatedSelection(state: EditorState, caret = state.selection.from): Selection {
+  const { from, to } = sectionAround(state.doc, caret);
   return TextSelection.between(state.doc.resolve(from), state.doc.resolve(to));
+}
+
+/**
+ * Where the caret really is, now.
+ *
+ * The browser moves the caret itself for keys the editor does not handle — Ctrl+End, a click, the arrows — and the
+ * editor learns of it a moment later. A reach asked for in that moment would be measured from where the caret *was*,
+ * and would take the wrong section: press Ctrl+End and then Ctrl+A quickly, and you would select the turn you had
+ * just left. So the page is asked where the caret is, and the editor's own answer is used only if the page has none.
+ */
+export function caretNow(view: EditorView): number {
+  const selection = view.dom.ownerDocument.getSelection();
+  const focus = selection?.focusNode;
+  if (focus === null || focus === undefined || !view.dom.contains(focus)) return view.state.selection.from;
+  try {
+    return view.posAtDOM(focus, selection?.focusOffset ?? 0);
+  } catch {
+    // A place the editor cannot make sense of: its own answer is the better one.
+    return view.state.selection.from;
+  }
 }
 
 export const SectionIsolation = Extension.create<SectionIsolationOptions>({
@@ -57,7 +78,7 @@ export const SectionIsolation = Extension.create<SectionIsolationOptions>({
     const reach = (toEnd: boolean): boolean => {
       if (!this.options.isolating()) return false;
       const { state, view } = this.editor;
-      const here = sectionAround(state.doc, state.selection.from);
+      const here = sectionAround(state.doc, caretNow(view));
       const anchor = state.selection.anchor;
       const head = toEnd ? here.to : here.from;
       view.dispatch(state.tr.setSelection(TextSelection.between(state.doc.resolve(anchor), state.doc.resolve(head))).scrollIntoView());
@@ -68,7 +89,7 @@ export const SectionIsolation = Extension.create<SectionIsolationOptions>({
       'Mod-a': () => {
         if (!this.options.isolating()) return false;
         const { state, view } = this.editor;
-        view.dispatch(state.tr.setSelection(isolatedSelection(state)));
+        view.dispatch(state.tr.setSelection(isolatedSelection(state, caretNow(view))));
         return true;
       },
       'Shift-Mod-Home': () => reach(false),
