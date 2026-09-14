@@ -116,15 +116,16 @@ describe('the library behind the list', () => {
     // An address the library does not hold is said to hold nothing, rather than stopping everything.
     expect(sections[2]).toMatchObject({ address: '40.9.9', line: 0, text: '' });
 
-    expect(halls.document('40.6.2')).toContain('## 40.6 — THE WIKI');
+    expect(halls.document('40.6.2').markdown).toContain('## 40.6 — THE WIKI');
   });
 
   it("writes the author's editing back to the library's own file", () => {
     const { file } = hall();
     const halls = new GreatHalls();
     halls.open(file);
-    halls.saveDocument('40.6.2', '# 40 Document\n\n## 40.6 — THE WIKI, rewritten\n');
-    expect(halls.document('40')).toContain('THE WIKI, rewritten');
+    // Written with the state it was read in, as the panel does.
+    halls.saveDocument('40.6.2', '# 40 Document\n\n## 40.6 — THE WIKI, rewritten\n', halls.document('40.6.2').stamp);
+    expect(halls.document('40').markdown).toContain('THE WIKI, rewritten');
   });
 
   it('says plainly when nothing is open, or when the address belongs to no document', () => {
@@ -133,5 +134,34 @@ describe('the library behind the list', () => {
     const { file } = hall();
     halls.open(file);
     expect(() => halls.document('99.1')).toThrow(/holds no document addressed "99"/);
+  });
+});
+
+describe('the library is not the author\'s alone', () => {
+  it('refuses to write over what someone else changed, and says so', () => {
+    const { file } = hall();
+    const halls = new GreatHalls();
+    halls.open(file);
+    const read = halls.document('40');
+
+    // The assistant's own tools write to the library too; so may another program.
+    writeFileSync(join(readGreatHall(file).library, '40_DOCUMENT.md'), '# 40 Document\n\nRewritten by someone else.\n');
+
+    expect(() => halls.saveDocument('40', '# 40 Document\n\nThe author\'s own editing.\n', read.stamp)).toThrow(
+      /changed outside Insanity_Loom/,
+    );
+    // Nothing was written over.
+    expect(halls.document('40').markdown).toContain('Rewritten by someone else.');
+  });
+
+  it('writes when nothing else has, and marks what it wrote as the state it now knows', () => {
+    const { file } = hall();
+    const halls = new GreatHalls();
+    halls.open(file);
+    const read = halls.document('40');
+    halls.saveDocument('40', '# 40 Document\n\nThe author wrote this.\n', read.stamp);
+    const after = halls.document('40');
+    expect(after.markdown).toContain('The author wrote this.');
+    expect(after.stamp).not.toBe(read.stamp);
   });
 });

@@ -104,7 +104,7 @@ const bridge: InsanityLoomBridge = {
     choose: () => ipcRenderer.invoke(GREATHALL_CHANNELS.choose),
     sections: (addresses) => ipcRenderer.invoke(GREATHALL_CHANNELS.sections, addresses),
     document: (address) => ipcRenderer.invoke(GREATHALL_CHANNELS.document, address),
-    saveDocument: (address, markdown) => ipcRenderer.invoke(GREATHALL_CHANNELS.saveDocument, address, markdown),
+    saveDocument: (address, markdown, stamp) => ipcRenderer.invoke(GREATHALL_CHANNELS.saveDocument, address, markdown, stamp),
   },
 
   journal: {

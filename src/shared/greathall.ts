@@ -78,6 +78,16 @@ export function documentOf(address: string): string {
   return address.split('.')[0] ?? address;
 }
 
+/** A library document as it was read, with a mark of the state it was in when it was read. */
+export interface HallDocumentRead {
+  readonly markdown: string;
+  /**
+   * What the file was when it was read — when it was last written, and how long it was. If it is not that any more,
+   * someone else has written to it since, and what the author has in the panel is no longer the whole story.
+   */
+  readonly stamp: string;
+}
+
 export interface GreatHallBridge {
   /** The hall in use, or undefined when none has been opened. */
   current(): Promise<GreatHall | undefined>;
@@ -86,9 +96,13 @@ export interface GreatHallBridge {
   /** What stands at these addresses in the library. */
   sections(addresses: readonly string[]): Promise<readonly HallSection[]>;
   /** A library document, in full, for reading and editing in the panel. */
-  document(address: string): Promise<string>;
-  /** Writes a library document back, as the author edited it. */
-  saveDocument(address: string, markdown: string): Promise<void>;
+  document(address: string): Promise<HallDocumentRead>;
+  /**
+   * Writes a library document back, as the author edited it — but only if no one else has written to it since it was
+   * read. The library is shared: the assistant writes to it with its own tools, and the author may have it open in
+   * another program.
+   */
+  saveDocument(address: string, markdown: string, stamp: string): Promise<void>;
 }
 
 export const GREATHALL_CHANNELS = {

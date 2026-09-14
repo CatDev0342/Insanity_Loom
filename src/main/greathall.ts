@@ -4,9 +4,16 @@
 // them: what stands at an address, and what a whole document says. The documents are the author's own files, edited
 // in the panel and written back as they are — Markdown in, Markdown out, with nothing of ours added to them.
 
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync, readFileSync, statSync } from 'node:fs';
 import { basename, dirname, isAbsolute, join, resolve } from 'node:path';
-import { GREATHALL_FORMAT, documentOf, type GreatHall, type HallDocument, type HallSection } from '../shared/greathall';
+import {
+  GREATHALL_FORMAT,
+  documentOf,
+  type GreatHall,
+  type HallDocument,
+  type HallDocumentRead,
+  type HallSection,
+} from '../shared/greathall';
 import { writeFileSafely } from './files';
 
 /** How many lines of a section are gathered for the list beside the whisper. */
@@ -93,6 +100,16 @@ function withoutMarkdownMarks(line: string): string {
     .replace(/[`*]/g, '');
 }
 
+/** What a file is at this moment: when it was last written, and how long it is. */
+export function stampOf(path: string): string {
+  try {
+    const about = statSync(path);
+    return `${String(about.mtimeMs)}:${String(about.size)}`;
+  } catch {
+    return '';
+  }
+}
+
 export class GreatHalls {
   private hall: GreatHall | undefined;
 
@@ -132,11 +149,24 @@ export class GreatHalls {
     });
   }
 
-  document(address: string): string {
-    return readFileSync(this.fileOf(address).path, 'utf8');
+  document(address: string): HallDocumentRead {
+    const path = this.fileOf(address).path;
+    return { markdown: readFileSync(path, 'utf8'), stamp: stampOf(path) };
   }
 
-  saveDocument(address: string, markdown: string): void {
-    writeFileSafely(this.fileOf(address).path, markdown);
+  /**
+   * Writes a document back, unless someone else has written to it since it was read.
+   *
+   * The library is not the author's alone: the assistant writes to it with its own tools, and the author may have it
+   * open elsewhere. Writing over another writer's work without a word is the one thing a program holding someone's
+   * library must never do, so this refuses and says so, and the panel offers to read it afresh.
+   */
+  saveDocument(address: string, markdown: string, stamp: string): void {
+    const found = this.fileOf(address);
+    const now = stampOf(found.path);
+    if (stamp !== '' && now !== stamp) {
+      throw new Error(`"${found.document.file}" was changed outside Insanity_Loom since it was opened. Nothing was written over.`);
+    }
+    writeFileSafely(found.path, markdown);
   }
 }

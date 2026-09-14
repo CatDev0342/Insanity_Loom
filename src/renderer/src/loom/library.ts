@@ -29,8 +29,8 @@ export class Library {
   /** Where each cited entry is drawn, so the bar between the panels can point at it. */
   private readonly drawn = new Map<string, HTMLElement>();
   private readonly list = document.createElement('div');
-  /** The entry opened, if any, and what is drawn for it. */
-  private open: { readonly section: HallSection; readonly holder: HTMLElement } | undefined;
+  /** The entry opened, if any, what is drawn for it, and the state its file was in when it was read. */
+  private open: { readonly section: HallSection; readonly holder: HTMLElement; stamp: string } | undefined;
   private writingSoon = 0;
 
   constructor(
@@ -132,9 +132,9 @@ export class Library {
   async openAt(address: string, line: number): Promise<void> {
     if (this.hall === undefined) return;
     try {
-      const markdown = await this.greatHall.document(address);
+      const read = await this.greatHall.document(address);
       const title = this.hall.documents.find((document) => document.address === documentOf(address))?.title ?? address;
-      this.showDocument({ address, document: documentOf(address), line, text: '', title }, markdown);
+      this.showDocument({ address, document: documentOf(address), line, text: '', title }, read.markdown, read.stamp);
     } catch (problem) {
       this.onProblem(problem instanceof Error ? problem.message : String(problem));
     }
@@ -147,15 +147,15 @@ export class Library {
       return;
     }
     try {
-      const markdown = await this.greatHall.document(section.address);
-      this.showDocument(section, markdown);
+      const read = await this.greatHall.document(section.address);
+      this.showDocument(section, read.markdown, read.stamp);
     } catch (problem) {
       this.onProblem(problem instanceof Error ? problem.message : String(problem));
     }
   }
 
   /** The document, pinned under the entry that opened it, as a development tool pins what you opened. */
-  private showDocument(section: HallSection, markdown: string): void {
+  private showDocument(section: HallSection, markdown: string, stamp: string): void {
     this.closeDocument();
     const holder = document.createElement('div');
     holder.className = 'library-open';
@@ -177,7 +177,7 @@ export class Library {
     holder.append(pinned, writing);
     this.elements.libraryInside.append(holder);
     this.list.hidden = true;
-    this.open = { section, holder };
+    this.open = { section, holder, stamp };
     Library.showLine(writing, section.line);
   }
 
@@ -227,7 +227,10 @@ export class Library {
 
   private pending: { readonly address: string; readonly markdown: string } | undefined;
 
-  /** Writes the author's editing back to the library's own file. */
+  /**
+   * Writes the author's editing back to the library's own file — unless someone else has written to it since it was
+   * opened, in which case nothing is written over and the author is told, with the way to read it afresh.
+   */
   private writeNow(): void {
     if (this.writingSoon !== 0) {
       window.clearTimeout(this.writingSoon);
@@ -236,9 +239,20 @@ export class Library {
     const pending = this.pending;
     this.pending = undefined;
     if (pending === undefined) return;
-    void this.greatHall.saveDocument(pending.address, pending.markdown).catch((problem: unknown) => {
-      this.onProblem(`The library could not be saved: ${problem instanceof Error ? problem.message : String(problem)}`);
-    });
+    const open = this.open;
+    void this.greatHall
+      .saveDocument(pending.address, pending.markdown, open?.stamp ?? '')
+      .then(() => {
+        // What was written is now what stands on disk, so the next save is measured against this one.
+        void this.greatHall.document(pending.address).then((read) => {
+          if (this.open?.section.address === pending.address) this.open.stamp = read.stamp;
+        });
+      })
+      .catch((problem: unknown) => {
+        this.onProblem(
+          `The library could not be saved: ${problem instanceof Error ? problem.message : String(problem)} Choose the entry again to read it as it now stands.`,
+        );
+      });
   }
 }
 

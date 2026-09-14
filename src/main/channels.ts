@@ -255,8 +255,12 @@ export function startServices(dataFolder: string, logsFolder: string, journal: J
   ipcMain.handle(GREATHALL_CHANNELS.document, (_event, address: unknown) =>
     halls.document(text(address, 'address', MAXIMUM_IDENTIFIER_LENGTH)),
   );
-  ipcMain.handle(GREATHALL_CHANNELS.saveDocument, (_event, address: unknown, markdown: unknown) =>
-    halls.saveDocument(text(address, 'address', MAXIMUM_IDENTIFIER_LENGTH), whisper(markdown)),
+  ipcMain.handle(GREATHALL_CHANNELS.saveDocument, (_event, address: unknown, markdown: unknown, stamp: unknown) =>
+    halls.saveDocument(
+      text(address, 'address', MAXIMUM_IDENTIFIER_LENGTH),
+      whisper(markdown),
+      text(stamp, 'stamp', MAXIMUM_IDENTIFIER_LENGTH),
+    ),
   );
   ipcMain.handle(HALL_CHANNELS.search, (_event, asked: unknown) => {
     // A GreatHall says where its own whispers are; without one, the alcove the author chose.
