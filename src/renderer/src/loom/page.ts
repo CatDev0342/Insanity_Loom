@@ -31,6 +31,7 @@ import { Navigation, type NavigationElements } from './navigation';
 import { ReferenceBar, type ReferenceBarElements } from './reference-bar';
 import { Thoughts, type ThoughtsElements } from './thoughts';
 import { Saving } from './saving';
+import { theAuthorsOwn } from './the-authors-own';
 import { chooseConversation } from './resume';
 
 export interface LoomElements
@@ -697,7 +698,9 @@ export class Loom {
     const editor = this.requireEditor();
     if (replay.fill) {
       if (replay.author !== '') {
-        replay.lastSection = editor.appendAuthorSection(replay.author);
+        // Only what the author themselves wrote goes into the whisper; the machinery's own words are left out.
+        const written = theAuthorsOwn(replay.author);
+        if (written !== '') replay.lastSection = editor.appendAuthorSection(written);
         replay.author = '';
       }
       if (replay.reply !== '') {
@@ -707,7 +710,8 @@ export class Loom {
       return;
     }
     if (replay.author !== '') {
-      replay.history.push({ kind: 'author', markdown: replay.author });
+      const written = theAuthorsOwn(replay.author);
+      if (written !== '') replay.history.push({ kind: 'author', markdown: written });
       replay.author = '';
     }
     if (replay.reply !== '') {
