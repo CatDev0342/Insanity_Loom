@@ -440,6 +440,27 @@ export class WhisperEditor {
     return true;
   }
 
+  /**
+   * Where the author is writing, drawn on the page: the block holding the caret, or the last block of the whisper.
+   *
+   * This is the thing that must not move while a reply arrives. Everything the assistant writes goes above it.
+   */
+  writingElement(): HTMLElement | undefined {
+    const caret = this.editor.state.selection.$from;
+    const top = caret.depth > 0 ? caret.before(1) : -1;
+    const at = top === -1 ? this.lastBlockPosition() : top;
+    const drawn = at === -1 ? null : this.editor.view.nodeDOM(at);
+    return drawn instanceof HTMLElement ? drawn : undefined;
+  }
+
+  private lastBlockPosition(): number {
+    let position = -1;
+    this.doc.forEach((_node, offset) => {
+      position = offset;
+    });
+    return position;
+  }
+
   /** Where a reply is drawn on the page, for keeping it in view as it is written. */
   replyElement(replyId: string): HTMLElement | undefined {
     const found = findReply(this.doc, replyId);

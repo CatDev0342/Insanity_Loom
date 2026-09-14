@@ -67,19 +67,12 @@ const COMPACT_COMMAND = 'compact';
 /** How long a notice with nothing to answer stays on the page, in milliseconds. */
 const NOTICE_STAYS_MS = 9000;
 
+/** How far beyond the window the writing may be and still be held still, in pixels. */
+const ANCHOR_SLACK_PX = 200;
+
 const PAGE_TITLE = 'Insanity_Loom';
 const UNTITLED = 'Untitled whisper';
 
-/**
- * How far past the bottom of the window the end of a reply may be and still count as being watched, in pixels. While
- * the author can see where the reply is being written, it keeps itself under their eyes as it grows; once they have
- * scrolled away from it — reading something further up, or writing in the middle — they are left where they are,
- * because being pulled away from what you are reading is worse than having to scroll down.
- *
- * It is the reply itself that is measured, not the scroll: the whisper keeps four tenths of the window as empty room
- * below the writing, so the end of the writing is never the end of the scroll.
- */
-const WATCHING_WITHIN_PX = 80;
 
 
 /** A finished section, with its reply already in place, waiting to be sent. */
@@ -621,7 +614,10 @@ export class Loom {
     this.thoughts.beginTurn(turn.number, turn.shown);
     this.thoughts.say('');
     this.navigation.changed();
-    const replyId = editor.placeReply(sectionId);
+    let replyId = '';
+    this.withoutMovingTheWriting(() => {
+      replyId = editor.placeReply(sectionId);
+    });
     this.waiting.push({ replyId, markdown });
     this.saveNow();
     if (this.state !== 'connected') {
@@ -651,40 +647,49 @@ export class Loom {
       this.renderScheduled = false;
       const writing = this.writing;
       if (writing === undefined) return;
-      const following = this.isWatching(writing.replyId);
-      this.requireEditor().setReply(writing.replyId, writing.markdown, 'writing');
-      if (following) this.keepInView(writing.replyId);
+      this.withoutMovingTheWriting(() => {
+        this.requireEditor().setReply(writing.replyId, writing.markdown, 'writing');
+      });
     });
   }
 
-  /** Whether the author can see where this reply is being written. */
-  private isWatching(replyId: string): boolean {
-    const reply = this.editor?.replyElement(replyId);
-    if (reply === undefined) return false;
-    return reply.getBoundingClientRect().bottom <= this.elements.scroll.getBoundingClientRect().bottom + WATCHING_WITHIN_PX;
-  }
-
-  /** Keeps the end of a reply in view as it grows. */
-  private keepInView(replyId: string): void {
-    this.editor?.replyElement(replyId)?.scrollIntoView({ block: 'end' });
+  /**
+   * Makes a change to the whisper without moving what the author is writing in.
+   *
+   * A reply arrives above the place the author writes, so as it grows it pushes that place down the screen and ends
+   * up covering the very line they are typing on (the designer, 2026-Sep-14). What is held still here is the writing:
+   * the reply grows *upward* against it, and each new piece appears in the same place on the screen.
+   *
+   * Nothing is moved when the author is reading somewhere else entirely: then nothing they can see is shifting.
+   */
+  private withoutMovingTheWriting(change: () => void): void {
+    const anchor = this.editor?.writingElement();
+    const scroll = this.elements.scroll;
+    const view = scroll.getBoundingClientRect();
+    const before = anchor?.getBoundingClientRect().top;
+    const watching = before !== undefined && before >= view.top - ANCHOR_SLACK_PX && before <= view.bottom + ANCHOR_SLACK_PX;
+    change();
+    if (!watching || anchor === undefined || !anchor.isConnected || before === undefined) return;
+    const after = anchor.getBoundingClientRect().top;
+    scroll.scrollTop += after - before;
   }
 
   private finishWriting(state: ReplyState): void {
     const writing = this.writing;
     if (writing === undefined) return;
     this.writing = undefined;
-    const following = this.isWatching(writing.replyId);
     const editor = this.requireEditor();
-    if (writing.markdown === '') editor.setReplyState(writing.replyId, state);
-    else editor.setReply(writing.replyId, writing.markdown, state);
+    this.withoutMovingTheWriting(() => {
+      if (writing.markdown === '') editor.setReplyState(writing.replyId, state);
+      else editor.setReply(writing.replyId, writing.markdown, state);
+    });
     this.elements.activity.textContent = '';
     // What the reply cited of the library, for the Library tab beside the whisper, and for the bar between them.
-    const answered = this.requireEditor().turnAnswering(writing.replyId);
+    const answered = editor.turnAnswering(writing.replyId);
     void this.library.cite(answered, referencesIn(writing.markdown, this.library.addresses)).then(() => {
       this.referenceBar.drawSoon();
     });
     this.hideAsks();
-    if (following) this.keepInView(writing.replyId);
     this.saveNow();
     this.sendNext();
   }

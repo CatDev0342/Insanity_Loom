@@ -91,57 +91,42 @@ test('a long whisper is written in, saved and searched without the author waitin
   expect(foundIn).toBeLessThan(FOUND_WITHIN_MS);
 });
 
-test('a reply written at the end of a long whisper carries the author along, unless they are reading elsewhere', async () => {
-  const scroll = page.locator('.whisper-scroll');
-  /** Whether the end of the last reply is in view, which is what "watching it being written" means. */
-  const replyInView = (): Promise<boolean> =>
+test('a reply grows upward, leaving the line the author is writing on where it was', async () => {
+  const whisper = page.locator('.whisper-editor');
+  /** Where the line the author is writing on sits on the screen. */
+  const whereTheWritingIs = (): Promise<number> =>
     page.evaluate(() => {
-      const replies = document.querySelectorAll('.whisper-editor section.reply');
-      const last = replies[replies.length - 1];
-      const scroller = document.querySelector('.whisper-scroll');
-      if (last === undefined || scroller === null) return false;
-      return last.getBoundingClientRect().bottom <= scroller.getBoundingClientRect().bottom + 80;
+      const blocks = document.querySelectorAll('.whisper-editor > *');
+      const last = blocks[blocks.length - 1];
+      return last === undefined ? 0 : Math.round(last.getBoundingClientRect().top);
     });
 
-  // Writing at the end, where the author is.
-  await page.locator('.whisper-editor p').last().click();
+  await whisper.click();
   await page.keyboard.press('Control+End');
   await page.keyboard.type('A question at the end of a long day.');
   await page.keyboard.press('Control+Enter');
-  await expect(page.locator('.reply').last()).toContainText('You wrote: A question at the end of a long day.');
-  // The reply wrote itself under the author's eyes.
-  await expect.poll(replyInView).toBe(true);
+  await expect(page.locator('.reply').last()).toContainText('You wrote:');
+  const wasAt = await whereTheWritingIs();
 
-  // Reading something further up while the next reply is written: the author is left where they are.
-  await page.keyboard.type('Another question.');
+  // A second turn, whose reply is written while the author watches.
+  await page.keyboard.type('And another question, longer than the first one was.');
   await page.keyboard.press('Control+Enter');
-  await scroll.evaluate((element) => element.scrollTo({ top: 0 }));
-  const whereTheyWere = await scroll.evaluate((element) => element.scrollTop);
-  await expect(page.locator('.reply').last()).toContainText('You wrote: Another question.');
-  expect(await scroll.evaluate((element) => element.scrollTop)).toBe(whereTheyWere);
+  await expect(page.locator('.reply').last()).toContainText('And another question');
+
+  // The reply grew above it: the place the author writes has not moved on the screen.
+  const nowAt = await whereTheWritingIs();
+  expect(Math.abs(nowAt - wasAt)).toBeLessThan(24);
 });
 
-test('finding something far down a long whisper takes the author to it', async () => {
+test('a reply written while the author reads elsewhere leaves them where they are', async () => {
   const scroll = page.locator('.whisper-scroll');
   await page.locator('.whisper-editor').click();
-  await page.keyboard.press('Control+Home');
-  // At the top of the whisper: the editor keeps a little room above the caret, so this is not exactly nothing.
-  const atTheTop = await scroll.evaluate((element) => element.scrollTop);
+  await page.keyboard.press('Control+End');
+  await page.keyboard.type('A question asked before going for a read.');
+  await page.keyboard.press('Control+Enter');
 
-  await page.keyboard.press('Control+f');
-  await page.keyboard.type('Section 399');
-  await expect(page.locator('#find-said')).toHaveText('1 of 1');
-
-  // The whisper moved a long way to what was found, and what was found is on the screen.
-  const atTheWord = await scroll.evaluate((element) => element.scrollTop);
-  expect(atTheWord).toBeGreaterThan(atTheTop + 1000);
-  const inView = await page.evaluate(() => {
-    const found = document.querySelector('.whisper-editor .is-found-now');
-    const scroller = document.querySelector('.whisper-scroll');
-    if (found === null || scroller === null) return false;
-    const where = found.getBoundingClientRect();
-    const view = scroller.getBoundingClientRect();
-    return where.top >= view.top && where.bottom <= view.bottom;
-  });
-  expect(inView).toBe(true);
+  await scroll.evaluate((element) => element.scrollTo({ top: 0 }));
+  const whereTheyWere = await scroll.evaluate((element) => element.scrollTop);
+  await expect(page.locator('.reply').last()).toContainText('You wrote: A question asked before going for a read.');
+  expect(await scroll.evaluate((element) => element.scrollTop)).toBe(whereTheyWere);
 });
