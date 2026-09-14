@@ -120,3 +120,26 @@ test('a reply written at the end of a long whisper carries the author along, unl
   await expect(page.locator('.reply').last()).toContainText('You wrote: Another question.');
   expect(await scroll.evaluate((element) => element.scrollTop)).toBe(whereTheyWere);
 });
+
+test('finding something far down a long whisper takes the author to it', async () => {
+  const scroll = page.locator('.whisper-scroll');
+  await page.locator('.whisper-editor').click();
+  await page.keyboard.press('Control+Home');
+  expect(await scroll.evaluate((element) => element.scrollTop)).toBe(0);
+
+  await page.keyboard.press('Control+f');
+  await page.keyboard.type('Section 399');
+  await expect(page.locator('#find-said')).toHaveText('1 of 1');
+
+  // The whisper moved to what was found, and what was found is on the screen.
+  expect(await scroll.evaluate((element) => element.scrollTop)).toBeGreaterThan(0);
+  const inView = await page.evaluate(() => {
+    const found = document.querySelector('.whisper-editor .is-found-now');
+    const scroller = document.querySelector('.whisper-scroll');
+    if (found === null || scroller === null) return false;
+    const where = found.getBoundingClientRect();
+    const view = scroller.getBoundingClientRect();
+    return where.top >= view.top && where.bottom <= view.bottom;
+  });
+  expect(inView).toBe(true);
+});
