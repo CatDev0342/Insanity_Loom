@@ -116,6 +116,19 @@ describe('searching the hall', () => {
     expect(found.hits).toHaveLength(0);
   });
 
+  it('searches what is there when a folder of the hall is not', () => {
+    const folder = alcove();
+    whisper(folder, '2026-09-14 1200 First', '<p>The loom stands here.</p>');
+    // A hall may name an alcove the author has not made yet, or one on a drive that is not plugged in.
+    expect(searchHall(join(folder, 'not there at all'), { ...PLAIN, looked: 'loom' })).toEqual({
+      hits: [],
+      found: 0,
+      looked: 0,
+      problem: '',
+    });
+    expect(searchHall(folder, { ...PLAIN, looked: 'loom' }).found).toBe(1);
+  });
+
   it('finds nothing for nothing, without reading a single file', () => {
     const folder = alcove();
     whisper(folder, '2026-09-14 1200 First', '<p>Anything.</p>');

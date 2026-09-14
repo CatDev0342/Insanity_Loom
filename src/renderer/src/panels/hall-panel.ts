@@ -137,7 +137,14 @@ export class HallPanel {
       this.show([], 'Write what to look for.');
       return;
     }
-    const found = await this.search(asked);
+    let found: HallFound;
+    try {
+      found = await this.search(asked);
+    } catch (problem) {
+      // Whatever went wrong is said here, in the window that asked: a search that says nothing looks broken.
+      this.show([], problem instanceof Error ? problem.message : String(problem));
+      return;
+    }
     if (found.problem !== '') {
       this.show([], found.problem);
       return;

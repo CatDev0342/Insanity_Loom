@@ -6,7 +6,7 @@
 // showing: a paragraph, a heading, an item of a list. The companion documents where the assistant's thinking is kept
 // are Markdown, and their lines are lines.
 
-import { readdirSync, readFileSync, statSync } from 'node:fs';
+import { readdirSync, readFileSync, statSync, type Dirent } from 'node:fs';
 import { basename, join, relative } from 'node:path';
 import type { GreatHall } from '../shared/greathall';
 import type { HallFound, HallHit, HallLine, HallSearch } from '../shared/hall';
@@ -84,10 +84,21 @@ function placesIn(lines: readonly string[], looking: RegExp): { readonly found: 
   return { found, total };
 }
 
-/** Every file in a folder, and in the folders beneath it when the whole GreatHall is being looked through. */
+/**
+ * Every file in a folder, and in the folders beneath it when the whole GreatHall is being looked through.
+ *
+ * A folder that is not there holds nothing: a GreatHall may name an alcove the author has not made yet, or one on a
+ * drive that is not plugged in, and neither is a reason to refuse to search what *is* there.
+ */
 function filesIn(folder: string, beneath: boolean): readonly string[] {
   const found: string[] = [];
-  for (const entry of readdirSync(folder, { withFileTypes: true })) {
+  let entries: Dirent[];
+  try {
+    entries = readdirSync(folder, { withFileTypes: true });
+  } catch {
+    return found;
+  }
+  for (const entry of entries) {
     const path = join(folder, entry.name);
     if (entry.isDirectory()) {
       if (beneath) found.push(...filesIn(path, beneath));
