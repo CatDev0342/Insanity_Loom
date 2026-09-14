@@ -5,6 +5,7 @@ import { Loom } from './loom/page';
 import { ContextMenu } from './menu/context-menu';
 import { MenuBar } from './menu/menubar';
 import { PanelTabs } from './loom/panel-tabs';
+import { COMMANDS_TAB } from './loom/thoughts';
 import { Splitters } from './loom/splitters';
 import { Toolbar } from './menu/toolbar';
 import { MENUS } from './menu/model';
@@ -61,6 +62,8 @@ const loom = new Loom(
     libraryInside: required<HTMLElement>('#library-inside'),
     librarySaid: required<HTMLElement>('#library-said'),
     libraryPane: required<HTMLElement>('#library-pane'),
+    commandsStream: required<HTMLElement>('#commands-stream'),
+    commandsSaid: required<HTMLElement>('#commands-said'),
     showLibraryTab: () => besideTheWhisper.showTab('library'),
     referenceBar: required<HTMLElement>('#reference-bar'),
     resumeDialog: required<HTMLDialogElement>('#resume-dialog'),
@@ -218,10 +221,16 @@ void bridge.layout.panelWidths().then((widths) => splitters.use(widths));
 new PanelTabs(required<HTMLElement>('#navigation-tabs'), [
   { id: 'navigation', name: 'Navigation', pane: required<HTMLElement>('#navigation-pane') },
 ]);
-const besideTheWhisper = new PanelTabs(required<HTMLElement>('#thoughts-tabs'), [
-  { id: 'thinking', name: 'Thinking', pane: required<HTMLElement>('#thoughts-pane') },
-  { id: 'library', name: 'Library', pane: required<HTMLElement>('#library-pane') },
-]);
+const besideTheWhisper = new PanelTabs(
+  required<HTMLElement>('#thoughts-tabs'),
+  [
+    { id: 'thinking', name: 'Thinking', pane: required<HTMLElement>('#thoughts-pane') },
+    { id: COMMANDS_TAB, name: 'Commands', pane: required<HTMLElement>('#commands-pane') },
+    { id: 'library', name: 'Library', pane: required<HTMLElement>('#library-pane') },
+  ],
+  (shown) => loom.showingBeside(shown),
+);
+loom.sayAboutTabs((tabId, howMuch) => besideTheWhisper.saySomethingHappened(tabId, howMuch));
 
 // The editing shortcuts along the top, saying the same about each command as the Format menu does.
 const toolbar = new Toolbar(required<HTMLElement>('#toolbar'), run, standingOf);

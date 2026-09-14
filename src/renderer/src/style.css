@@ -120,6 +120,20 @@ body {
   color: var(--ink);
 }
 
+/* What has happened in a tab the author is not looking at: said quietly beside its name, never taking them there. */
+.panel-tab-news {
+  margin-left: 0.4rem;
+  padding: 0 0.3rem;
+  border-radius: 0.6rem;
+  background: var(--menu-edge);
+  color: var(--ink);
+  font-size: 0.7rem;
+}
+
+.panel-tab-news[hidden] {
+  display: none;
+}
+
 .panel-tab[aria-selected='true'] {
   background: var(--menu);
   border-color: var(--menu-edge);
@@ -394,6 +408,18 @@ body {
 .thought-command[data-status='failed']::before {
   content: '✗';
   color: var(--problem);
+}
+
+/* The work the command does, which is what the author reads down the panel; the whole of it is on hover. */
+.thought-command-said {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* The same work done again and again in a row is said once, counted here, rather than filling the panel. */
+.thought-command-times:not(:empty) {
+  margin-left: 0.4rem;
+  color: var(--ink-quiet);
 }
 
 .thought-turn {

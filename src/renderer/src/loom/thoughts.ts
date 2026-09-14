@@ -7,16 +7,26 @@
 //
 // The companion is Markdown, headed by the turn it belongs to, so it can be read, indexed and searched on its own.
 //
-// The commands the assistant runs are shown here too, and kept with the thinking. They used to be said in the status
-// bar, where a long one pushed the bar up into the writing (the designer's screenshot, 2026-Sep-14): a line beneath
-// the whisper cannot hold a command, and should never try.
+// The commands the assistant runs are kept with the thinking in the companion, because what was run is part of the
+// record of the turn — but they are shown in **a tab of their own**. Mixed in with the thinking they crowded it out
+// entirely: a wall of `export PATH=…` with the thinking nowhere to be seen (the designer, 2026-Sep-14). Thinking in
+// one tab, commands in another.
+//
+// They were in the status bar before that, where a long one pushed the bar up into the writing. A line beneath the
+// whisper cannot hold a command, and should never try.
 
 import type { WhispersBridge } from '../../../shared/whispers';
+import { sameCommand, shortCommand, timesOver } from './command-lines';
+
+/** The tab the commands are shown in, for saying that something has happened there. */
+export const COMMANDS_TAB = 'commands';
 
 export interface ThoughtsElements {
   readonly thoughtsPanel: HTMLElement;
   readonly thoughtsStream: HTMLElement;
   readonly thoughtsSaid: HTMLElement;
+  readonly commandsStream: HTMLElement;
+  readonly commandsSaid: HTMLElement;
 }
 
 /** How long the thinking may gather before it is written to the companion, in milliseconds. */
@@ -36,12 +46,23 @@ export class Thoughts {
   private thinkingAbout = '';
   /** The commands being followed, by the name the assistant gave them, so each is shown once. */
   private readonly commands = new Map<string, HTMLElement>();
+  /** The last command shown, and how many times that same work has been done in a row. */
+  private lastCommand = { title: '', times: 0, line: undefined as HTMLElement | undefined };
+  /** How many commands have arrived since the author last looked at the Commands tab. */
+  private unseenCommands = 0;
 
   constructor(
     private readonly elements: ThoughtsElements,
     private readonly whispers: WhispersBridge,
     private readonly onProblem: (message: string) => void,
+    /** Says how much has happened in a tab the author is not looking at. */
+    private readonly saySomethingHappened: (tabId: string, howMuch: number) => void = () => undefined,
   ) {}
+
+  /** The author is looking at the commands now, so there is nothing there they have not seen. */
+  commandsSeen(): void {
+    this.unseenCommands = 0;
+  }
 
   /** Another whisper is open: what follows belongs beside that one, and the panel starts afresh. */
   keepBeside(whisperPath: string): void {
@@ -49,8 +70,13 @@ export class Thoughts {
     this.whisperPath = whisperPath;
     this.headed = false;
     this.commands.clear();
+    this.lastCommand = { title: '', times: 0, line: undefined };
+    this.unseenCommands = 0;
+    this.saySomethingHappened(COMMANDS_TAB, 0);
     this.elements.thoughtsStream.replaceChildren();
     this.elements.thoughtsSaid.textContent = '';
+    this.elements.commandsStream.replaceChildren();
+    this.elements.commandsSaid.textContent = '';
   }
 
   /**
@@ -78,26 +104,58 @@ export class Thoughts {
    * A command the assistant is running, and how it is getting on. The same command is shown once and then followed:
    * a line that changes as it goes, rather than a new line each time something happens to it.
    */
+  /**
+   * A command the assistant is running, or one already shown moving on to its next state.
+   *
+   * What is shown is the work, not the getting ready (command-lines.ts), and a command run again and again in a row —
+   * the same file read twice, the same build tried twice — is said once with a count beside it rather than filling
+   * the panel with the same line.
+   */
   command(id: string, title: string, status: string): void {
-    const shown = title.trim();
-    if (shown === '') return;
+    const whole = title.trim();
+    if (whole === '') return;
     const already = this.commands.get(id);
     if (already !== undefined) {
       already.dataset['status'] = status;
-      already.title = `${shown} — ${status}`;
+      already.title = `${whole} — ${status}`;
       return;
     }
+    const shown = shortCommand(whole);
+    // The same work again, right after itself: counted on the line already there.
+    const lastLine = this.lastCommand.line;
+    if (lastLine !== undefined && sameCommand(this.lastCommand.title, whole)) {
+      this.lastCommand = { ...this.lastCommand, times: this.lastCommand.times + 1 };
+      const count = lastLine.querySelector('.thought-command-times');
+      if (count instanceof HTMLElement) count.textContent = timesOver(this.lastCommand.times);
+      this.commands.set(id, lastLine);
+      this.newsOfACommand();
+      return;
+    }
+
     const line = document.createElement('p');
     line.className = 'thought-command';
-    line.textContent = shown;
-    line.title = `${shown} — ${status}`;
+    line.title = `${whole} — ${status}`;
     line.dataset['status'] = status;
+    const said = document.createElement('span');
+    said.className = 'thought-command-said';
+    said.textContent = shown;
+    const count = document.createElement('span');
+    count.className = 'thought-command-times';
+    line.append(said, count);
     this.commands.set(id, line);
-    this.elements.thoughtsStream.append(line);
-    this.goToTheEnd();
-    // Kept with the thinking, in the companion: what was run is part of the record of the turn.
-    this.unwritten += `\n\n\u0060${shown.replace(/\s+/g, ' ')}\u0060\n`;
+    this.lastCommand = { title: whole, times: 1, line };
+    this.elements.commandsStream.append(line);
+    this.commandsToTheEnd();
+    this.newsOfACommand();
+    // Kept with the thinking, in the companion: what was run is part of the record of the turn, whichever tab it is
+    // shown in. The whole command is kept, not the short name — the record is for looking things up later.
+    this.unwritten += `\n\n\u0060${whole.replace(/\s+/g, ' ')}\u0060\n`;
     this.writeSoon();
+  }
+
+  private newsOfACommand(): void {
+    this.unseenCommands += 1;
+    this.saySomethingHappened(COMMANDS_TAB, this.unseenCommands);
   }
 
   /** A piece of thinking, as it is written. */
@@ -150,5 +208,10 @@ export class Thoughts {
 
   private goToTheEnd(): void {
     this.elements.thoughtsPanel.scrollTop = this.elements.thoughtsPanel.scrollHeight;
+  }
+
+  private commandsToTheEnd(): void {
+    const pane = this.elements.commandsStream.parentElement?.parentElement;
+    if (pane !== null && pane !== undefined) pane.scrollTop = pane.scrollHeight;
   }
 }

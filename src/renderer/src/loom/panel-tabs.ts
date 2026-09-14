@@ -25,7 +25,14 @@ export class PanelTabs {
       button.type = 'button';
       button.className = 'panel-tab';
       button.id = `tab-${tab.id}`;
-      button.textContent = tab.name;
+      // The name and, beside it, what has happened in a tab the author is not looking at.
+      const name = document.createElement('span');
+      name.className = 'panel-tab-name';
+      name.textContent = tab.name;
+      const news = document.createElement('span');
+      news.className = 'panel-tab-news';
+      news.hidden = true;
+      button.append(name, news);
       button.setAttribute('role', 'tab');
       button.setAttribute('aria-controls', tab.pane.id);
       tab.pane.setAttribute('role', 'tabpanel');
@@ -37,6 +44,20 @@ export class PanelTabs {
       this.buttons.push(button);
     });
     this.show(0);
+  }
+
+  /**
+   * Says how much has happened in a tab since the author last looked at it — the way a program marks a panel that
+   * has news without taking the author away from what they are doing. Nothing is said about the tab in use: they
+   * are looking at it, so there is nothing they have not seen.
+   */
+  saySomethingHappened(id: string, howMuch: number): void {
+    const index = this.tabs.findIndex((tab) => tab.id === id);
+    const news = this.buttons[index]?.querySelector('.panel-tab-news');
+    if (!(news instanceof HTMLElement)) return;
+    const worth = index !== this.showing && howMuch > 0;
+    news.hidden = !worth;
+    news.textContent = worth ? String(howMuch) : '';
   }
 
   /** Shows a tab by its name in the code; nothing happens if there is no such tab. */
@@ -68,6 +89,14 @@ export class PanelTabs {
       button.setAttribute('aria-selected', chosen ? 'true' : 'false');
       // Only the tab in use is in the Tab order: the strip is one stop, and the arrows move within it.
       button.tabIndex = chosen ? 0 : -1;
+      // Looking at a tab is having seen it.
+      if (chosen) {
+        const news = button.querySelector('.panel-tab-news');
+        if (news instanceof HTMLElement) {
+          news.hidden = true;
+          news.textContent = '';
+        }
+      }
     });
     this.onShown?.(this.showingTab);
   }

@@ -29,7 +29,7 @@ import { FindBar, type FindBarElements } from './find-bar';
 import { Library, type LibraryElements } from './library';
 import { Navigation, type NavigationElements } from './navigation';
 import { ReferenceBar, type ReferenceBarElements } from './reference-bar';
-import { Thoughts, type ThoughtsElements } from './thoughts';
+import { COMMANDS_TAB, Thoughts, type ThoughtsElements } from './thoughts';
 import type { UpdateStanding } from '../../../shared/updates';
 import { NOTHING_YET, withPiece, type ReplyBeingWritten } from './one-reply';
 import { howLong, TICK_SECONDS } from './how-long';
@@ -174,7 +174,9 @@ export class Loom {
   ) {
     this.findBar = new FindBar(elements, () => this.editor);
     this.contextRoom = new ContextRoom(elements, () => void this.compact());
-    this.thoughts = new Thoughts(elements, whispers, (message) => this.showProblem(message));
+    this.thoughts = new Thoughts(elements, whispers, (message) => this.showProblem(message), (tabId, howMuch) =>
+      this.tellTheTabs(tabId, howMuch),
+    );
     this.library = new Library(elements, greatHall, (message) => this.showProblem(message));
     this.referenceBar = new ReferenceBar(elements, {
       citations: () => this.library.citationsByTurn,
@@ -642,6 +644,18 @@ export class Loom {
     } catch (problem) {
       this.showProblem(problem instanceof Error ? problem.message : String(problem));
     }
+  }
+
+  /** How the panel beside the whisper is told that something has happened in a tab the author is not looking at. */
+  private tellTheTabs: (tabId: string, howMuch: number) => void = () => undefined;
+
+  sayAboutTabs(tell: (tabId: string, howMuch: number) => void): void {
+    this.tellTheTabs = tell;
+  }
+
+  /** Which tab is being shown beside the whisper. Looking at the commands is having seen them. */
+  showingBeside(tabId: string): void {
+    if (tabId === COMMANDS_TAB) this.thoughts.commandsSeen();
   }
 
   /** The address of the link the caret is in, or '' when it is in none. */

@@ -3,7 +3,7 @@
 // what points here, and where the assistant's thinking is kept.
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { describeRoom, inThousands } from '../../src/renderer/src/loom/context-room';
-import { Thoughts } from '../../src/renderer/src/loom/thoughts';
+import { COMMANDS_TAB, Thoughts } from '../../src/renderer/src/loom/thoughts';
 import { whereabouts } from '../../src/renderer/src/loom/navigation';
 import { WhisperEditor } from '../../src/renderer/src/document/whisper-editor';
 import type { WhispersBridge } from '../../src/shared/whispers';
@@ -49,21 +49,35 @@ describe('the room left in the context window', () => {
 });
 
 describe("where the assistant's thinking is kept", () => {
-  function panel(): { readonly thoughts: Thoughts; readonly written: { path: string; text: string }[]; readonly stream: HTMLElement } {
+  function panel(): {
+    readonly thoughts: Thoughts;
+    readonly written: { path: string; text: string }[];
+    readonly stream: HTMLElement;
+    readonly commands: HTMLElement;
+    readonly news: { tabId: string; howMuch: number }[];
+  } {
     const thoughtsPanel = document.createElement('div');
     const thoughtsStream = document.createElement('div');
     const thoughtsSaid = document.createElement('p');
+    const commandsStream = document.createElement('div');
+    const commandsSaid = document.createElement('p');
     thoughtsPanel.append(thoughtsStream);
-    document.body.append(thoughtsPanel, thoughtsSaid);
+    document.body.append(thoughtsPanel, thoughtsSaid, commandsStream, commandsSaid);
     const written: { path: string; text: string }[] = [];
+    const news: { tabId: string; howMuch: number }[] = [];
     const whispers = {
       addThought: async (path: string, text: string) => {
         written.push({ path, text });
         return Promise.resolve();
       },
     } as unknown as WhispersBridge;
-    const thoughts = new Thoughts({ thoughtsPanel, thoughtsStream, thoughtsSaid }, whispers, () => undefined);
-    return { thoughts, written, stream: thoughtsStream };
+    const thoughts = new Thoughts(
+      { thoughtsPanel, thoughtsStream, thoughtsSaid, commandsStream, commandsSaid },
+      whispers,
+      () => undefined,
+      (tabId, howMuch) => news.push({ tabId, howMuch }),
+    );
+    return { thoughts, written, stream: thoughtsStream, commands: commandsStream, news };
   }
 
   it('shows it beside the whisper and keeps it in the companion document, headed by the turn', () => {
@@ -101,6 +115,49 @@ describe("where the assistant's thinking is kept", () => {
     vi.runAllTimers();
     expect(written.map((piece) => piece.text)).toEqual(['\n## Turn 1 · now\n\nfirst', 'second']);
     vi.useRealTimers();
+  });
+
+  it('keeps commands out of the thinking and in a tab of their own', () => {
+    vi.useFakeTimers();
+    const { thoughts, stream, commands, written } = panel();
+    thoughts.keepBeside('/alcove/A.xhtml');
+    thoughts.beginTurn(1, 'now');
+    thoughts.add('Working out what to do.');
+    thoughts.command('one', 'export PATH="$HOME/bin:$PATH"; cd ~/work && npm run check', 'in_progress');
+
+    // The thinking is not crowded out by the command, and the command says the work rather than the getting ready.
+    expect(stream.textContent).toContain('Working out what to do.');
+    expect(stream.textContent).not.toContain('npm run check');
+    expect(commands.textContent).toContain('npm run check');
+    expect(commands.textContent).not.toContain('export PATH');
+    // The whole command is kept in the companion, and on hover: the record is for looking things up later.
+    vi.runAllTimers();
+    expect(written.map((piece) => piece.text).join('')).toContain('export PATH="$HOME/bin:$PATH"');
+    expect(commands.querySelector('.thought-command')?.getAttribute('title')).toContain('export PATH');
+    vi.useRealTimers();
+  });
+
+  it('says the same work done again in a row once, with a count', () => {
+    const { thoughts, commands } = panel();
+    thoughts.keepBeside('/alcove/A.xhtml');
+    thoughts.command('one', 'cd ~/work && npm run check', 'completed');
+    thoughts.command('two', 'export PATH="/x:$PATH"; npm run check', 'completed');
+    thoughts.command('three', 'npm run check', 'completed');
+
+    expect(commands.querySelectorAll('.thought-command')).toHaveLength(1);
+    expect(commands.textContent).toContain('× 3');
+  });
+
+  it('says how many commands the author has not looked at, and stops once they have', () => {
+    const { thoughts, news } = panel();
+    thoughts.keepBeside('/alcove/A.xhtml');
+    thoughts.command('one', 'npm run check', 'completed');
+    thoughts.command('two', 'git status', 'completed');
+    expect(news.at(-1)).toEqual({ tabId: COMMANDS_TAB, howMuch: 2 });
+
+    thoughts.commandsSeen();
+    thoughts.command('three', 'git log', 'completed');
+    expect(news.at(-1)).toEqual({ tabId: COMMANDS_TAB, howMuch: 1 });
   });
 });
 
