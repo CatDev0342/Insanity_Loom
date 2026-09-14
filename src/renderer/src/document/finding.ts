@@ -6,6 +6,7 @@
 // saved, and Ctrl+Z has nothing to take back.
 
 import { Extension } from '@tiptap/core';
+import { replyIsBusy } from './extensions';
 import { Plugin, PluginKey } from '@tiptap/pm/state';
 import type { EditorState } from '@tiptap/pm/state';
 import { Decoration, DecorationSet } from '@tiptap/pm/view';
@@ -39,6 +40,20 @@ export function placesFound(state: EditorState, looked: string): readonly { read
     return true;
   });
   return places;
+}
+
+/**
+ * The places the writing appears that the author may change. A reply the assistant is still writing is the
+ * assistant's alone (extensions.ts), so what is found inside one is shown but never replaced.
+ */
+export function placesToReplace(state: EditorState, looked: string): readonly { readonly from: number; readonly to: number }[] {
+  const busy: { from: number; to: number }[] = [];
+  state.doc.descendants((node, position) => {
+    if (!replyIsBusy(node)) return node.isBlock && !node.isTextblock;
+    busy.push({ from: position, to: position + node.nodeSize });
+    return false;
+  });
+  return placesFound(state, looked).filter((place) => !busy.some((reply) => place.from >= reply.from && place.to <= reply.to));
 }
 
 /** What the author is told: which place they are at, of how many. */

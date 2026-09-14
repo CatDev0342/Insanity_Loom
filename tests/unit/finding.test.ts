@@ -70,6 +70,38 @@ describe('finding writing in the whisper', () => {
     expect(marks(w)).toEqual({ all: 1, now: 'loom' });
   });
 
+  it('writes something else in its place, and goes on to the next', () => {
+    const w = whisper('<p>one loom, two loom</p>');
+    w.editor.commands.setTextSelection(1);
+    expect(w.find('loom')).toEqual({ at: 0, of: 2 });
+    expect(w.replaceFound('thread')).toEqual({ at: 0, of: 1 });
+    expect(w.html).toContain('<p>one thread, two loom</p>');
+    expect(w.replaceFound('thread')).toEqual({ at: -1, of: 0 });
+    expect(w.html).toContain('<p>one thread, two thread</p>');
+  });
+
+  it('writes something else in place of every one, in a single change the author can take back at once', () => {
+    const w = whisper('<p>loom, loom, loom</p>');
+    w.find('loom');
+    expect(w.replaceAllFound('thread')).toBe(3);
+    expect(w.html).toContain('<p>thread, thread, thread</p>');
+    w.undo();
+    expect(w.html).toContain('<p>loom, loom, loom</p>');
+  });
+
+  it("leaves alone what is inside a reply the assistant is still writing", () => {
+    const w = whisper('<p>a loom of my own</p>');
+    const replyId = w.placeReply('no-such-section');
+    w.setReply(replyId, 'the loom in the reply', 'writing');
+    w.editor.commands.setTextSelection(1);
+    // Both places are found and shown...
+    expect(w.find('loom').of).toBe(2);
+    // ...but only the author's own is changed.
+    expect(w.replaceAllFound('thread')).toBe(1);
+    expect(w.html).toContain('<p>a thread of my own</p>');
+    expect(w.html).toContain('the loom in the reply');
+  });
+
   it('changes nothing: the looking is not an edit, and Ctrl+Z has nothing to take back', () => {
     const w = whisper('<p>a loom here</p>');
     const before = w.html;

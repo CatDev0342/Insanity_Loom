@@ -100,8 +100,8 @@ export class SearchPanel {
     if (found.length > 0) this.found.selectedIndex = 0;
   }
 
-  /** Opens the panel. Returns the file name of the whisper the author chose to open, or '' for none. */
-  async ask(search: (looked: string) => Promise<readonly WhisperFound[]>): Promise<string> {
+  /** What the author asked for: a whisper to open, and the writing they were looking for in it. */
+  async ask(search: (looked: string) => Promise<readonly WhisperFound[]>): Promise<{ readonly name: string; readonly looked: string }> {
     this.search = search;
     this.chosen = '';
     this.show([], 'Write what to look for.');
@@ -109,6 +109,6 @@ export class SearchPanel {
     this.looked.focus();
     this.looked.select();
     await new Promise<void>((resolve) => this.dialog.addEventListener('close', () => resolve(), { once: true }));
-    return this.chosen;
+    return { name: this.chosen, looked: this.looked.value.trim() };
   }
 }

@@ -195,4 +195,7 @@ test('File ▸ Find in the Alcove finds a whisper by its writing, and opens it',
   await expect(panel).toBeHidden();
   await expect(page.locator('#whisper-name')).toHaveText(holding ?? '');
   await expect(whisper).toContainText('a thought about weaving');
+  // The author was looking for words, not for a whisper: they land on them, with the find bar holding what they asked.
+  await expect(page.getByRole('search', { name: 'Find in this whisper' })).toBeVisible();
+  await expect(page.locator('#find-said')).toHaveText('1 of 1');
 });

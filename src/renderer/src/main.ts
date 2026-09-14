@@ -38,6 +38,10 @@ const loom = new Loom(
     previous: required<HTMLButtonElement>('#find-previous'),
     next: required<HTMLButtonElement>('#find-next'),
     close: required<HTMLButtonElement>('#find-close'),
+    replaceRow: required<HTMLElement>('#find-replace-row'),
+    replacement: required<HTMLInputElement>('#find-replacement'),
+    replace: required<HTMLButtonElement>('#find-replace'),
+    replaceAll: required<HTMLButtonElement>('#find-replace-all'),
     resumeDialog: required<HTMLDialogElement>('#resume-dialog'),
     connectionDialog: required<HTMLDialogElement>('#connection-dialog'),
   },
@@ -90,9 +94,14 @@ async function showWhatPointsHere(): Promise<void> {
 
 /** File ▸ Find in the Alcove: the whispers holding some writing; choosing one opens it. */
 async function findInTheAlcove(): Promise<void> {
-  const chosen = await search.ask((looked) => bridge.whispers.search(looked));
-  if (chosen !== '') await loom.openNamedWhisper(chosen);
-  loom.focusWhisper();
+  const asked = await search.ask((looked) => bridge.whispers.search(looked));
+  if (asked.name === '') {
+    loom.focusWhisper();
+    return;
+  }
+  await loom.openNamedWhisper(asked.name);
+  // The author was looking for words, not for a whisper: they land on them.
+  loom.findFor(asked.looked);
 }
 
 async function run(command: AnyCommandId): Promise<void> {
@@ -102,6 +111,7 @@ async function run(command: AnyCommandId): Promise<void> {
   if (command === 'whisper.pointsHere') return showWhatPointsHere();
   if (command === 'whisper.search') return findInTheAlcove();
   if (command === 'find.show') return loom.showFindBar();
+  if (command === 'find.replace') return loom.showReplaceBar();
   if (command === 'find.next') return loom.stepFind('next');
   if (command === 'find.previous') return loom.stepFind('previous');
   if (!isPageCommand(command)) return bridge.runCommand(command);

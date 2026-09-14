@@ -20,7 +20,16 @@ import {
   SectionRule,
   type ReplyState,
 } from './extensions';
-import { FINDING, FindInWhisper, FINDING_META, foundSoFar, placesFound, NOTHING_FOUND, type Finding } from './finding';
+import {
+  FINDING,
+  FindInWhisper,
+  FINDING_META,
+  foundSoFar,
+  placesFound,
+  placesToReplace,
+  NOTHING_FOUND,
+  type Finding,
+} from './finding';
 import { applyFormat, formatStanding, type FormatCommandId, type FormatStanding } from './formatting';
 import { WhisperPaste } from './paste';
 import { readWhisperLink } from '../../../shared/whispers';
@@ -336,6 +345,40 @@ export class WhisperEditor {
     // The caret goes to what was found, so the author may carry on writing there, and the whisper scrolls to it.
     if (place !== undefined) this.editor.chain().setTextSelection(place).scrollIntoView().run();
     return { at, of };
+  }
+
+  /**
+   * Writes something else in place of the one the author is at, and goes on to the next. What is inside a reply the
+   * assistant is still writing is left alone: it is shown, but it is not the author's to change yet.
+   */
+  replaceFound(written: string): { readonly at: number; readonly of: number } {
+    const finding = this.findingNow;
+    const places = placesFound(this.editor.state, finding.looked);
+    const here = places[finding.at];
+    const mayChange = here !== undefined && placesToReplace(this.editor.state, finding.looked).some((place) => place.from === here.from);
+    if (!mayChange) return this.step(1);
+    // The author's own change: it is saved, and Ctrl+Z takes it back.
+    this.editor.view.dispatch(this.editor.state.tr.insertText(written, here.from, here.to));
+    const left = placesFound(this.editor.state, finding.looked);
+    if (left.length === 0) {
+      this.setFinding({ looked: finding.looked, at: -1 });
+      return { at: -1, of: 0 };
+    }
+    return this.goToPlace(finding.looked, Math.min(finding.at, left.length - 1), left.length);
+  }
+
+  /** Writes something else in place of every one of them, in a single change the author can take back at once. */
+  replaceAllFound(written: string): number {
+    const finding = this.findingNow;
+    const places = placesToReplace(this.editor.state, finding.looked);
+    if (places.length === 0) return 0;
+    const transaction = this.editor.state.tr;
+    // From the last backwards, so that each place is still where it was when its turn comes.
+    for (const place of [...places].reverse()) transaction.insertText(written, place.from, place.to);
+    this.editor.view.dispatch(transaction);
+    const left = placesFound(this.editor.state, finding.looked);
+    this.setFinding({ looked: finding.looked, at: left.length === 0 ? -1 : 0 });
+    return places.length;
   }
 
   /** Stops looking: the marks go, and the whisper is as it was. */

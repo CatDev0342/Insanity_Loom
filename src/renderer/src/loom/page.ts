@@ -293,6 +293,16 @@ export class Loom {
     this.findBar.show();
   }
 
+  /** Edit ▸ Replace: the find bar, with the line for what to write instead. */
+  showReplaceBar(): void {
+    this.findBar.showReplace();
+  }
+
+  /** Takes the author to writing they looked for across the alcove, in the whisper just opened. */
+  findFor(looked: string): void {
+    this.findBar.showFor(looked);
+  }
+
   /** Edit ▸ Find Next and Find Previous, which work whether the bar is showing or not. */
   stepFind(which: 'next' | 'previous'): void {
     this.findBar.step(which);

@@ -159,11 +159,22 @@ body {
 /* The bar for finding writing in the whisper: quiet, above the writing, out of the way. */
 .find-bar {
   display: flex;
-  align-items: center;
-  gap: 0.5rem;
+  flex-direction: column;
+  gap: 0.3rem;
   padding: 0.3rem 0.8rem;
   background: var(--bar);
   border-bottom: 1px solid var(--menu-edge);
+}
+
+.find-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+/* The two lines' labels line up, so the fields beneath one another do too. */
+.find-row label {
+  min-width: 7rem;
 }
 
 .find-bar input {

@@ -79,6 +79,7 @@ export const MENUS: readonly TopMenu[] = [
       command('&Find…', 'find.show', ['Ctrl+F']),
       command('Find &Next', 'find.next', ['F3']),
       command('Find Pre&vious', 'find.previous', ['Shift+F3']),
+      command('Rep&lace…', 'find.replace', ['Ctrl+H']),
       SEPARATOR,
       command('Pr&eferences…', 'app.preferences'),
     ],

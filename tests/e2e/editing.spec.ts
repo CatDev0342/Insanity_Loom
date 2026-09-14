@@ -102,3 +102,26 @@ test('Ctrl+F finds writing in the whisper, F3 goes on, Esc puts it away', async 
   // The author is back in the whisper, writing where they were.
   await expect(whisper).toBeFocused();
 });
+
+test('Ctrl+H writes something else in place of what was found', async () => {
+  const whisper = page.locator('.whisper-editor');
+  await whisper.click();
+  await page.keyboard.type('one loom, two loom, three looms');
+
+  await page.keyboard.press('Control+h');
+  const bar = page.getByRole('search', { name: 'Find in this whisper' });
+  await expect(bar).toBeVisible();
+  await page.keyboard.type('loom');
+  await expect(page.locator('#find-said')).toHaveText('1 of 3');
+
+  await bar.getByLabel('Replace with:').fill('thread');
+  await bar.getByRole('button', { name: 'Replace', exact: true }).click();
+  await expect(whisper).toContainText('one thread, two loom, three looms');
+
+  await bar.getByRole('button', { name: 'Replace All' }).click();
+  await expect(whisper).toContainText('one thread, two thread, three threads');
+  // One change the author can take back at once.
+  await whisper.click();
+  await page.keyboard.press('Control+z');
+  await expect(whisper).toContainText('one thread, two loom, three looms');
+});

@@ -13,6 +13,11 @@ export interface FindBarElements {
   readonly previous: HTMLButtonElement;
   readonly next: HTMLButtonElement;
   readonly close: HTMLButtonElement;
+  /** The second line, which appears only when the author asked to replace (Ctrl+H). */
+  readonly replaceRow: HTMLElement;
+  readonly replacement: HTMLInputElement;
+  readonly replace: HTMLButtonElement;
+  readonly replaceAll: HTMLButtonElement;
 }
 
 export class FindBar {
@@ -33,6 +38,19 @@ export class FindBar {
         this.hide();
       }
     });
+    elements.replacement.addEventListener('keydown', (event) => {
+      if (event.key === 'Enter') {
+        event.preventDefault();
+        this.replaceHere();
+        return;
+      }
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        this.hide();
+      }
+    });
+    elements.replace.addEventListener('click', () => this.replaceHere());
+    elements.replaceAll.addEventListener('click', () => this.replaceEverywhere());
     elements.next.addEventListener('click', () => this.step('next'));
     elements.previous.addEventListener('click', () => this.step('previous'));
     elements.close.addEventListener('click', () => this.hide());
@@ -42,7 +60,7 @@ export class FindBar {
     return !this.elements.bar.hidden;
   }
 
-  /** Ctrl+F: shows the bar, with whatever the author has selected already in it, ready to be looked for. */
+  /** Ctrl+F: shows the bar, with whatever was last looked for still in it, ready to be looked for again. */
   show(): void {
     this.elements.bar.hidden = false;
     this.elements.looked.focus();
@@ -50,10 +68,47 @@ export class FindBar {
     this.look();
   }
 
+  /** Ctrl+H: the same bar, with the line for what to write instead. */
+  showReplace(): void {
+    this.elements.replaceRow.hidden = false;
+    this.elements.bar.hidden = false;
+    this.look();
+    this.elements.looked.focus();
+    this.elements.looked.select();
+  }
+
+  private replaceHere(): void {
+    const whisper = this.whisper();
+    if (whisper === undefined) return;
+    this.say(whisper.replaceFound(this.elements.replacement.value));
+  }
+
+  private replaceEverywhere(): void {
+    const whisper = this.whisper();
+    if (whisper === undefined) return;
+    const many = whisper.replaceAllFound(this.elements.replacement.value);
+    const found = whisper.found;
+    this.say(found);
+    this.elements.said.textContent = many === 0 ? 'None' : `${many} replaced`;
+  }
+
+  /**
+   * Shows the bar already looking for this writing, and takes the author to the first place it appears — how a
+   * whisper found in the alcove is opened, so that they land on the words they were looking for rather than at the
+   * top of it.
+   */
+  showFor(looked: string): void {
+    this.elements.looked.value = looked;
+    this.elements.bar.hidden = false;
+    this.look();
+    this.whisper()?.focus();
+  }
+
   /** Esc, or Close: the marks go and the author is back in the whisper where they were. */
   hide(): void {
     if (!this.isShowing) return;
     this.elements.bar.hidden = true;
+    this.elements.replaceRow.hidden = true;
     this.whisper()?.stopFinding();
     this.whisper()?.focus();
   }

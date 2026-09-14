@@ -10,6 +10,7 @@ export const PAGE_COMMANDS = [
   'whisper.pointsHere',
   'whisper.search',
   'find.show',
+  'find.replace',
   'find.next',
   'find.previous',
   'assistant.reconnect',
@@ -31,6 +32,7 @@ export type AssistantCommandId = Exclude<
   | 'whisper.pointsHere'
   | 'whisper.search'
   | 'find.show'
+  | 'find.replace'
   | 'find.next'
   | 'find.previous'
 >;
