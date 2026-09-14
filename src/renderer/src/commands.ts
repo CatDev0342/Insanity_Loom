@@ -11,6 +11,7 @@ export const PAGE_COMMANDS = [
   'whisper.pointsHere',
   'whisper.search',
   'whisper.searchHall',
+  'hall.open',
   'find.show',
   'find.replace',
   'edit.isolateSections',
@@ -30,11 +31,13 @@ export type PageCommandId = (typeof PAGE_COMMANDS)[number];
 
 /** The page commands the loom carries out (the rest are the page's own panels). */
 export type AssistantCommandId = Exclude<
-  PageCommandId,   | 'app.preferences'
+  PageCommandId,
+  | 'app.preferences'
   | 'assistant.signIn'
   | 'whisper.pointsHere'
   | 'whisper.search'
   | 'whisper.searchHall'
+  | 'hall.open'
   | 'find.show'
   | 'find.replace'
   | 'find.next'

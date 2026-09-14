@@ -1,0 +1,189 @@
+// The Library tab: what the assistant has cited, and the library itself when the author wants to look.
+//
+// It shows a list, not a document: every place in the library the assistant referred to in its replies, newest last,
+// each as its address and what stands there. The library is loaded behind the list, so choosing an entry opens that
+// document at that place at once — as a live document the author may edit, with everything around it in view.
+//
+// The entry chosen stays pinned above the document, as a development tool pins the thing you opened. Choosing it
+// again puts the document away and the list comes back, exactly where it was: the list keeps its history, so the
+// author can scroll back through everything referred to over the whole conversation.
+
+import type { GreatHall, GreatHallBridge, HallSection } from '../../../shared/greathall';
+
+export interface LibraryElements {
+  readonly libraryInside: HTMLElement;
+  readonly librarySaid: HTMLElement;
+}
+
+/** How long after the last change a document edited in the panel is written back, in milliseconds. */
+const WRITTEN_AFTER_MS = 800;
+
+export class Library {
+  private hall: GreatHall | undefined;
+  /** Everything cited, in the order it was cited, with nothing repeated. */
+  private readonly cited: HallSection[] = [];
+  private readonly list = document.createElement('div');
+  /** The entry opened, if any, and what is drawn for it. */
+  private open: { readonly section: HallSection; readonly holder: HTMLElement } | undefined;
+  private writingSoon = 0;
+
+  constructor(
+    private readonly elements: LibraryElements,
+    private readonly greatHall: GreatHallBridge,
+    private readonly onProblem: (message: string) => void,
+  ) {
+    this.list.className = 'library-list';
+    elements.libraryInside.append(this.list);
+  }
+
+  /** The GreatHall in use; the tab says so, and what it can do depends on it. */
+  useHall(hall: GreatHall | undefined): void {
+    this.hall = hall;
+    this.say();
+  }
+
+  get addresses(): readonly string[] {
+    return this.hall?.documents.map((document) => document.address) ?? [];
+  }
+
+  /** What the assistant cited in a reply: added to the list, in the order written, nothing twice. */
+  async cite(addresses: readonly string[]): Promise<void> {
+    if (this.hall === undefined || addresses.length === 0) return;
+    const fresh = addresses.filter((address) => !this.cited.some((already) => already.address === address));
+    if (fresh.length === 0) return;
+    try {
+      const sections = await this.greatHall.sections(fresh);
+      for (const section of sections) this.cited.push(section);
+      this.drawList();
+    } catch (problem) {
+      this.onProblem(`The library could not be read: ${problem instanceof Error ? problem.message : String(problem)}`);
+    }
+  }
+
+  private say(): void {
+    if (this.hall === undefined) {
+      this.elements.librarySaid.textContent = 'No GreatHall is open. File ▸ Open GreatHall… opens one.';
+      return;
+    }
+    this.elements.librarySaid.textContent =
+      this.cited.length === 0
+        ? `${this.hall.libraryName}: what the assistant cites will be listed here.`
+        : `${this.hall.libraryName} · ${this.cited.length} cited`;
+  }
+
+  private drawList(): void {
+    this.say();
+    this.list.replaceChildren(
+      ...this.cited.map((section) => {
+        const entry = document.createElement('button');
+        entry.type = 'button';
+        entry.className = 'library-entry';
+        entry.dataset['address'] = section.address;
+        const address = document.createElement('span');
+        address.className = 'library-address';
+        address.textContent = section.address;
+        const text = document.createElement('span');
+        text.className = 'library-text';
+        text.textContent = section.text === '' ? `(not in ${section.title})` : section.text;
+        entry.append(address, text);
+        entry.title = `${section.address} — ${section.title}`;
+        entry.addEventListener('mousedown', (event) => event.preventDefault());
+        entry.addEventListener('click', () => void this.choose(section));
+        return entry;
+      }),
+    );
+  }
+
+  /** Opens a cited place as a live document, or puts it away again when it is the one already open. */
+  private async choose(section: HallSection): Promise<void> {
+    if (this.open?.section.address === section.address) {
+      this.closeDocument();
+      return;
+    }
+    try {
+      const markdown = await this.greatHall.document(section.address);
+      this.showDocument(section, markdown);
+    } catch (problem) {
+      this.onProblem(problem instanceof Error ? problem.message : String(problem));
+    }
+  }
+
+  /** The document, pinned under the entry that opened it, as a development tool pins what you opened. */
+  private showDocument(section: HallSection, markdown: string): void {
+    this.closeDocument();
+    const holder = document.createElement('div');
+    holder.className = 'library-open';
+
+    const pinned = document.createElement('button');
+    pinned.type = 'button';
+    pinned.className = 'library-pinned';
+    pinned.textContent = `${section.address} — ${section.title}`;
+    pinned.title = 'Choose again to close';
+    pinned.addEventListener('mousedown', (event) => event.preventDefault());
+    pinned.addEventListener('click', () => this.closeDocument());
+
+    const writing = document.createElement('textarea');
+    writing.className = 'library-writing';
+    writing.spellcheck = false;
+    writing.value = markdown;
+    writing.addEventListener('input', () => this.writeSoon(section.address, writing.value));
+
+    holder.append(pinned, writing);
+    this.elements.libraryInside.append(holder);
+    this.list.hidden = true;
+    this.open = { section, holder };
+    // The place cited, in view, with everything around it: the author came to see its surroundings.
+    const lines = writing.value.split(/\r?\n/);
+    const before = lines.slice(0, Math.max(0, section.line - 1)).join('\n').length;
+    writing.focus();
+    writing.setSelectionRange(before, before);
+    writing.blur();
+    writing.scrollTop = Math.max(0, (section.line - 1) * LINE_HEIGHT_GUESS - writing.clientHeight / 3);
+  }
+
+  /** Puts the document away; the list comes back exactly where it was. */
+  private closeDocument(): void {
+    this.writeNow();
+    this.open?.holder.remove();
+    this.open = undefined;
+    this.list.hidden = false;
+  }
+
+  /** Where in the library the author is looking, for the bar between the panels; -1 when they are not. */
+  get lookingAt(): { readonly address: string; readonly share: number } | undefined {
+    const holder = this.open;
+    if (holder === undefined) return undefined;
+    const writing = holder.holder.querySelector('textarea');
+    if (writing === null) return undefined;
+    const room = writing.scrollHeight - writing.clientHeight;
+    return { address: holder.section.address, share: room <= 0 ? 0 : writing.scrollTop / room };
+  }
+
+  private writeSoon(address: string, markdown: string): void {
+    this.pending = { address, markdown };
+    if (this.writingSoon !== 0) return;
+    this.writingSoon = window.setTimeout(() => {
+      this.writingSoon = 0;
+      this.writeNow();
+    }, WRITTEN_AFTER_MS);
+  }
+
+  private pending: { readonly address: string; readonly markdown: string } | undefined;
+
+  /** Writes the author's editing back to the library's own file. */
+  private writeNow(): void {
+    if (this.writingSoon !== 0) {
+      window.clearTimeout(this.writingSoon);
+      this.writingSoon = 0;
+    }
+    const pending = this.pending;
+    this.pending = undefined;
+    if (pending === undefined) return;
+    void this.greatHall.saveDocument(pending.address, pending.markdown).catch((problem: unknown) => {
+      this.onProblem(`The library could not be saved: ${problem instanceof Error ? problem.message : String(problem)}`);
+    });
+  }
+}
+
+/** How tall a line of the library is drawn, in pixels, for finding the place cited before the document is measured. */
+const LINE_HEIGHT_GUESS = 19;

@@ -24,11 +24,14 @@ export interface Preferences {
   readonly assistantMode: string;
   /** The folder the author's whispers live in; '' for the Alcove folder beside the program. */
   readonly alcoveFolder: string;
+  /** The GreatHall file last opened, so the next start opens it again; '' when none has been. */
+  readonly greatHallPath: string;
 }
 
 export const DEFAULT_PREFERENCES: Preferences = {
   version: PREFERENCES_VERSION,
   spelling: DEFAULT_SPELLING,
+  greatHallPath: '',
   assistantMode: '',
   alcoveFolder: '',
 };
@@ -82,6 +85,7 @@ export function loadPreferences(dataFolder: string): Preferences {
       spelling: readSpelling(parsed['spelling'], file),
       assistantMode: parsed['version'] === SECOND_VERSION ? readMode(parsed['assistantMode'], file) : '',
       alcoveFolder: '',
+      greatHallPath: '',
     };
     savePreferences(dataFolder, upgraded);
     return upgraded;
@@ -94,6 +98,7 @@ export function loadPreferences(dataFolder: string): Preferences {
     spelling: readSpelling(parsed['spelling'], file),
     assistantMode: readMode(parsed['assistantMode'], file),
     alcoveFolder: readFolder(parsed['alcoveFolder'], file),
+    greatHallPath: typeof parsed['greatHallPath'] === 'string' ? parsed['greatHallPath'] : '',
   };
 }
 
@@ -106,6 +111,7 @@ export function readFolder(value: unknown, where: string): string {
   return value;
 }
 
-export function preferencesWith(spelling: SpellingPreferences, assistantMode: string, alcoveFolder: string): Preferences {
-  return { version: PREFERENCES_VERSION, spelling, assistantMode, alcoveFolder };
+/** The same preferences with something changed: one place to add to as more is remembered. */
+export function preferencesWith(preferences: Preferences, changed: Partial<Omit<Preferences, 'version'>>): Preferences {
+  return { ...preferences, ...changed, version: PREFERENCES_VERSION };
 }

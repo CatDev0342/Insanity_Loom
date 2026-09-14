@@ -60,6 +60,7 @@ export const MENUS: readonly TopMenu[] = [
       command('Find in Fi&les…', 'whisper.searchHall', ['Ctrl+Shift+G']),
       command('What Points &Here…', 'whisper.pointsHere', ['Ctrl+Shift+H']),
       SEPARATOR,
+      command('Open &GreatHall…', 'hall.open'),
       command('&Show Alcove Folder', 'whisper.showAlcove'),
       SEPARATOR,
       command('E&xit', 'app.quit', ['Alt+F4'], true),

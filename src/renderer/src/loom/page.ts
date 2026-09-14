@@ -14,6 +14,7 @@ import type {
   JournalBridge,
   SessionMode,
 } from '../../../shared/assistant';
+import { referencesIn, type GreatHallBridge } from '../../../shared/greathall';
 import type { LinksBridge } from '../../../shared/links';
 import { readWhisperLink, type OpenWhisper, type WhispersBridge } from '../../../shared/whispers';
 import type { AssistantCommandId } from '../commands';
@@ -25,12 +26,13 @@ import { ConnectionPanel } from '../panels/connection-panel';
 import { catchUpWith, describeCatchUp, type HistoryPiece } from './catch-up';
 import { ContextRoom, type ContextElements } from './context-room';
 import { FindBar, type FindBarElements } from './find-bar';
+import { Library, type LibraryElements } from './library';
 import { Navigation, type NavigationElements } from './navigation';
 import { Thoughts, type ThoughtsElements } from './thoughts';
 import { Saving } from './saving';
 import { chooseConversation } from './resume';
 
-export interface LoomElements extends FindBarElements, ContextElements, ThoughtsElements, NavigationElements {
+export interface LoomElements extends FindBarElements, ContextElements, ThoughtsElements, NavigationElements, LibraryElements {
   /** The word in the status bar saying that section isolation is on. */
   readonly isolation: HTMLElement;
   readonly whisper: HTMLElement;
@@ -88,6 +90,7 @@ export class Loom {
   private readonly contextRoom: ContextRoom;
   private readonly thoughts: Thoughts;
   private readonly navigation: Navigation;
+  private readonly library: Library;
   /** Called whenever the caret moves or the whisper changes, so the toolbar can follow the author. */
   private caretMoved: () => void = () => undefined;
   private readonly waiting: Waiting[] = [];
@@ -126,11 +129,13 @@ export class Loom {
     private readonly connection: ConnectionBridge,
     private readonly whispers: WhispersBridge,
     private readonly links: LinksBridge,
+    private readonly greatHall: GreatHallBridge,
     private readonly journal: JournalBridge,
   ) {
     this.findBar = new FindBar(elements, () => this.editor);
     this.contextRoom = new ContextRoom(elements, () => void this.compact());
     this.thoughts = new Thoughts(elements, whispers, (message) => this.showProblem(message));
+    this.library = new Library(elements, greatHall, (message) => this.showProblem(message));
     this.navigation = new Navigation(elements, () => this.editor, {
       goToHeading: (identity) => this.goToHeading(identity),
       goToTurn: (sectionId) => this.goToTurn(sectionId),
@@ -187,6 +192,8 @@ export class Loom {
    * Insanity_Loom — the Connection Settings panel opens first, by itself.
    */
   async start(): Promise<void> {
+    // The GreatHall opened last time, if there was one: the author never opens it twice.
+    this.library.useHall(await this.greatHall.current());
     // An empty panel looks broken; it says what it is waiting for.
     this.thoughts.say('What the assistant thinks while it answers will appear here, and be kept beside the whisper.');
     await this.openWhisper();
@@ -344,6 +351,19 @@ export class Loom {
   }
 
   // ——— Finding writing in the whisper ———
+
+  /** File ▸ Open GreatHall: what belongs together, and the library the assistant cites (greathall.ts). */
+  async openGreatHall(): Promise<void> {
+    try {
+      const chosen = await this.greatHall.choose();
+      if (chosen === undefined) return;
+      this.library.useHall(chosen);
+      this.showNotice(`The GreatHall "${chosen.name}" is open. What the assistant cites will be listed in the Library.`);
+    } catch (problem) {
+      this.showProblem(problem instanceof Error ? problem.message : String(problem));
+    }
+    this.editor?.focus();
+  }
 
   /**
    * Edit ▸ Section Isolation: whether Select All and the keys that reach for the ends of the whisper stay inside the
@@ -514,6 +534,8 @@ export class Loom {
     if (writing.markdown === '') editor.setReplyState(writing.replyId, state);
     else editor.setReply(writing.replyId, writing.markdown, state);
     this.elements.activity.textContent = '';
+    // What the reply cited of the library, for the Library tab beside the whisper.
+    void this.library.cite(referencesIn(writing.markdown, this.library.addresses));
     this.hideAsks();
     if (following) this.keepInView(writing.replyId);
     this.saveNow();

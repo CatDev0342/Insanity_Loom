@@ -55,6 +55,8 @@ const loom = new Loom(
     thoughtsStream: required<HTMLElement>('#thoughts-stream'),
     thoughtsSaid: required<HTMLElement>('#thoughts-said'),
     navigationInside: required<HTMLElement>('#navigation-inside'),
+    libraryInside: required<HTMLElement>('#library-inside'),
+    librarySaid: required<HTMLElement>('#library-said'),
     resumeDialog: required<HTMLDialogElement>('#resume-dialog'),
     connectionDialog: required<HTMLDialogElement>('#connection-dialog'),
   },
@@ -62,6 +64,7 @@ const loom = new Loom(
   bridge.connection,
   bridge.whispers,
   bridge.links,
+  bridge.greatHall,
   bridge.journal,
 );
 
@@ -138,6 +141,7 @@ async function run(command: AnyCommandId): Promise<void> {
   if (command === 'whisper.searchHall') return findInFiles();
   if (command === 'find.show') return loom.showFindBar();
   if (command === 'edit.isolateSections') return loom.isolateSections();
+  if (command === 'hall.open') return loom.openGreatHall();
   if (command === 'find.replace') return loom.showReplaceBar();
   if (command === 'find.next') return loom.stepFind('next');
   if (command === 'find.previous') return loom.stepFind('previous');

@@ -138,6 +138,93 @@ body {
   }
 }
 
+/* The Library tab: what the assistant cited, and the library itself when the author opens one. */
+.library-list {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.library-entry {
+  display: block;
+  width: 100%;
+  padding: 0.3rem 0.35rem;
+  background: none;
+  border: 0;
+  border-left: 2px solid transparent;
+  color: var(--ink);
+  font: inherit;
+  text-align: left;
+  cursor: default;
+}
+
+.library-entry:hover {
+  background: var(--menu);
+  border-left-color: var(--focus);
+}
+
+.library-address {
+  display: block;
+  color: var(--focus);
+  font-family: ui-monospace, Consolas, 'DejaVu Sans Mono', monospace;
+  font-size: 0.8rem;
+}
+
+.library-text {
+  display: -webkit-box;
+  overflow: hidden;
+  color: var(--ink-quiet);
+  font-size: 0.82rem;
+  line-height: 1.35;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+}
+
+/* The document, opened under the entry that opened it, which stays pinned above it. */
+.library-open {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 24rem;
+}
+
+.library-pinned {
+  flex: none;
+  padding: 0.35rem 0.4rem;
+  background: var(--menu);
+  border: 0;
+  border-bottom: 1px solid var(--menu-edge);
+  color: var(--ink);
+  font: inherit;
+  font-size: 0.82rem;
+  text-align: left;
+  cursor: default;
+}
+
+.library-pinned::before {
+  content: '▾ ';
+  color: var(--focus);
+}
+
+.library-writing {
+  flex: 1;
+  min-height: 20rem;
+  padding: 0.4rem;
+  background: var(--ground);
+  border: 0;
+  color: var(--ink);
+  font-family: ui-monospace, Consolas, 'DejaVu Sans Mono', monospace;
+  font-size: 0.8rem;
+  line-height: 19px;
+  resize: none;
+  white-space: pre-wrap;
+}
+
+.library-writing:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: -2px;
+}
+
 /* The panel on the left: lists of places to go. */
 .navigation-part {
   margin-bottom: 1rem;

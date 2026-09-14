@@ -7,6 +7,7 @@ import { ASSISTANT_CHANNELS, CONNECTION_CHANNELS, JOURNAL_CHANNELS, type Assista
 import type { InsanityLoomBridge } from '../shared/bridge';
 import { RUN_COMMAND_CHANNEL } from '../shared/commands';
 import { EDITING_CHANNELS, type ContextDetails } from '../shared/editing';
+import { GREATHALL_CHANNELS } from '../shared/greathall';
 import { HALL_CHANNELS } from '../shared/hall';
 import { LINK_CHANNELS } from '../shared/links';
 import { WHISPER_CHANNELS } from '../shared/whispers';
@@ -96,6 +97,14 @@ const bridge: InsanityLoomBridge = {
 
   hall: {
     search: (asked) => ipcRenderer.invoke(HALL_CHANNELS.search, asked),
+  },
+
+  greatHall: {
+    current: () => ipcRenderer.invoke(GREATHALL_CHANNELS.current),
+    choose: () => ipcRenderer.invoke(GREATHALL_CHANNELS.choose),
+    sections: (addresses) => ipcRenderer.invoke(GREATHALL_CHANNELS.sections, addresses),
+    document: (address) => ipcRenderer.invoke(GREATHALL_CHANNELS.document, address),
+    saveDocument: (address, markdown) => ipcRenderer.invoke(GREATHALL_CHANNELS.saveDocument, address, markdown),
   },
 
   journal: {

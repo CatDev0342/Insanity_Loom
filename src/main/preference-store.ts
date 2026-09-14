@@ -38,18 +38,28 @@ export class PreferenceStore {
     return this.preferences.alcoveFolder;
   }
 
+  /** The GreatHall file last opened; '' when none has been. */
+  get greatHallPath(): string {
+    return this.preferences.greatHallPath;
+  }
+
+  setGreatHallPath(greatHallPath: string): void {
+    if (greatHallPath === this.preferences.greatHallPath) return;
+    this.write(preferencesWith(this.preferences, { greatHallPath }));
+  }
+
   setSpelling(spelling: SpellingPreferences): void {
-    this.write(preferencesWith(spelling, this.preferences.assistantMode, this.preferences.alcoveFolder));
+    this.write(preferencesWith(this.preferences, { spelling }));
   }
 
   setAssistantMode(assistantMode: string): void {
     if (assistantMode === this.preferences.assistantMode) return;
-    this.write(preferencesWith(this.preferences.spelling, assistantMode, this.preferences.alcoveFolder));
+    this.write(preferencesWith(this.preferences, { assistantMode }));
   }
 
   setAlcoveFolder(alcoveFolder: string): void {
     if (alcoveFolder === this.preferences.alcoveFolder) return;
-    this.write(preferencesWith(this.preferences.spelling, this.preferences.assistantMode, alcoveFolder));
+    this.write(preferencesWith(this.preferences, { alcoveFolder }));
   }
 
   private write(preferences: Preferences): void {

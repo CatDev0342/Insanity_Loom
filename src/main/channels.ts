@@ -1,7 +1,7 @@
 // The layer underneath's answers to the page's assistant, connection and journal requests. Everything arriving from
 // the page is checked here before it is used: the page is never trusted to send only what it should.
 
-import { BrowserWindow, ipcMain, shell, type IpcMainInvokeEvent } from 'electron';
+import { BrowserWindow, dialog, ipcMain, shell, type IpcMainInvokeEvent } from 'electron';
 import { execFile } from 'node:child_process';
 import { join } from 'node:path';
 import {
@@ -18,6 +18,8 @@ import { DEFAULT_CONNECTION, type ConnectionSettings } from '../shared/connectio
 import { Assistant, HOST_LOG_FILE_NAME } from './assistant';
 import type { Journal } from './journal';
 import type { PreferenceStore } from './preference-store';
+import { GREATHALL_CHANNELS } from '../shared/greathall';
+import { GreatHalls } from './greathall';
 import { HALL_CHANNELS, type HallSearch } from '../shared/hall';
 import { searchHall } from './hall';
 import { LINK_CHANNELS } from '../shared/links';
@@ -34,10 +36,33 @@ const MAXIMUM_IDENTIFIER_LENGTH = 512;
 const MAXIMUM_ADDRESS_LENGTH = 4096;
 const MAXIMUM_PATH_LENGTH = 4096;
 
+// How many addresses the page may ask about at once: a reply cites a handful, never hundreds.
+const MOST_ADDRESSES_ASKED_ABOUT = 200;
+
 // How long Docker may take to list its running containers, in milliseconds, before Insanity_Loom stops waiting.
 const CONTAINER_LIST_TIME_LIMIT_MS = 15_000;
 
 const PANEL = 'the Connection Settings panel';
+
+/** The addresses the page asked about, checked: the layer underneath trusts nothing it is handed. */
+function readAddresses(value: unknown): readonly string[] {
+  if (!Array.isArray(value)) return [];
+  return value.slice(0, MOST_ADDRESSES_ASKED_ABOUT).map((one) => text(one, 'address', MAXIMUM_IDENTIFIER_LENGTH));
+}
+
+/** Asks the author for a GreatHall file. */
+async function chooseGreatHall(window: BrowserWindow | null): Promise<string> {
+  const options = {
+    title: 'Open GreatHall',
+    filters: [
+      { name: 'GreatHalls', extensions: ['greathall'] },
+      { name: 'All files', extensions: ['*'] },
+    ],
+    properties: ['openFile' as const],
+  };
+  const answer = window === null ? await dialog.showOpenDialog(options) : await dialog.showOpenDialog(window, options);
+  return answer.canceled ? '' : (answer.filePaths[0] ?? '');
+}
 
 /** What the page asked to search for, checked: the layer underneath trusts nothing it is handed. */
 function readHallSearch(value: unknown): HallSearch {
@@ -204,6 +229,33 @@ export function startServices(dataFolder: string, logsFolder: string, journal: J
   );
   ipcMain.handle(WHISPER_CHANNELS.search, (_event, looked: unknown) =>
     whispers.search(text(looked, 'search', MAXIMUM_IDENTIFIER_LENGTH)),
+  );
+  const halls = new GreatHalls();
+  // A GreatHall opened before is opened again on the next start; the author never opens it twice.
+  const remembered = preferences.greatHallPath;
+  if (remembered !== '') {
+    try {
+      halls.open(remembered);
+    } catch {
+      // A hall that has moved or been deleted is simply not open; the author is not stopped from working.
+    }
+  }
+  ipcMain.handle(GREATHALL_CHANNELS.current, () => halls.current);
+  ipcMain.handle(GREATHALL_CHANNELS.choose, async (event) => {
+    const chosen = await chooseGreatHall(windowOf(event));
+    if (chosen === '') return undefined;
+    const hall = halls.open(chosen);
+    preferences.setGreatHallPath(chosen);
+    return hall;
+  });
+  ipcMain.handle(GREATHALL_CHANNELS.sections, (_event, addresses: unknown) =>
+    halls.sections(readAddresses(addresses)),
+  );
+  ipcMain.handle(GREATHALL_CHANNELS.document, (_event, address: unknown) =>
+    halls.document(text(address, 'address', MAXIMUM_IDENTIFIER_LENGTH)),
+  );
+  ipcMain.handle(GREATHALL_CHANNELS.saveDocument, (_event, address: unknown, markdown: unknown) =>
+    halls.saveDocument(text(address, 'address', MAXIMUM_IDENTIFIER_LENGTH), whisper(markdown)),
   );
   ipcMain.handle(HALL_CHANNELS.search, (_event, asked: unknown) => searchHall(whispers.alcoveFolder, readHallSearch(asked)));
   ipcMain.handle(LINK_CHANNELS.open, (_event, address: unknown) => openAddress(text(address, 'address', MAXIMUM_ADDRESS_LENGTH)));
