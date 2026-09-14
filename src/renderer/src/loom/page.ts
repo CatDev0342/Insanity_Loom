@@ -32,6 +32,7 @@ import { ReferenceBar, type ReferenceBarElements } from './reference-bar';
 import { Thoughts, type ThoughtsElements } from './thoughts';
 import type { UpdateStanding } from '../../../shared/updates';
 import { NOTHING_YET, withPiece, type ReplyBeingWritten } from './one-reply';
+import { howLong, TICK_SECONDS } from './how-long';
 import { sendAgain, wentUnheard } from './sending-again';
 import { Saving } from './saving';
 import { theAuthorsOwn } from './the-authors-own';
@@ -74,6 +75,8 @@ const NOTICE_STAYS_MS = 9000;
 const ANCHOR_SLACK_PX = 200;
 
 const PAGE_TITLE = 'Insanity_Loom';
+
+const MILLISECONDS_PER_SECOND = 1000;
 const UNTITLED = 'Untitled whisper';
 
 
@@ -118,6 +121,9 @@ export class Loom {
   /** The reply being written: its own identity, what has arrived, and which message the last piece belonged to. */
   private writing: ({ replyId: string; sent: string; tries: number } & ReplyBeingWritten) | undefined;
   private renderScheduled = false;
+  /** When the reply being written was asked for, and the timer that keeps saying how long it has been. */
+  private writingSince = 0;
+  private writingTimer: ReturnType<typeof setInterval> | undefined;
 
   /**
    * While a resumed conversation's history is replayed. `fill` writes it straight into a whisper that does not record
@@ -673,6 +679,7 @@ export class Loom {
     if (next === undefined) return;
     this.writing = { replyId: next.replyId, sent: next.markdown, tries: next.tries + 1, ...NOTHING_YET };
     this.requireEditor().setReplyState(next.replyId, 'writing');
+    this.startSayingHowLong();
     // The reply arrives as events; the promise settles when it has finished, which replyFinished also reports.
     this.assistant.send(next.markdown).catch((problem: unknown) => {
       this.showProblem(problem instanceof Error ? problem.message : String(problem));
@@ -715,9 +722,37 @@ export class Loom {
     scroll.scrollTop += after - before;
   }
 
+  /**
+   * Keeps the label on the reply saying how long the assistant has been writing.
+   *
+   * "The assistant is writing…" reads the same after two seconds and after twenty minutes, so a turn that has quietly
+   * died looks exactly like one thinking hard (the designer's screenshot, 2026-Sep-14). The time is written straight
+   * onto the drawn reply rather than into the whisper: how long a reply took is not part of what was said, and has no
+   * business in the file or in the author's undo history.
+   */
+  private startSayingHowLong(): void {
+    this.stopSayingHowLong();
+    this.writingSince = Date.now();
+    const say = (): void => {
+      const writing = this.writing;
+      const drawn = writing === undefined ? undefined : this.editor?.replyElement(writing.replyId);
+      if (drawn === undefined) return;
+      drawn.dataset['waited'] = howLong((Date.now() - this.writingSince) / MILLISECONDS_PER_SECOND);
+    };
+    say();
+    this.writingTimer = setInterval(say, TICK_SECONDS * MILLISECONDS_PER_SECOND);
+  }
+
+  private stopSayingHowLong(): void {
+    if (this.writingTimer === undefined) return;
+    clearInterval(this.writingTimer);
+    this.writingTimer = undefined;
+  }
+
   private finishWriting(state: ReplyState): void {
     const writing = this.writing;
     if (writing === undefined) return;
+    this.stopSayingHowLong();
     this.writing = undefined;
     const editor = this.requireEditor();
     this.withoutMovingTheWriting(() => {

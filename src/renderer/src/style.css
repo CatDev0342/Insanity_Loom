@@ -752,7 +752,8 @@ body {
 }
 
 .whisper-editor section.reply[data-state='writing']::before {
-  content: 'The assistant is writing…';
+  /* The time is added by the page (how-long.ts) once there is enough of it to be worth saying. */
+  content: 'The assistant is writing…' attr(data-waited);
 }
 
 .whisper-editor section.reply[data-state='stopped']::after,
