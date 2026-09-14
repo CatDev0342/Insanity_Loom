@@ -121,3 +121,15 @@ describe('what the navigation panel reads from the whisper', () => {
     expect(here.pointsAt).toEqual([{ address: 'Another%20whisper.xhtml', name: 'Another whisper', text: 'a link' }]);
   });
 });
+
+describe('the bar between the panels', () => {
+  it('says which way the panel must go to show what the author is reading about', async () => {
+    const { whichWay } = await import('../../src/renderer/src/loom/reference-bar');
+    const view = new DOMRect(0, 100, 300, 400);
+    expect(whichWay(new DOMRect(0, 50, 300, 20), view)).toBe('up');
+    expect(whichWay(new DOMRect(0, 600, 300, 20), view)).toBe('down');
+    expect(whichWay(new DOMRect(0, 200, 300, 20), view)).toBe('here');
+    // Nothing to point at: the turn being read cited nothing the panel holds.
+    expect(whichWay(undefined, view)).toBe('none');
+  });
+});

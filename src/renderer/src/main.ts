@@ -57,6 +57,9 @@ const loom = new Loom(
     navigationInside: required<HTMLElement>('#navigation-inside'),
     libraryInside: required<HTMLElement>('#library-inside'),
     librarySaid: required<HTMLElement>('#library-said'),
+    libraryPane: required<HTMLElement>('#library-pane'),
+    showLibraryTab: () => besideTheWhisper.showTab('library'),
+    referenceBar: required<HTMLElement>('#reference-bar'),
     resumeDialog: required<HTMLDialogElement>('#resume-dialog'),
     connectionDialog: required<HTMLDialogElement>('#connection-dialog'),
   },
@@ -167,7 +170,7 @@ new MenuBar(required<HTMLElement>('#menubar'), MENUS, run, standingOf);
 new PanelTabs(required<HTMLElement>('#navigation-tabs'), [
   { id: 'navigation', name: 'Navigation', pane: required<HTMLElement>('#navigation-pane') },
 ]);
-new PanelTabs(required<HTMLElement>('#thoughts-tabs'), [
+const besideTheWhisper = new PanelTabs(required<HTMLElement>('#thoughts-tabs'), [
   { id: 'thinking', name: 'Thinking', pane: required<HTMLElement>('#thoughts-pane') },
   { id: 'library', name: 'Library', pane: required<HTMLElement>('#library-pane') },
 ]);

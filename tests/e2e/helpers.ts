@@ -7,6 +7,8 @@ import { join } from 'node:path';
 export const REPOSITORY = join(__dirname, '..', '..');
 export const DATA = join(REPOSITORY, 'Data');
 export const FAKE_ASSISTANT = join(REPOSITORY, 'tests', 'fixtures', 'fake-assistant.mjs');
+/** A GreatHall with a small library, for the tests that need one (tests/fixtures/hall). */
+export const TEST_GREATHALL = join(REPOSITORY, 'tests', 'fixtures', 'hall', 'Testing.greathall');
 /** Where a development run keeps its whispers: the Alcove folder beside the program, which is the repository. */
 export const ALCOVE = join(REPOSITORY, 'Alcove');
 /** Where the stand-in assistant records being signed in, when a test makes it require signing in. */
@@ -31,7 +33,7 @@ export const FAKE_CONNECTION = {
  */
 export function prepareData(
   start: 'first start' | 'fake assistant' | 'fake assistant, signed out',
-  options: { readonly history?: number; readonly keepJournal?: boolean } = {},
+  options: { readonly history?: number; readonly keepJournal?: boolean; readonly greatHall?: boolean } = {},
 ): void {
   mkdirSync(DATA, { recursive: true });
   rmSync(join(DATA, 'settings.json'), { force: true });
@@ -40,6 +42,20 @@ export function prepareData(
     rmSync(ALCOVE, { recursive: true, force: true });
   }
   rmSync(FAKE_AUTH_FILE, { force: true });
+  // A GreatHall opened before is opened again on the next start; a test that wants one says so here.
+  rmSync(join(DATA, 'preferences.json'), { force: true });
+  if (options.greatHall === true) {
+    writeFileSync(
+      join(DATA, 'preferences.json'),
+      JSON.stringify({
+        version: 3,
+        spelling: { enabled: true, languages: [] },
+        assistantMode: '',
+        alcoveFolder: '',
+        greatHallPath: TEST_GREATHALL,
+      }),
+    );
+  }
   if (start === 'fake assistant') {
     const history = options.history ?? 1;
     const connection = { ...FAKE_CONNECTION, hostArguments: [FAKE_ASSISTANT, '--history', String(history)] };

@@ -138,6 +138,67 @@ body {
   }
 }
 
+/* The thin bar between the whisper and the panel beside it: how far the two have drifted apart. */
+.reference-bar {
+  position: relative;
+  flex: none;
+  width: 0.9rem;
+  background: var(--ground);
+  border-inline: 1px solid var(--menu-edge);
+}
+
+.reference-bar[data-state='apart'] {
+  background: var(--bar);
+}
+
+.reference-marks {
+  position: absolute;
+  inset: 0.9rem 0;
+}
+
+.reference-mark {
+  position: absolute;
+  left: 1px;
+  right: 1px;
+  height: 3px;
+  padding: 0;
+  background: var(--reply-mark);
+  border: 0;
+  cursor: default;
+}
+
+.reference-mark:hover {
+  background: var(--focus);
+}
+
+/* The turn the author is reading, and what it cited. */
+.reference-mark[data-reading='true'] {
+  height: 5px;
+  background: var(--focus);
+}
+
+.reference-arrow {
+  position: absolute;
+  left: 0;
+  right: 0;
+  color: var(--focus);
+  font-size: 0.6rem;
+  text-align: center;
+}
+
+.reference-arrow-up {
+  top: 0;
+}
+
+.reference-arrow-down {
+  bottom: 0;
+}
+
+/* An entry the author was taken to, marked for a moment. */
+.library-entry.is-found {
+  background: var(--highlight);
+}
+
 /* The Library tab: what the assistant cited, and the library itself when the author opens one. */
 .library-list {
   display: flex;

@@ -28,11 +28,18 @@ import { ContextRoom, type ContextElements } from './context-room';
 import { FindBar, type FindBarElements } from './find-bar';
 import { Library, type LibraryElements } from './library';
 import { Navigation, type NavigationElements } from './navigation';
+import { ReferenceBar, type ReferenceBarElements } from './reference-bar';
 import { Thoughts, type ThoughtsElements } from './thoughts';
 import { Saving } from './saving';
 import { chooseConversation } from './resume';
 
-export interface LoomElements extends FindBarElements, ContextElements, ThoughtsElements, NavigationElements, LibraryElements {
+export interface LoomElements
+  extends FindBarElements,
+    ContextElements,
+    ThoughtsElements,
+    NavigationElements,
+    LibraryElements,
+    ReferenceBarElements {
   /** The word in the status bar saying that section isolation is on. */
   readonly isolation: HTMLElement;
   readonly whisper: HTMLElement;
@@ -91,6 +98,7 @@ export class Loom {
   private readonly thoughts: Thoughts;
   private readonly navigation: Navigation;
   private readonly library: Library;
+  private readonly referenceBar: ReferenceBar;
   /** Called whenever the caret moves or the whisper changes, so the toolbar can follow the author. */
   private caretMoved: () => void = () => undefined;
   private readonly waiting: Waiting[] = [];
@@ -136,6 +144,17 @@ export class Loom {
     this.contextRoom = new ContextRoom(elements, () => void this.compact());
     this.thoughts = new Thoughts(elements, whispers, (message) => this.showProblem(message));
     this.library = new Library(elements, greatHall, (message) => this.showProblem(message));
+    this.referenceBar = new ReferenceBar(elements, {
+      citations: () => this.library.citationsByTurn,
+      turnElement: (turn) => this.editor?.elementOfTurn(turn),
+      entryElement: (address) => this.library.entryFor(address),
+      whisperScroll: elements.scroll,
+      panelScroll: elements.libraryPane,
+      goToCitation: (address) => {
+        this.elements.showLibraryTab();
+        this.library.goTo(address);
+      },
+    });
     this.navigation = new Navigation(elements, () => this.editor, {
       goToHeading: (identity) => this.goToHeading(identity),
       goToTurn: (sectionId) => this.goToTurn(sectionId),
@@ -534,8 +553,11 @@ export class Loom {
     if (writing.markdown === '') editor.setReplyState(writing.replyId, state);
     else editor.setReply(writing.replyId, writing.markdown, state);
     this.elements.activity.textContent = '';
-    // What the reply cited of the library, for the Library tab beside the whisper.
-    void this.library.cite(referencesIn(writing.markdown, this.library.addresses));
+    // What the reply cited of the library, for the Library tab beside the whisper, and for the bar between them.
+    const answered = this.requireEditor().turnAnswering(writing.replyId);
+    void this.library.cite(answered, referencesIn(writing.markdown, this.library.addresses)).then(() => {
+      this.referenceBar.drawSoon();
+    });
     this.hideAsks();
     if (following) this.keepInView(writing.replyId);
     this.saveNow();

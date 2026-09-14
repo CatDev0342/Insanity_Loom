@@ -13,6 +13,10 @@ import type { GreatHall, GreatHallBridge, HallSection } from '../../../shared/gr
 export interface LibraryElements {
   readonly libraryInside: HTMLElement;
   readonly librarySaid: HTMLElement;
+  /** What scrolls when the library is longer than the panel. */
+  readonly libraryPane: HTMLElement;
+  /** Brings the Library tab to the front, for when something takes the author there. */
+  readonly showLibraryTab: () => void;
 }
 
 /** How long after the last change a document edited in the panel is written back, in milliseconds. */
@@ -20,8 +24,10 @@ const WRITTEN_AFTER_MS = 800;
 
 export class Library {
   private hall: GreatHall | undefined;
-  /** Everything cited, in the order it was cited, with nothing repeated. */
-  private readonly cited: HallSection[] = [];
+  /** Everything cited, in the order it was cited, with nothing repeated; each remembers the turn that cited it. */
+  private readonly cited: (HallSection & { readonly turn: number })[] = [];
+  /** Where each cited entry is drawn, so the bar between the panels can point at it. */
+  private readonly drawn = new Map<string, HTMLElement>();
   private readonly list = document.createElement('div');
   /** The entry opened, if any, and what is drawn for it. */
   private open: { readonly section: HallSection; readonly holder: HTMLElement } | undefined;
@@ -46,14 +52,14 @@ export class Library {
     return this.hall?.documents.map((document) => document.address) ?? [];
   }
 
-  /** What the assistant cited in a reply: added to the list, in the order written, nothing twice. */
-  async cite(addresses: readonly string[]): Promise<void> {
+  /** What the assistant cited in a reply to one turn: added to the list, in the order written, nothing twice. */
+  async cite(turn: number, addresses: readonly string[]): Promise<void> {
     if (this.hall === undefined || addresses.length === 0) return;
     const fresh = addresses.filter((address) => !this.cited.some((already) => already.address === address));
     if (fresh.length === 0) return;
     try {
       const sections = await this.greatHall.sections(fresh);
-      for (const section of sections) this.cited.push(section);
+      for (const section of sections) this.cited.push({ ...section, turn });
       this.drawList();
     } catch (problem) {
       this.onProblem(`The library could not be read: ${problem instanceof Error ? problem.message : String(problem)}`);
@@ -71,8 +77,35 @@ export class Library {
         : `${this.hall.libraryName} · ${this.cited.length} cited`;
   }
 
+  /** Which turns cited something, and what each cited: what the bar between the panels is drawn from. */
+  get citationsByTurn(): readonly { readonly turn: number; readonly addresses: readonly string[] }[] {
+    const byTurn = new Map<number, string[]>();
+    for (const section of this.cited) {
+      const already = byTurn.get(section.turn);
+      if (already === undefined) byTurn.set(section.turn, [section.address]);
+      else already.push(section.address);
+    }
+    return [...byTurn.entries()].sort(([left], [right]) => left - right).map(([turn, addresses]) => ({ turn, addresses }));
+  }
+
+  /** Where a cited entry is drawn in the panel, for pointing at it and for scrolling to it. */
+  entryFor(address: string): HTMLElement | undefined {
+    return this.drawn.get(address);
+  }
+
+  /** Takes the author to a cited entry in the list. */
+  goTo(address: string): void {
+    const entry = this.drawn.get(address);
+    if (entry === undefined) return;
+    if (this.open !== undefined) this.closeDocument();
+    entry.scrollIntoView({ block: 'center' });
+    entry.classList.add('is-found');
+    window.setTimeout(() => entry.classList.remove('is-found'), FOUND_MS);
+  }
+
   private drawList(): void {
     this.say();
+    this.drawn.clear();
     this.list.replaceChildren(
       ...this.cited.map((section) => {
         const entry = document.createElement('button');
@@ -89,6 +122,7 @@ export class Library {
         entry.title = `${section.address} — ${section.title}`;
         entry.addEventListener('mousedown', (event) => event.preventDefault());
         entry.addEventListener('click', () => void this.choose(section));
+        this.drawn.set(section.address, entry);
         return entry;
       }),
     );
@@ -187,3 +221,6 @@ export class Library {
 
 /** How tall a line of the library is drawn, in pixels, for finding the place cited before the document is measured. */
 const LINE_HEIGHT_GUESS = 19;
+
+/** How long an entry the author was taken to stays marked, in milliseconds. */
+const FOUND_MS = 1500;

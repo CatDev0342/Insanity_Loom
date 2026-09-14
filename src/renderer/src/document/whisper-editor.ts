@@ -317,6 +317,24 @@ export class WhisperEditor {
     return found;
   }
 
+  /** Where the line closing a turn is drawn on the page, for the bar between the panels. */
+  elementOfTurn(turn: number): HTMLElement | undefined {
+    let position = -1;
+    this.doc.forEach((node, offset) => {
+      if (position === -1 && node.type.name === 'horizontalRule' && Number(node.attrs['turn'] ?? 0) === turn) position = offset;
+    });
+    if (position === -1) return undefined;
+    const drawn = this.editor.view.nodeDOM(position);
+    return drawn instanceof HTMLElement ? drawn : undefined;
+  }
+
+  /** Which turn a reply answers: the turn of the rule it was placed after. */
+  turnAnswering(replyId: string): number {
+    const found = findReply(this.doc, replyId);
+    const answers = found?.node.attrs['answers'];
+    return typeof answers === 'string' ? this.turnOf(answers).number : 0;
+  }
+
   /** Takes the author to the line that closed a turn. */
   goToTurn(sectionId: string): boolean {
     const at = ruleIndex(this.doc, sectionId);
