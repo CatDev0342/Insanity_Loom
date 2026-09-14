@@ -42,7 +42,14 @@ export const MENUS: readonly TopMenu[] = [
   {
     label: '&File',
     // Alt+F4 closes the window on every Windows program; the system handles it, and the menu shows it.
-    entries: [command('E&xit', 'app.quit', ['Alt+F4'], true)],
+    entries: [
+      command('&New Whisper', 'whisper.new', ['Ctrl+N']),
+      command('&Open Whisper…', 'whisper.open', ['Ctrl+O']),
+      SEPARATOR,
+      command('&Show Alcove Folder', 'whisper.showAlcove'),
+      SEPARATOR,
+      command('E&xit', 'app.quit', ['Alt+F4'], true),
+    ],
   },
   {
     label: '&Edit',

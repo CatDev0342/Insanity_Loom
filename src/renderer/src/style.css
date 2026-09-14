@@ -644,3 +644,12 @@ button:disabled {
   outline: 2px solid var(--focus);
   outline-offset: 0;
 }
+
+/* Which whisper is open, at the left of the status bar. */
+.status-whisper {
+  color: var(--ink);
+}
+
+.status-whisper:empty {
+  display: none;
+}

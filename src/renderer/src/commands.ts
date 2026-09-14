@@ -3,6 +3,9 @@
 import { isCommandId, type CommandId } from '../../shared/commands';
 
 export const PAGE_COMMANDS = [
+  'whisper.new',
+  'whisper.open',
+  'whisper.showAlcove',
   'assistant.reconnect',
   'assistant.newConversation',
   'assistant.resumeConversation',

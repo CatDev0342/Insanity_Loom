@@ -417,6 +417,11 @@ export class Assistant {
       case 'tool_call_update':
         this.emit({ type: 'tool', id: update.toolCallId, title: update.title ?? '', status: update.status ?? '' });
         return;
+      case 'session_info_update': {
+        const title = update.title ?? '';
+        if (title.trim() !== '') this.emit({ type: 'title', title });
+        return;
+      }
       case 'current_mode_update':
         // The assistant can change its own way of working — leaving Plan mode, say; the status bar follows it.
         this.modes = { ...this.modes, current: update.currentModeId };

@@ -3,6 +3,7 @@
 import type { AssistantBridge, ConnectionBridge, JournalBridge } from './assistant';
 import type { CommandId } from './commands';
 import type { EditingBridge } from './editing';
+import type { WhispersBridge } from './whispers';
 
 export interface InsanityLoomBridge {
   /** The versions of the engine Insanity_Loom runs on, for the About box and for bug reports. */
@@ -23,6 +24,9 @@ export interface InsanityLoomBridge {
 
   /** Right-click menus, spelling and the personal dictionary. */
   readonly editing: EditingBridge;
+
+  /** The author's whispers as files, and the alcove they live in. */
+  readonly whispers: WhispersBridge;
 
   /** Where the author's unsent writing is kept safe. */
   readonly journal: JournalBridge;

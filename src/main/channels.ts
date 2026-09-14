@@ -1,7 +1,7 @@
 // The layer underneath's answers to the page's assistant, connection and journal requests. Everything arriving from
 // the page is checked here before it is used: the page is never trusted to send only what it should.
 
-import { BrowserWindow, ipcMain, shell } from 'electron';
+import { BrowserWindow, ipcMain, shell, type IpcMainInvokeEvent } from 'electron';
 import { execFile } from 'node:child_process';
 import { join } from 'node:path';
 import {
@@ -18,14 +18,17 @@ import { DEFAULT_CONNECTION, type ConnectionSettings } from '../shared/connectio
 import { Assistant, HOST_LOG_FILE_NAME } from './assistant';
 import type { Journal } from './journal';
 import type { PreferenceStore } from './preference-store';
+import { WHISPER_CHANNELS } from '../shared/whispers';
+import { Whispers } from './whispers';
 import { loadSettings, readConnection, saveSettings, settingsWith } from './settings';
 
 // Identifiers the page passes back (conversation ids, permission request and choice ids) are short; anything longer
 // is not one of them. The same bound serves for a Docker program's path.
 const MAXIMUM_IDENTIFIER_LENGTH = 512;
 
-// A sign-in page's address, with its one-time parameters, is long but bounded.
+// A sign-in page's address, with its one-time parameters, is long but bounded. A file path is bounded too.
 const MAXIMUM_ADDRESS_LENGTH = 4096;
+const MAXIMUM_PATH_LENGTH = 4096;
 
 // How long Docker may take to list its running containers, in milliseconds, before Insanity_Loom stops waiting.
 const CONTAINER_LIST_TIME_LIMIT_MS = 15_000;
@@ -146,8 +149,24 @@ export function startServices(dataFolder: string, logsFolder: string, journal: J
   });
 
   ipcMain.handle(JOURNAL_CHANNELS.loadDraft, () => journal.loadDraft());
-  ipcMain.handle(JOURNAL_CHANNELS.loadWhisper, () => journal.loadWhisper());
-  ipcMain.handle(JOURNAL_CHANNELS.saveWhisper, (_event, xhtml: unknown) => journal.saveWhisper(text(xhtml, 'whisper', MAXIMUM_WHISPER_LENGTH)));
+  const whispers = new Whispers(Whispers.programFolderOf(dataFolder), journal, preferences);
+  const windowOf = (event: IpcMainInvokeEvent): BrowserWindow | null => BrowserWindow.fromWebContents(event.sender);
+  const whisper = (value: unknown): string => text(value, 'whisper', MAXIMUM_WHISPER_LENGTH);
+  // A path only ever comes back from a dialog or from the alcove itself, so it is checked for length alone.
+  const whisperPath = (value: unknown): string => text(value, 'whisper path', MAXIMUM_PATH_LENGTH);
+
+  ipcMain.handle(WHISPER_CHANNELS.alcoveFolder, () => whispers.alcoveFolder);
+  ipcMain.handle(WHISPER_CHANNELS.chooseAlcove, (event) => whispers.chooseAlcove(windowOf(event)));
+  ipcMain.handle(WHISPER_CHANNELS.current, () => whispers.current() ?? whispers.carryOverFromJournal());
+  ipcMain.handle(WHISPER_CHANNELS.create, (_event, title: unknown, xhtml: unknown) =>
+    whispers.create(text(title, 'whisper title', MAXIMUM_IDENTIFIER_LENGTH), whisper(xhtml)),
+  );
+  ipcMain.handle(WHISPER_CHANNELS.save, (_event, path: unknown, xhtml: unknown) => whispers.save(whisperPath(path), whisper(xhtml)));
+  ipcMain.handle(WHISPER_CHANNELS.choose, (event) => whispers.choose(windowOf(event)));
+  ipcMain.handle(WHISPER_CHANNELS.rename, (_event, path: unknown, title: unknown) =>
+    whispers.rename(whisperPath(path), text(title, 'whisper title', MAXIMUM_IDENTIFIER_LENGTH)),
+  );
+  ipcMain.handle(WHISPER_CHANNELS.showAlcove, () => whispers.showAlcove());
 
   return assistant;
 }

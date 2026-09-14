@@ -83,7 +83,7 @@ describe('preferences', () => {
   it('are the defaults until saved, then read back as saved', () => {
     const data = folder();
     expect(loadPreferences(data)).toEqual(DEFAULT_PREFERENCES);
-    savePreferences(data, preferencesWith({ enabled: false, languages: ['en-GB', 'fr'] }, 'auto'));
+    savePreferences(data, preferencesWith({ enabled: false, languages: ['en-GB', 'fr'] }, 'auto', ''));
     expect(loadPreferences(data).spelling).toEqual({ enabled: false, languages: ['en-GB', 'fr'] });
     expect(loadPreferences(data).assistantMode).toBe('auto');
   });
@@ -94,7 +94,12 @@ describe('preferences', () => {
       join(data, PREFERENCES_FILE_NAME),
       JSON.stringify({ version: 1, spelling: { enabled: false, languages: [] } }),
     );
-    expect(loadPreferences(data)).toEqual({ version: 2, spelling: { enabled: false, languages: [] }, assistantMode: '' });
+    expect(loadPreferences(data)).toEqual({
+      version: 3,
+      spelling: { enabled: false, languages: [] },
+      assistantMode: '',
+      alcoveFolder: '',
+    });
   });
 
   it('refuse a way of working that is not one', () => {

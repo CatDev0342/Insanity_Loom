@@ -33,13 +33,23 @@ export class PreferenceStore {
     return this.preferences.assistantMode;
   }
 
+  /** The folder the author's whispers live in; '' for the Alcove folder beside the program. */
+  get alcoveFolder(): string {
+    return this.preferences.alcoveFolder;
+  }
+
   setSpelling(spelling: SpellingPreferences): void {
-    this.write(preferencesWith(spelling, this.preferences.assistantMode));
+    this.write(preferencesWith(spelling, this.preferences.assistantMode, this.preferences.alcoveFolder));
   }
 
   setAssistantMode(assistantMode: string): void {
     if (assistantMode === this.preferences.assistantMode) return;
-    this.write(preferencesWith(this.preferences.spelling, assistantMode));
+    this.write(preferencesWith(this.preferences.spelling, assistantMode, this.preferences.alcoveFolder));
+  }
+
+  setAlcoveFolder(alcoveFolder: string): void {
+    if (alcoveFolder === this.preferences.alcoveFolder) return;
+    this.write(preferencesWith(this.preferences.spelling, this.preferences.assistantMode, alcoveFolder));
   }
 
   private write(preferences: Preferences): void {

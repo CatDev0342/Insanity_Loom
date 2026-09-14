@@ -9,7 +9,9 @@ import { writeFileSafely } from './files';
 const JOURNAL_FOLDER_NAME = 'Journal';
 // Milestone 1 kept the author's unsent writing as plain text; it is read once, to carry it into the whisper.
 const DRAFT_FILE_NAME = 'draft.txt';
+// Milestone 2a kept the whisper itself here; whispers are files in an alcove now, and the journal remembers which.
 const WHISPER_FILE_NAME = 'whisper.xhtml';
+const WHISPER_PATH_FILE_NAME = 'whisper.json';
 const CONVERSATION_FILE_NAME = 'conversation.json';
 
 export class Journal {
@@ -34,8 +36,18 @@ export class Journal {
     return existsSync(file) ? readFileSync(file, 'utf8') : '';
   }
 
-  saveWhisper(xhtml: string): void {
-    writeFileSafely(join(this.folder, WHISPER_FILE_NAME), xhtml);
+  /** Where the whisper open now lives, or undefined when none has been opened. */
+  get whisperPath(): string | undefined {
+    const file = join(this.folder, WHISPER_PATH_FILE_NAME);
+    if (!existsSync(file)) return undefined;
+    const saved: unknown = JSON.parse(readFileSync(file, 'utf8'));
+    const path = typeof saved === 'object' && saved !== null ? (saved as { path?: unknown }).path : undefined;
+    if (typeof path !== 'string' || path === '') throw new Error(`The journal file ${file} does not name a whisper.`);
+    return path;
+  }
+
+  set whisperPath(path: string) {
+    writeFileSafely(join(this.folder, WHISPER_PATH_FILE_NAME), `${JSON.stringify({ path })}\n`);
   }
 
   /** The conversation to resume on the next start, or undefined when there is none. */

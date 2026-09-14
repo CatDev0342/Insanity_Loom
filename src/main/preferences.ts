@@ -11,19 +11,27 @@ import { writeFileSafely } from './files';
 
 export const PREFERENCES_FILE_NAME = 'preferences.json';
 
-// Version 1 held the spelling preferences alone; version 2 adds the assistant's way of working. An older file is
-// upgraded, and written back complete, when read.
-const PREFERENCES_VERSION = 2;
+// Version 1 held the spelling preferences alone; version 2 added the assistant's way of working; version 3 adds the
+// alcove the author keeps their whispers in. An older file is upgraded, and written back complete, when read.
+const PREFERENCES_VERSION = 3;
 const FIRST_VERSION = 1;
+const SECOND_VERSION = 2;
 
 export interface Preferences {
   readonly version: typeof PREFERENCES_VERSION;
   readonly spelling: SpellingPreferences;
   /** The way of working last chosen for the assistant, used again for later conversations; '' for its own default. */
   readonly assistantMode: string;
+  /** The folder the author's whispers live in; '' for the Alcove folder beside the program. */
+  readonly alcoveFolder: string;
 }
 
-export const DEFAULT_PREFERENCES: Preferences = { version: PREFERENCES_VERSION, spelling: DEFAULT_SPELLING, assistantMode: '' };
+export const DEFAULT_PREFERENCES: Preferences = {
+  version: PREFERENCES_VERSION,
+  spelling: DEFAULT_SPELLING,
+  assistantMode: '',
+  alcoveFolder: '',
+};
 
 // A mode's name as the protocol gives it: short, and without spaces or control characters.
 const MODE_ID = /^[\w.:-]{1,64}$/;
@@ -68,8 +76,13 @@ export function loadPreferences(dataFolder: string): Preferences {
     throw problem(file, `It is not valid JSON: ${cause instanceof Error ? cause.message : String(cause)}`);
   }
   if (!isObject(parsed)) throw problem(file, 'It does not hold a preferences object.');
-  if (parsed['version'] === FIRST_VERSION) {
-    const upgraded = { version: PREFERENCES_VERSION, spelling: readSpelling(parsed['spelling'], file), assistantMode: '' } as const;
+  if (parsed['version'] === FIRST_VERSION || parsed['version'] === SECOND_VERSION) {
+    const upgraded: Preferences = {
+      version: PREFERENCES_VERSION,
+      spelling: readSpelling(parsed['spelling'], file),
+      assistantMode: parsed['version'] === SECOND_VERSION ? readMode(parsed['assistantMode'], file) : '',
+      alcoveFolder: '',
+    };
     savePreferences(dataFolder, upgraded);
     return upgraded;
   }
@@ -80,6 +93,7 @@ export function loadPreferences(dataFolder: string): Preferences {
     version: PREFERENCES_VERSION,
     spelling: readSpelling(parsed['spelling'], file),
     assistantMode: readMode(parsed['assistantMode'], file),
+    alcoveFolder: readFolder(parsed['alcoveFolder'], file),
   };
 }
 
@@ -87,6 +101,11 @@ export function savePreferences(dataFolder: string, preferences: Preferences): v
   writeFileSafely(join(dataFolder, PREFERENCES_FILE_NAME), `${JSON.stringify(preferences, null, JSON_INDENT)}\n`);
 }
 
-export function preferencesWith(spelling: SpellingPreferences, assistantMode: string): Preferences {
-  return { version: PREFERENCES_VERSION, spelling, assistantMode };
+export function readFolder(value: unknown, where: string): string {
+  if (typeof value !== 'string') throw problem(where, '"alcoveFolder" must be a folder, or empty.');
+  return value;
+}
+
+export function preferencesWith(spelling: SpellingPreferences, assistantMode: string, alcoveFolder: string): Preferences {
+  return { version: PREFERENCES_VERSION, spelling, assistantMode, alcoveFolder };
 }

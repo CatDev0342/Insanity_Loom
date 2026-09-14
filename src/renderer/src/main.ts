@@ -26,6 +26,7 @@ const loom = new Loom(
     reconnect: required<HTMLButtonElement>('#reconnect'),
     signIn: required<HTMLButtonElement>('#sign-in'),
     connectionSettings: required<HTMLButtonElement>('#connection-settings'),
+    whisperName: required<HTMLElement>('#whisper-name'),
     modeLabel: required<HTMLElement>('#mode-label'),
     mode: required<HTMLSelectElement>('#mode'),
     resumeDialog: required<HTMLDialogElement>('#resume-dialog'),
@@ -33,10 +34,11 @@ const loom = new Loom(
   },
   bridge.assistant,
   bridge.connection,
+  bridge.whispers,
   bridge.journal,
 );
 
-const preferences = new PreferencesPanel(required<HTMLDialogElement>('#preferences-dialog'), bridge.editing);
+const preferences = new PreferencesPanel(required<HTMLDialogElement>('#preferences-dialog'), bridge.editing, bridge.whispers);
 const signIn = new SignInPanel(required<HTMLDialogElement>('#sign-in-dialog'), bridge.assistant);
 required<HTMLButtonElement>('#sign-in').addEventListener('click', () => void signIn.show());
 

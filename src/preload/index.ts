@@ -7,6 +7,7 @@ import { ASSISTANT_CHANNELS, CONNECTION_CHANNELS, JOURNAL_CHANNELS, type Assista
 import type { InsanityLoomBridge } from '../shared/bridge';
 import { RUN_COMMAND_CHANNEL } from '../shared/commands';
 import { EDITING_CHANNELS, type ContextDetails } from '../shared/editing';
+import { WHISPER_CHANNELS } from '../shared/whispers';
 
 const bridge: InsanityLoomBridge = {
   versions: {
@@ -67,10 +68,19 @@ const bridge: InsanityLoomBridge = {
     removeFromDictionary: (word) => ipcRenderer.invoke(EDITING_CHANNELS.removeWord, word),
   },
 
+  whispers: {
+    alcoveFolder: () => ipcRenderer.invoke(WHISPER_CHANNELS.alcoveFolder),
+    chooseAlcoveFolder: () => ipcRenderer.invoke(WHISPER_CHANNELS.chooseAlcove),
+    current: () => ipcRenderer.invoke(WHISPER_CHANNELS.current),
+    create: (title, xhtml) => ipcRenderer.invoke(WHISPER_CHANNELS.create, title, xhtml),
+    save: (path, xhtml) => ipcRenderer.invoke(WHISPER_CHANNELS.save, path, xhtml),
+    choose: () => ipcRenderer.invoke(WHISPER_CHANNELS.choose),
+    rename: (path, title) => ipcRenderer.invoke(WHISPER_CHANNELS.rename, path, title),
+    showAlcove: () => ipcRenderer.invoke(WHISPER_CHANNELS.showAlcove),
+  },
+
   journal: {
     loadDraft: () => ipcRenderer.invoke(JOURNAL_CHANNELS.loadDraft),
-    loadWhisper: () => ipcRenderer.invoke(JOURNAL_CHANNELS.loadWhisper),
-    saveWhisper: (xhtml) => ipcRenderer.invoke(JOURNAL_CHANNELS.saveWhisper, xhtml),
   },
 };
 

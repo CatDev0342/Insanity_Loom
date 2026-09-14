@@ -14,6 +14,7 @@ import type {
   JournalBridge,
   SessionMode,
 } from '../../../shared/assistant';
+import type { WhispersBridge } from '../../../shared/whispers';
 import type { AssistantCommandId } from '../commands';
 import type { ReplyState } from '../document/extensions';
 import { WhisperEditor } from '../document/whisper-editor';
@@ -31,6 +32,7 @@ export interface LoomElements {
   readonly reconnect: HTMLButtonElement;
   readonly signIn: HTMLButtonElement;
   readonly connectionSettings: HTMLButtonElement;
+  readonly whisperName: HTMLElement;
   readonly modeLabel: HTMLElement;
   readonly mode: HTMLSelectElement;
   readonly resumeDialog: HTMLDialogElement;
@@ -61,6 +63,9 @@ export class Loom {
   private state: ConnectionState = 'disconnected';
   private conversationId = '';
   private title = UNTITLED;
+  /** Where the whisper open now is kept, and what its file is called. */
+  private whisperPath = '';
+  private whisperName = '';
 
   /** The reply being written, and its Markdown so far. */
   private writing: { replyId: string; markdown: string } | undefined;
@@ -84,6 +89,7 @@ export class Loom {
     private readonly elements: LoomElements,
     private readonly assistant: AssistantBridge,
     private readonly connection: ConnectionBridge,
+    private readonly whispers: WhispersBridge,
     private readonly journal: JournalBridge,
   ) {
     // Saving new connection settings reconnects with them at once.
@@ -128,24 +134,33 @@ export class Loom {
     else this.onEvent({ type: 'status', state: 'disconnected', detail: 'Not connected. Assistant ▸ Reconnect connects.' });
   }
 
+  /**
+   * Opens the whisper the author was last in — a file in their alcove — or makes a new one. Writing left over from
+   * before whispers were files is carried into it.
+   */
   private async openWhisper(): Promise<void> {
-    const saved = await this.journal.loadWhisper();
+    const open = await this.whispers.current();
     let html: string;
-    if (saved !== '') {
+    if (open !== undefined) {
       try {
-        const whisper = fromXhtml(saved);
+        const whisper = fromXhtml(open.xhtml);
         html = whisper.bodyHtml;
         this.conversationId = whisper.conversationId;
         this.title = whisper.title === '' ? UNTITLED : whisper.title;
+        this.whisperPath = open.path;
+        this.whisperName = open.name;
       } catch (problem) {
-        this.showProblem(`The whisper in progress could not be read, and has been left as it is. ${problem instanceof Error ? problem.message : String(problem)}`);
+        this.showProblem(
+          `"${open.name}" could not be read, and has been left as it is. ${problem instanceof Error ? problem.message : String(problem)}`,
+        );
         throw problem;
       }
     } else {
-      // Writing left over from before whispers is carried in, a paragraph per line.
+      // Writing left over from Milestone 1's writing box is carried in, a paragraph per line.
       const draft = await this.journal.loadDraft();
       html = draft
         .split('\n')
+        .filter((line) => line.trim() !== '')
         .map((line) => `<p>${line.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')}</p>`)
         .join('');
     }
@@ -155,7 +170,19 @@ export class Loom {
       onSectionFinished: (sectionId, markdown) => this.sectionFinished(sectionId, markdown),
       onChange: () => this.saveNow(),
     });
+    if (open === undefined) await this.makeWhisperFile();
     this.showTitle();
+  }
+
+  /** Makes the file this whisper lives in, in the alcove. */
+  private async makeWhisperFile(): Promise<void> {
+    const made = await this.whispers.create(this.title, this.asXhtml());
+    this.whisperPath = made.path;
+    this.whisperName = made.name;
+  }
+
+  private asXhtml(): string {
+    return toXhtml({ title: this.title, conversationId: this.conversationId, bodyHtml: this.requireEditor().html });
   }
 
   private requireEditor(): WhisperEditor {
@@ -164,15 +191,16 @@ export class Loom {
   }
 
   private showTitle(): void {
-    document.title = `${this.title} — ${PAGE_TITLE}`;
+    document.title = this.whisperName === '' ? `${this.title} — ${PAGE_TITLE}` : `${this.whisperName} — ${PAGE_TITLE}`;
+    this.elements.whisperName.textContent = this.whisperName;
   }
 
   // ——— Saving ———
 
   /**
-   * Writes the whisper to the journal at once, on every change. Changes that arrive while a save is being written —
-   * fast typing, a streaming reply — are gathered into the next save, so saving never falls behind and the file on
-   * disk is never more than one save old.
+   * Writes the whisper to its file at once, on every change. Changes that arrive while a save is being written — fast
+   * typing, a streaming reply — are gathered into the next save, so saving never falls behind and the file on disk is
+   * never more than one save old.
    */
   private saveNow(): void {
     this.unsaved = true;
@@ -182,9 +210,8 @@ export class Loom {
       try {
         while (this.unsaved) {
           this.unsaved = false;
-          const editor = this.editor;
-          if (editor === undefined) return;
-          await this.journal.saveWhisper(toXhtml({ title: this.title, conversationId: this.conversationId, bodyHtml: editor.html }));
+          if (this.editor === undefined || this.whisperPath === '') return;
+          await this.whispers.save(this.whisperPath, this.asXhtml());
         }
       } catch (problem) {
         this.showProblem(`The whisper could not be saved: ${problem instanceof Error ? problem.message : String(problem)}`);
@@ -228,6 +255,15 @@ export class Loom {
           return;
         case 'assistant.signOut':
           await this.assistant.signOut();
+          return;
+        case 'whisper.new':
+          await this.newWhisper();
+          return;
+        case 'whisper.open':
+          await this.openAnotherWhisper();
+          return;
+        case 'whisper.showAlcove':
+          await this.whispers.showAlcove();
           return;
       }
     } catch (problem) {
@@ -362,6 +398,9 @@ export class Loom {
       case 'modes':
         this.showModes(event.modes, event.current);
         return;
+      case 'title':
+        void this.useTitle(event.title);
+        return;
     }
   }
 
@@ -437,6 +476,58 @@ export class Loom {
     }
     const said = describeCatchUp(catchUp);
     if (said !== '') this.showNotice(said);
+  }
+
+  /** The conversation's own title, which also names its whisper's file (keeping the date it began). */
+  /** A new whisper: a new file in the alcove, and a new conversation to go with it. */
+  private async newWhisper(): Promise<void> {
+    const editor = this.requireEditor();
+    this.abandonWriting('stopped');
+    this.waiting.length = 0;
+    editor.clear();
+    this.title = UNTITLED;
+    this.conversationId = '';
+    await this.makeWhisperFile();
+    this.showTitle();
+    if (this.state === 'connected') await this.assistant.startConversation();
+    editor.focus();
+  }
+
+  /**
+   * Opens another whisper from the alcove, and takes up its conversation where it left off — anything said while that
+   * whisper was closed is brought in (catch-up.ts).
+   */
+  private async openAnotherWhisper(): Promise<void> {
+    const chosen = await this.whispers.choose();
+    if (chosen === undefined) return;
+    const whisper = fromXhtml(chosen.xhtml);
+    const editor = this.requireEditor();
+    this.abandonWriting('stopped');
+    this.waiting.length = 0;
+    editor.replaceAll(whisper.bodyHtml);
+    this.whisperPath = chosen.path;
+    this.whisperName = chosen.name;
+    this.conversationId = whisper.conversationId;
+    this.title = whisper.title === '' ? UNTITLED : whisper.title;
+    this.showTitle();
+    if (this.state === 'connected' && whisper.conversationId !== '') await this.assistant.resumeConversation(whisper.conversationId);
+    editor.focus();
+  }
+
+  private async useTitle(title: string): Promise<void> {
+    if (title === this.title) return;
+    this.title = title;
+    this.saveNow();
+    if (this.whisperPath !== '') {
+      try {
+        const moved = await this.whispers.rename(this.whisperPath, title);
+        this.whisperPath = moved.path;
+        this.whisperName = moved.name;
+      } catch (problem) {
+        this.showProblem(`The whisper's file could not be named after the conversation: ${problem instanceof Error ? problem.message : String(problem)}`);
+      }
+    }
+    this.showTitle();
   }
 
   /**

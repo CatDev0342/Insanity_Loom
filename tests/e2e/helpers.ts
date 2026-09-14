@@ -7,6 +7,8 @@ import { join } from 'node:path';
 export const REPOSITORY = join(__dirname, '..', '..');
 export const DATA = join(REPOSITORY, 'Data');
 export const FAKE_ASSISTANT = join(REPOSITORY, 'tests', 'fixtures', 'fake-assistant.mjs');
+/** Where a development run keeps its whispers: the Alcove folder beside the program, which is the repository. */
+export const ALCOVE = join(REPOSITORY, 'Alcove');
 /** Where the stand-in assistant records being signed in, when a test makes it require signing in. */
 export const FAKE_AUTH_FILE = join(DATA, 'fake-assistant-sign-in.txt');
 
@@ -33,7 +35,10 @@ export function prepareData(
 ): void {
   mkdirSync(DATA, { recursive: true });
   rmSync(join(DATA, 'settings.json'), { force: true });
-  if (options.keepJournal !== true) rmSync(join(DATA, 'Journal'), { recursive: true, force: true });
+  if (options.keepJournal !== true) {
+    rmSync(join(DATA, 'Journal'), { recursive: true, force: true });
+    rmSync(ALCOVE, { recursive: true, force: true });
+  }
   rmSync(FAKE_AUTH_FILE, { force: true });
   if (start === 'fake assistant') {
     const history = options.history ?? 1;

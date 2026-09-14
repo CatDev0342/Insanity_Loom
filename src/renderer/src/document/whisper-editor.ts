@@ -4,7 +4,7 @@
 
 import { Editor, type JSONContent } from '@tiptap/core';
 import { Markdown } from '@tiptap/markdown';
-import type { NodeType, Node as ProseMirrorNode } from '@tiptap/pm/model';
+import { DOMParser as HtmlParser, type NodeType, type Node as ProseMirrorNode } from '@tiptap/pm/model';
 import type { Transaction } from '@tiptap/pm/state';
 import StarterKit from '@tiptap/starter-kit';
 import { ASSISTANT_META, newIdentity, ProtectBusyReplies, Reply, SectionKeys, SectionRule, type ReplyState } from './extensions';
@@ -149,6 +149,14 @@ export class WhisperEditor {
     const last = doc.lastChild;
     const trailingBlank = last !== null && last.type.name === 'paragraph' && last.childCount === 0;
     return trailingBlank ? doc.content.size - last.nodeSize : doc.content.size;
+  }
+
+  /** Puts another whisper's content in place of this one — opening a whisper — outside the author's undo. */
+  replaceAll(html: string): void {
+    const holder = document.createElement('div');
+    holder.innerHTML = html;
+    const parsed = HtmlParser.fromSchema(this.editor.schema).parse(holder);
+    this.asAssistant((transaction) => transaction.replaceWith(0, transaction.doc.content.size, parsed.content));
   }
 
   /** Empties the whisper — for a new conversation — without it entering the author's undo. */

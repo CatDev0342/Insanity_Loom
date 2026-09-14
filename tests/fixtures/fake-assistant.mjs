@@ -161,6 +161,9 @@ function startAgent() {
             return { stopReason: 'end_turn' };
           }
 
+          // A conversation gains a title of its own once there is something to name it after, as Claude's does.
+          await client.sessionUpdate({ sessionId, update: { sessionUpdate: 'session_info_update', title: 'A named conversation' } });
+
           for (const piece of ['You ', 'wrote: ', text]) {
             await say(sessionId, piece);
             await wait(PIECE_INTERVAL_MS);

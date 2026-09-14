@@ -64,7 +64,9 @@ export type AssistantEvent =
   /** A sign-in in progress: `url` is the sign-in page once known; `message` says what happened, in words. */
   | { readonly type: 'signIn'; readonly stage: SignInStage; readonly url: string; readonly message: string }
   /** The ways of working this assistant offers, and the one in use. Empty when it offers none. */
-  | { readonly type: 'modes'; readonly modes: readonly SessionMode[]; readonly current: string };
+  | { readonly type: 'modes'; readonly modes: readonly SessionMode[]; readonly current: string }
+  /** The conversation now has a title of its own, which the assistant chose from what was said. */
+  | { readonly type: 'title'; readonly title: string };
 
 export interface AssistantBridge {
   /** Connects, using the settings in Data/settings.json, and resumes the last conversation if there was one. */
@@ -98,9 +100,7 @@ export interface JournalBridge {
   /** The author's unsent writing from before whispers, as last saved: '' when there is none. Read once, to carry it over. */
   loadDraft(): Promise<string>;
   /** The whisper in progress, as its XHTML file: '' when there is none yet. */
-  loadWhisper(): Promise<string>;
   /** Saves the whisper in progress to disk at once, crash-safely. */
-  saveWhisper(xhtml: string): Promise<void>;
 }
 
 /** What the Connection Settings panel opens with. */
@@ -170,8 +170,6 @@ export const CONNECTION_CHANNELS = {
 
 export const JOURNAL_CHANNELS = {
   loadDraft: 'insanity-loom:journal-load-draft',
-  loadWhisper: 'insanity-loom:journal-load-whisper',
-  saveWhisper: 'insanity-loom:journal-save-whisper',
 } as const;
 
 /** The largest whisper file accepted from the page, in characters: far beyond any real whisper, but bounded. */

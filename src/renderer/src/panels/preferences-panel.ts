@@ -6,6 +6,7 @@
 // Chromium keeps the dictionary itself; the panel says so beside them.
 
 import type { EditingBridge, SpellingPreferences } from '../../../shared/editing';
+import type { WhispersBridge } from '../../../shared/whispers';
 import { button, choice, dialogButtons, element, enableAccessKeys, group, row } from './kit';
 
 // How many dictionary words the list shows at once before it scrolls.
@@ -30,9 +31,12 @@ export class PreferencesPanel {
   private readonly words: HTMLSelectElement;
   private readonly result: HTMLParagraphElement;
 
+  private readonly alcove: HTMLInputElement;
+
   constructor(
     private readonly dialog: HTMLDialogElement,
     private readonly editing: EditingBridge,
+    private readonly whispers: WhispersBridge,
   ) {
     const heading = element('h2');
     heading.textContent = 'Preferences';
@@ -60,6 +64,18 @@ export class PreferencesPanel {
     const dictionaryNote = element('p', 'panel-note');
     dictionaryNote.textContent = 'Words here are never marked as misspelled. Changes to the dictionary take effect at once.';
 
+    this.alcove = element('input');
+    this.alcove.readOnly = true;
+    this.alcove.spellcheck = false;
+    const browse = button('&Browse…');
+    const browseHolder = element('span', 'panel-inline');
+    browseHolder.append(browse);
+    const alcoveNote = element('p', 'panel-note');
+    alcoveNote.textContent =
+      'Whispers are ordinary .xhtml files: open them in any browser, copy them, back them up. One whisper is one ' +
+      'conversation.';
+    browse.addEventListener('click', () => void this.chooseAlcove());
+
     this.result = element('p', 'panel-result');
     this.result.setAttribute('role', 'status');
 
@@ -70,6 +86,7 @@ export class PreferencesPanel {
     this.form.append(
       heading,
       this.problem,
+      group('Whispers', row('alcove-folder', '&Alcove folder:', this.alcove, browseHolder), alcoveNote),
       group('Spelling', enabled.row, row('spelling-languages', '&Languages:', this.languages), languagesNote),
       group(
         'Personal dictionary',
@@ -106,6 +123,7 @@ export class PreferencesPanel {
   }
 
   async show(): Promise<void> {
+    this.alcove.value = await this.whispers.alcoveFolder();
     const state = await this.editing.loadSpelling();
     this.problem.textContent = state.problem;
     this.problem.hidden = state.problem === '';
@@ -128,6 +146,18 @@ export class PreferencesPanel {
     this.dialog.showModal();
     this.enabled.focus();
     return new Promise((resolve) => this.dialog.addEventListener('close', () => resolve(), { once: true }));
+  }
+
+  /** The alcove folder is chosen in the system's own folder dialog, and takes effect at once. */
+  private async chooseAlcove(): Promise<void> {
+    try {
+      const chosen = await this.whispers.chooseAlcoveFolder();
+      if (chosen === '') return;
+      this.alcove.value = chosen;
+      this.say('New whispers will be kept here. The one open stays where it is.', false);
+    } catch (problem) {
+      this.say(problem instanceof Error ? problem.message : String(problem), true);
+    }
   }
 
   private showWords(words: readonly string[]): void {

@@ -154,3 +154,6 @@ test-results/
 playwright-report/
 # Generated on every build from the dependencies actually shipped.
 THIRD_PARTY_NOTICES.txt
+
+# A development run keeps its whispers in an Alcove folder beside the program, which is the repository.
+Alcove/
