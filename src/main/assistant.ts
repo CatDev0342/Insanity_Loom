@@ -181,11 +181,16 @@ async function openHost(
   }
 }
 
+/** What Claude Code calls the command that makes room in its context window. */
+export const COMPACT_COMMAND = 'compact';
+
 export class Assistant {
   private settings: ConnectionSettings;
   private open: OpenHost | undefined;
   private conversationId: string | undefined;
   private replaying = false;
+  /** True while room is being made in the context window: what the assistant says then is not a reply. */
+  private compacting = false;
   private readonly pending = new Map<string, PendingPermission>();
   private nextRequestNumber = 1;
   private readonly recentErrors: string[] = [];
@@ -406,10 +411,15 @@ export class Assistant {
         if (this.replaying && update.content.type === 'text') this.emit({ type: 'authorText', text: update.content.text });
         return;
       case 'agent_message_chunk':
-        if (update.content.type === 'text') this.emit({ type: 'replyText', text: update.content.text });
+        if (update.content.type !== 'text') return;
+        // While room is being made, what the assistant says is about the conversation rather than part of it.
+        this.emit(this.compacting ? { type: 'thought', text: update.content.text } : { type: 'replyText', text: update.content.text });
         return;
       case 'agent_thought_chunk':
         this.emit({ type: 'thinking' });
+        // The thinking itself, as it is written: it is shown beside the whisper and kept in a document of its own,
+        // never in the whisper, which is the author's prose (40.8).
+        if (update.content.type === 'text') this.emit({ type: 'thought', text: update.content.text });
         return;
       case 'tool_call':
         this.emit({ type: 'tool', id: update.toolCallId, title: update.title, status: update.status ?? 'pending' });
@@ -422,6 +432,27 @@ export class Assistant {
         if (title.trim() !== '') this.emit({ type: 'title', title });
         return;
       }
+      case 'usage_update':
+        // How much of the assistant's context window is in use. The status bar shows it, and offers to make room.
+        this.emit({ type: 'context', used: update.used, size: update.size });
+        return;
+      case 'available_commands_update':
+        this.emit({ type: 'commands', names: update.availableCommands.map((command) => command.name) });
+        return;
+      case 'compaction_update':
+        this.emit({
+          type: 'compacting',
+          status: update.status,
+          summary: (update.summary ?? [])
+            .map((block) => (block.type === 'text' ? block.text : ''))
+            .join('')
+            .trim(),
+        });
+        return;
+      case 'compaction_summary_chunk':
+        // The summary is the assistant's account of what it kept: thinking about the conversation, not part of it.
+        if (update.content.type === 'text') this.emit({ type: 'thought', text: update.content.text });
+        return;
       case 'current_mode_update':
         // The assistant can change its own way of working — leaving Plan mode, say; the status bar follows it.
         this.modes = { ...this.modes, current: update.currentModeId };
@@ -547,6 +578,27 @@ export class Assistant {
       }
       this.emit({ type: 'problem', message: cause instanceof Error ? cause.message : String(cause) });
       this.emit({ type: 'replyFinished', reason: 'error' });
+    }
+  }
+
+  /**
+   * Asks the assistant to make room in its context window. Claude Code offers this as a command of its own
+   * (`available_commands_update`), and a command is given the way anything is given: as a prompt. What it says while
+   * doing it is not a reply to any turn, so nothing of it reaches the whisper — the page is told it is compacting,
+   * and the summary arrives as thinking.
+   */
+  async compact(): Promise<void> {
+    const { connection, conversationId } = this.requireConversation();
+    this.compacting = true;
+    this.emit({ type: 'compacting', status: 'in_progress', summary: '' });
+    try {
+      await connection.prompt({ sessionId: conversationId, prompt: [{ type: 'text', text: `/${COMPACT_COMMAND}` }] });
+      this.emit({ type: 'compacting', status: 'completed', summary: '' });
+    } catch (cause) {
+      this.emit({ type: 'problem', message: cause instanceof Error ? cause.message : String(cause) });
+      this.emit({ type: 'compacting', status: 'failed', summary: '' });
+    } finally {
+      this.compacting = false;
     }
   }
 

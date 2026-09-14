@@ -130,6 +130,7 @@ export function startServices(dataFolder: string, logsFolder: string, journal: J
     await shell.openExternal(page);
   });
   ipcMain.handle(ASSISTANT_CHANNELS.signOut, () => assistant.signOut());
+  ipcMain.handle(ASSISTANT_CHANNELS.compact, () => assistant.compact());
   ipcMain.handle(ASSISTANT_CHANNELS.setMode, (_event, modeId: unknown) => assistant.setMode(identifier(modeId, 'way of working')));
 
   ipcMain.handle(CONNECTION_CHANNELS.load, (): ConnectionPanelState => ({ settings: connection, saved, problem }));
@@ -164,6 +165,9 @@ export function startServices(dataFolder: string, logsFolder: string, journal: J
     whispers.create(text(title, 'whisper title', MAXIMUM_IDENTIFIER_LENGTH), whisper(xhtml)),
   );
   ipcMain.handle(WHISPER_CHANNELS.save, (_event, path: unknown, xhtml: unknown) => whispers.save(whisperPath(path), whisper(xhtml)));
+  ipcMain.handle(WHISPER_CHANNELS.addThought, (_event, path: unknown, written: unknown) =>
+    whispers.addThought(whisperPath(path), whisper(written)),
+  );
   ipcMain.handle(WHISPER_CHANNELS.choose, (event) => whispers.choose(windowOf(event)));
   ipcMain.handle(WHISPER_CHANNELS.rename, (_event, path: unknown, title: unknown) =>
     whispers.rename(whisperPath(path), text(title, 'whisper title', MAXIMUM_IDENTIFIER_LENGTH)),

@@ -13,6 +13,14 @@ export const DEFAULT_ALCOVE_NAME = 'Alcove';
 
 const WHISPER_SUFFIX = '.xhtml';
 
+/**
+ * What the companion document is called: the whisper's own name with this instead of `.xhtml`. The assistant's
+ * thinking is kept there rather than in the whisper, because the whisper is the author's prose — what they edit,
+ * search and share — and thinking is a record beside it. Markdown, because thinking wants indexing, not formatting,
+ * and because a file of it can be handed to another assistant without carrying the weight of a whole XHTML page.
+ */
+const THOUGHTS_SUFFIX = '.thoughts.md';
+
 // A whisper's file name begins with when it began, so an alcove reads in order in any file manager.
 const NAME_DATE_LENGTH = 'YYYY-MM-DD HHMM'.length;
 
@@ -174,6 +182,7 @@ export class Alcove {
     const taken = join(this.folder, wanted);
     if (existsSync(taken)) return path;
     renameSync(path, taken);
+    this.moveThoughts(path, taken);
     return taken;
   }
 
@@ -234,6 +243,25 @@ export class Alcove {
       found.push({ name: whisper.name, found: countOf(words.toLowerCase(), wanted), glimpse: glimpseAt(words, where, wanted.length) });
     }
     return found;
+  }
+
+  /** Where a whisper's thinking is kept: the companion document beside it. */
+  static thoughtsOf(whisperPath: string): string {
+    return `${whisperPath.slice(0, -WHISPER_SUFFIX.length)}${THOUGHTS_SUFFIX}`;
+  }
+
+  /** Adds to a whisper's companion document, making it if it is not there yet. */
+  addThought(whisperPath: string, written: string): void {
+    const path = Alcove.thoughtsOf(whisperPath);
+    const before = existsSync(path) ? readFileSync(path, 'utf8') : '';
+    writeFileSafely(path, `${before}${written}`);
+  }
+
+  /** Moves a whisper's companion document along with it, so the two never come apart. */
+  private moveThoughts(from: string, to: string): void {
+    const was = Alcove.thoughtsOf(from);
+    if (!existsSync(was)) return;
+    renameSync(was, Alcove.thoughtsOf(to));
   }
 
   static isWhisper(path: string): boolean {

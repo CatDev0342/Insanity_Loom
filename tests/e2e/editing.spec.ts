@@ -125,3 +125,56 @@ test('Ctrl+H writes something else in place of what was found', async () => {
   await page.keyboard.press('Control+z');
   await expect(whisper).toContainText('one thread, two loom, three looms');
 });
+
+test('the editing shortcuts along the top act on the writing and follow the caret', async () => {
+  const whisper = page.locator('.whisper-editor');
+  const toolbar = page.getByRole('toolbar', { name: 'Editing' });
+  await expect(toolbar).toBeVisible();
+
+  await whisper.click();
+  await page.keyboard.type('a line to shape');
+  await page.keyboard.press('Control+a');
+  await toolbar.getByRole('button', { name: 'Bold' }).click();
+  await expect(whisper.locator('strong')).toHaveText('a line to shape');
+  // The button says what the caret is standing in, and the author is still in their writing.
+  await expect(toolbar.getByRole('button', { name: 'Bold' })).toHaveAttribute('aria-pressed', 'true');
+  await expect(whisper).toBeFocused();
+
+  await toolbar.getByRole('button', { name: 'Heading 2' }).click();
+  await expect(whisper.locator('h2')).toHaveText('a line to shape');
+  await expect(toolbar.getByRole('button', { name: 'Heading 2' })).toHaveAttribute('aria-pressed', 'true');
+});
+
+test('the panel on the left lists the headings and turns of the whisper, and goes to them', async () => {
+  const whisper = page.locator('.whisper-editor');
+  const navigation = page.getByLabel('Navigation');
+  await expect(navigation).toBeVisible();
+
+  await whisper.click();
+  await page.keyboard.type('What the loom is');
+  await page.keyboard.press('Control+Alt+2');
+  await page.keyboard.press('Enter');
+  await page.keyboard.type('A question.');
+  await page.keyboard.press('Control+Enter');
+  await expect(page.locator('.reply')).toHaveCount(1);
+
+  await expect(navigation.getByRole('button', { name: 'What the loom is' })).toBeVisible();
+  await expect(navigation.getByRole('button', { name: /^Turn 1/ })).toBeVisible();
+  await navigation.getByRole('button', { name: 'What the loom is' }).click();
+  // Choosing leaves the author in their writing rather than in the panel.
+  await expect(navigation.getByRole('button', { name: 'What the loom is' })).not.toBeFocused();
+});
+
+test("the assistant's thinking is shown beside the whisper, not in it", async () => {
+  const whisper = page.locator('.whisper-editor');
+  await whisper.click();
+  await page.keyboard.type('please think about it');
+  await page.keyboard.press('Control+Enter');
+  await expect(page.locator('.reply')).toHaveCount(1);
+
+  const thinking = page.getByLabel("The assistant's thinking");
+  await expect(thinking).toContainText('Turn 1');
+  await expect(thinking.locator('.thought')).toContainText('Thinking about');
+  // What was thought is not in the whisper: the whisper is the author's prose.
+  await expect(whisper).not.toContainText('Thinking about');
+});

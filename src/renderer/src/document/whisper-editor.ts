@@ -37,7 +37,7 @@ import { applyFormat, formatStanding, type FormatCommandId, type FormatStanding 
 import { WhisperPaste } from './paste';
 import { readWhisperLink } from '../../../shared/whispers';
 import type { WhisperRecord } from '../loom/catch-up';
-import { afterRule, findReply, isBlank, sectionContent } from './sections';
+import { afterRule, findReply, isBlank, ruleIndex, sectionContent } from './sections';
 
 // How many of the author's changes Ctrl+Z can take back.
 const UNDO_DEPTH = 500;
@@ -55,6 +55,8 @@ export interface WhisperEditorOptions {
   readonly onChange: () => void;
   /** Called when the author Ctrl+clicks a link, with the address it carries. */
   readonly onFollowLink: (address: string) => void;
+  /** Called whenever the caret moves, so that what is drawn about where the author is can follow them. */
+  readonly onCaretMoved?: () => void;
 }
 
 export class WhisperEditor {
@@ -93,6 +95,8 @@ export class WhisperEditor {
         },
       },
       onUpdate: () => options.onChange(),
+      onSelectionUpdate: () => options.onCaretMoved?.(),
+      onTransaction: () => options.onCaretMoved?.(),
     });
   }
 
@@ -283,6 +287,32 @@ export class WhisperEditor {
     this.markHeading(identity);
     window.clearTimeout(this.unmarkAt);
     this.unmarkAt = window.setTimeout(() => this.markHeading(''), HEADING_FOUND_MS);
+    return true;
+  }
+
+  /** Which turn a rule closed, and when — what the thinking beside it is headed with. */
+  turnOf(sectionId: string): { readonly number: number; readonly shown: string } {
+    let found = { number: 0, shown: '' };
+    this.doc.forEach((node) => {
+      if (node.type.name !== 'horizontalRule' || node.attrs['sectionId'] !== sectionId) return;
+      found = {
+        number: Number(node.attrs['turn'] ?? 0),
+        shown: typeof node.attrs['shown'] === 'string' ? node.attrs['shown'] : '',
+      };
+    });
+    return found;
+  }
+
+  /** Takes the author to the line that closed a turn. */
+  goToTurn(sectionId: string): boolean {
+    const at = ruleIndex(this.doc, sectionId);
+    if (at === -1) return false;
+    let position = 0;
+    this.doc.forEach((node, offset, index) => {
+      if (index === at) position = offset;
+    });
+    const drawn = this.editor.view.nodeDOM(position);
+    if (drawn instanceof HTMLElement) drawn.scrollIntoView({ block: 'center' });
     return true;
   }
 

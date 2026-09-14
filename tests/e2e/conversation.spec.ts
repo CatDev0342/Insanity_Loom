@@ -141,3 +141,25 @@ test('Assistant ▸ Resume Conversation fills a fresh whisper from the conversat
   await expect(whisper().locator('p').first()).toHaveText('An earlier question');
   await expect(replies().first()).toHaveText('An earlier answer');
 });
+
+test('the status bar says how full the assistant is, and offers to make room', async () => {
+  const context = page.locator('#context');
+  const compact = page.locator('#compact');
+  await expect(compact).toBeVisible();
+  await expect(context).toBeHidden();
+
+  await finishSection('The first thing.');
+  await expect(replies()).toHaveCount(1);
+  await expect(context).toBeVisible();
+  await expect(context).toContainText('10% of context · 20k of 200k');
+
+  await finishSection('The second thing.');
+  await expect(replies()).toHaveCount(2);
+  await expect(context).toContainText('20% of context · 40k of 200k');
+
+  // Making room: what the assistant says while doing it is thinking, not a reply, and the whisper is untouched.
+  await compact.click();
+  await expect(context).toContainText('5% of context · 10k of 200k');
+  await expect(replies()).toHaveCount(2);
+  await expect(page.getByLabel("The assistant's thinking")).toContainText('Kept what mattered.');
+});

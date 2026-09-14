@@ -2,7 +2,9 @@
 // answers predictably and costs nothing. Run by Insanity_Loom as a "local" assistant host (tests/e2e/conversation.spec.ts).
 //
 // What it does with what it is sent:
-// - anything: replies "You wrote: <text>", in several pieces, as a real reply streams;
+// - anything: thinks aloud, replies "You wrote: <text>" in several pieces as a real reply streams, and says how full
+//   its context window is afterwards;
+// - "/compact": makes room, reporting it as a compaction rather than a reply;
 // - text containing "permission": asks permission first, and replies with the choice made;
 // - text containing "slow": keeps writing until it is stopped.
 //
@@ -80,6 +82,22 @@ function startAgent() {
         });
       const say = (sessionId, text) =>
         client.sessionUpdate({ sessionId, update: { sessionUpdate: 'agent_message_chunk', content: { type: 'text', text } } });
+      const think = (sessionId, text) =>
+        client.sessionUpdate({ sessionId, update: { sessionUpdate: 'agent_thought_chunk', content: { type: 'text', text } } });
+      // How full its context window is. It fills as the conversation goes on, as a real one does.
+      const CONTEXT_SIZE = 200_000;
+      const CONTEXT_PER_TURN = 20_000;
+      let contextUsed = 0;
+      const reportContext = (sessionId) =>
+        client.sessionUpdate({ sessionId, update: { sessionUpdate: 'usage_update', used: contextUsed, size: CONTEXT_SIZE } });
+      const offerCommands = (sessionId) =>
+        client.sessionUpdate({
+          sessionId,
+          update: {
+            sessionUpdate: 'available_commands_update',
+            availableCommands: [{ name: 'compact', description: 'Make room in the context window' }],
+          },
+        });
 
       return {
         initialize: ({ clientCapabilities }) => {
@@ -102,7 +120,10 @@ function startAgent() {
         },
         newSession: () => {
           mustSignIn();
-          return { sessionId: `fake-conversation-${++conversationNumber}`, modes: modeState() };
+          const sessionId = `fake-conversation-${++conversationNumber}`;
+          // What it offers to be asked to do, as Claude's adapter does once a session is open.
+          setTimeout(() => void offerCommands(sessionId), 0);
+          return { sessionId, modes: modeState() };
         },
         setSessionMode: async ({ sessionId, modeId }) => {
           currentMode = modeId;
@@ -123,6 +144,7 @@ function startAgent() {
             });
             await say(sessionId, answer);
           }
+          setTimeout(() => void offerCommands(sessionId), 0);
           return { modes: modeState() };
         },
         cancel: ({ sessionId }) => {
@@ -131,6 +153,29 @@ function startAgent() {
         prompt: async ({ sessionId, prompt }) => {
           cancelled.delete(sessionId);
           const text = prompt.map((block) => (block.type === 'text' ? block.text : '')).join('');
+
+          if (text.trim() === '/compact') {
+            // Making room is not a reply: it is reported as a compaction, with a summary of what was kept.
+            await client.sessionUpdate({
+              sessionId,
+              update: { sessionUpdate: 'compaction_update', compactionId: 'fake-compaction', status: 'in_progress' },
+            });
+            await wait(PIECE_INTERVAL_MS);
+            contextUsed = Math.round(contextUsed / 4);
+            await client.sessionUpdate({
+              sessionId,
+              update: {
+                sessionUpdate: 'compaction_update',
+                compactionId: 'fake-compaction',
+                status: 'completed',
+                summary: [{ type: 'text', text: 'Kept what mattered.' }],
+              },
+            });
+            await reportContext(sessionId);
+            return { stopReason: 'end_turn' };
+          }
+
+          await think(sessionId, `Thinking about what to say to: ${text}`);
 
           if (text.includes('permission') && currentMode === 'auto') {
             // Deciding by itself: nothing is asked of the author.
@@ -168,6 +213,8 @@ function startAgent() {
             await say(sessionId, piece);
             await wait(PIECE_INTERVAL_MS);
           }
+          contextUsed = Math.min(CONTEXT_SIZE, contextUsed + CONTEXT_PER_TURN);
+          await reportContext(sessionId);
           return { stopReason: 'end_turn' };
         },
       };

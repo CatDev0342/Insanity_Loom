@@ -23,11 +23,14 @@ import { WhisperEditor } from '../document/whisper-editor';
 import { fromXhtml, toXhtml } from '../document/xhtml';
 import { ConnectionPanel } from '../panels/connection-panel';
 import { catchUpWith, describeCatchUp, type HistoryPiece } from './catch-up';
+import { ContextRoom, type ContextElements } from './context-room';
 import { FindBar, type FindBarElements } from './find-bar';
+import { Navigation, type NavigationElements } from './navigation';
+import { Thoughts, type ThoughtsElements } from './thoughts';
 import { Saving } from './saving';
 import { chooseConversation } from './resume';
 
-export interface LoomElements extends FindBarElements {
+export interface LoomElements extends FindBarElements, ContextElements, ThoughtsElements, NavigationElements {
   readonly whisper: HTMLElement;
   /** What scrolls when the whisper is longer than the window. */
   readonly scroll: HTMLElement;
@@ -44,6 +47,9 @@ export interface LoomElements extends FindBarElements {
   readonly resumeDialog: HTMLDialogElement;
   readonly connectionDialog: HTMLDialogElement;
 }
+
+/** What Claude Code calls the command that makes room in its context window (src/main/assistant.ts). */
+const COMPACT_COMMAND = 'compact';
 
 const PAGE_TITLE = 'Insanity_Loom';
 const UNTITLED = 'Untitled whisper';
@@ -77,6 +83,11 @@ export class Loom {
   private editor: WhisperEditor | undefined;
   private readonly connectionPanel: ConnectionPanel;
   private readonly findBar: FindBar;
+  private readonly contextRoom: ContextRoom;
+  private readonly thoughts: Thoughts;
+  private readonly navigation: Navigation;
+  /** Called whenever the caret moves or the whisper changes, so the toolbar can follow the author. */
+  private caretMoved: () => void = () => undefined;
   private readonly waiting: Waiting[] = [];
   private state: ConnectionState = 'disconnected';
   private conversationId = '';
@@ -116,6 +127,14 @@ export class Loom {
     private readonly journal: JournalBridge,
   ) {
     this.findBar = new FindBar(elements, () => this.editor);
+    this.contextRoom = new ContextRoom(elements, () => void this.compact());
+    this.thoughts = new Thoughts(elements, whispers, (message) => this.showProblem(message));
+    this.navigation = new Navigation(elements, () => this.editor, {
+      goToHeading: (identity) => this.goToHeading(identity),
+      goToTurn: (sectionId) => this.goToTurn(sectionId),
+      follow: (address) => void this.follow(address),
+      open: (name) => void this.openNamedWhisper(name),
+    });
     this.saving = new Saving({
       // Before the whisper is open there is nothing to write; the first save comes with the whisper itself.
       write: async (path) => (this.editor === undefined ? undefined : this.whispers.save(path, this.asXhtml())),
@@ -194,6 +213,7 @@ export class Loom {
         this.conversationId = whisper.conversationId;
         this.title = whisper.title === '' ? UNTITLED : whisper.title;
         this.saving.useFile(open.path);
+        this.thoughts.keepBeside(open.path);
         this.whisperName = open.name;
       } catch (problem) {
         this.showProblem(
@@ -214,17 +234,32 @@ export class Loom {
       element: this.elements.whisper,
       html,
       onSectionFinished: (sectionId, markdown) => this.sectionFinished(sectionId, markdown),
-      onChange: () => this.saveNow(),
+      onChange: () => {
+        this.saveNow();
+        this.navigation.changed();
+      },
       onFollowLink: (address) => void this.follow(address),
+      onCaretMoved: () => this.caretMoved(),
     });
     if (open === undefined) await this.makeWhisperFile();
     this.showTitle();
+  }
+
+  /** Asks what points at the whisper open, for the panel on the left. Quietly: it is a nicety, not a promise. */
+  private showWhatPointsHere(): void {
+    const name = this.whisperName;
+    if (name === '') return;
+    void this.whispers
+      .pointingHere(name)
+      .then((pointing) => this.navigation.showPointingHere(pointing))
+      .catch(() => this.navigation.showPointingHere([]));
   }
 
   /** Makes the file this whisper lives in, in the alcove. */
   private async makeWhisperFile(): Promise<void> {
     const made = await this.whispers.create(this.title, this.asXhtml());
     this.saving.useFile(made.path);
+    this.thoughts.keepBeside(made.path);
     this.whisperName = made.name;
   }
 
@@ -238,6 +273,8 @@ export class Loom {
   }
 
   private showTitle(): void {
+    this.showWhatPointsHere();
+    this.navigation.draw();
     document.title = this.whisperName === '' ? `${this.title} — ${PAGE_TITLE}` : `${this.whisperName} — ${PAGE_TITLE}`;
     this.elements.whisperName.textContent = this.whisperName;
   }
@@ -303,6 +340,11 @@ export class Loom {
   }
 
   // ——— Finding writing in the whisper ———
+
+  /** Whatever must follow the caret — the editing shortcuts along the top — is told so here. */
+  followTheCaret(follower: () => void): void {
+    this.caretMoved = follower;
+  }
 
   /** Edit ▸ Find: the bar above the whisper, with whatever is selected ready to be looked for. */
   showFindBar(): void {
@@ -378,7 +420,12 @@ export class Loom {
   private sectionFinished(sectionId: string, markdown: string): void {
     // The caret has just been taken to the fresh paragraph after the rule, so the author is already looking at where
     // the reply will appear; nothing needs scrolling here.
-    const replyId = this.requireEditor().placeReply(sectionId);
+    const editor = this.requireEditor();
+    const turn = editor.turnOf(sectionId);
+    this.thoughts.beginTurn(turn.number, turn.shown);
+    this.thoughts.say('');
+    this.navigation.changed();
+    const replyId = editor.placeReply(sectionId);
     this.waiting.push({ replyId, markdown });
     this.saveNow();
     this.sendNext();
@@ -484,6 +531,21 @@ export class Loom {
         return;
       case 'thinking':
         if (this.writing !== undefined) this.elements.activity.textContent = 'Thinking…';
+        return;
+      case 'thought':
+        this.thoughts.add(event.text);
+        return;
+      case 'context':
+        this.contextRoom.show(event.used, event.size);
+        return;
+      case 'commands':
+        this.contextRoom.offersCompacting(event.names.includes(COMPACT_COMMAND));
+        return;
+      case 'compacting':
+        this.contextRoom.compacting(event.status);
+        if (event.status === 'completed') this.thoughts.say('Room was made in the context window.');
+        if (event.status === 'failed') this.thoughts.say('Room could not be made in the context window.');
+        if (event.summary !== '') this.thoughts.add(`${event.summary}\n`);
         return;
       case 'tool':
         if (this.writing !== undefined && event.title !== '') this.elements.activity.textContent = `${event.title} — ${event.status}`;
@@ -636,6 +698,21 @@ export class Loom {
     }
   }
 
+  /** Asks the assistant to make room in its context window; nothing of it enters the whisper. */
+  private async compact(): Promise<void> {
+    try {
+      this.thoughts.say('Making room in the assistant\u2019s context window…');
+      await this.assistant.compact();
+    } catch (problem) {
+      this.showProblem(problem instanceof Error ? problem.message : String(problem));
+    }
+  }
+
+  /** Takes the author to a turn of the conversation — the line that closed it. */
+  private goToTurn(sectionId: string): void {
+    this.requireEditor().goToTurn(sectionId);
+  }
+
   /** Takes the author to the heading a link points at; the whisper marks it for a moment so their eye finds it. */
   private goToHeading(identity: string): void {
     if (!this.requireEditor().goToHeading(identity)) this.showNotice(`This whisper has no section called "${identity}".`);
@@ -652,6 +729,7 @@ export class Loom {
     await this.saving.stop();
     editor.replaceAll(whisper.bodyHtml);
     this.saving.useFile(opened.path);
+    this.thoughts.keepBeside(opened.path);
     this.whisperName = opened.name;
     this.conversationId = whisper.conversationId;
     this.title = whisper.title === '' ? UNTITLED : whisper.title;
@@ -678,6 +756,7 @@ export class Loom {
       try {
         const moved = await this.whispers.rename(path, title);
         this.saving.useFile(moved.path);
+        this.thoughts.keepBeside(moved.path);
         this.whisperName = moved.name;
         // Whispers that pointed here have been put right on disk; this one's own links are put right in the window,
         // where the whisper is held, or the next save would write the old name back over them.

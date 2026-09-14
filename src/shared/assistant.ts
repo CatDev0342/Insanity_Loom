@@ -53,6 +53,14 @@ export type AssistantEvent =
   | { readonly type: 'authorText'; readonly text: string }
   | { readonly type: 'replyText'; readonly text: string }
   | { readonly type: 'thinking' }
+  /** A piece of the assistant's thinking, as it is written. Shown beside the whisper and kept in its own document. */
+  | { readonly type: 'thought'; readonly text: string }
+  /** How much of the assistant's context window is in use, and how big it is, in tokens. */
+  | { readonly type: 'context'; readonly used: number; readonly size: number }
+  /** What the assistant offers to be asked to do, by name ("compact"). */
+  | { readonly type: 'commands'; readonly names: readonly string[] }
+  /** The assistant is making room in its context window: 'in_progress', 'completed', 'failed' or 'cancelled'. */
+  | { readonly type: 'compacting'; readonly status: string; readonly summary: string }
   | { readonly type: 'tool'; readonly id: string; readonly title: string; readonly status: string }
   | { readonly type: 'permission'; readonly requestId: string; readonly title: string; readonly choices: readonly PermissionChoice[] }
   | { readonly type: 'replyFinished'; readonly reason: string }
@@ -78,6 +86,11 @@ export interface AssistantBridge {
   send(text: string): Promise<void>;
   /** Stops the reply being written. */
   stop(): Promise<void>;
+  /**
+   * Asks the assistant to make room in its context window by summarizing what has been said so far. Nothing of it
+   * enters the whisper: what the assistant says while compacting is thinking, not a reply.
+   */
+  compact(): Promise<void>;
   /** Answers a permission request: a choice's id, or null to refuse without choosing. */
   answerPermission(requestId: string, choiceId: string | null): Promise<void>;
   /** Listens for assistant events. Returns a function that stops listening. */
@@ -142,6 +155,7 @@ export const ASSISTANT_CHANNELS = {
   openSignInPage: 'insanity-loom:assistant-sign-in-page',
   signOut: 'insanity-loom:assistant-sign-out',
   setMode: 'insanity-loom:assistant-set-mode',
+  compact: 'insanity-loom:assistant-compact',
 } as const;
 
 /**

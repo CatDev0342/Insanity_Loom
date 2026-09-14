@@ -88,6 +88,11 @@ export class Whispers {
     this.alcove.write(path, xhtml);
   }
 
+  /** Adds to the companion document of the whisper open: the assistant's thinking, kept beside its prose. */
+  addThought(path: string, written: string): void {
+    this.alcove.addThought(path, written);
+  }
+
   open(path: string): OpenWhisper {
     const xhtml = this.alcove.read(path);
     this.journal.whisperPath = path;

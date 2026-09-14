@@ -37,14 +37,177 @@ body {
   flex-direction: column;
 }
 
-/* The loom: questions from the assistant above, the whisper filling the window below them. */
+/* Three panels: what the whisper points at on the left, the whisper itself in the middle, the assistant's thinking on
+   the right. The middle keeps its column of writing; the sides fill what would otherwise be empty margin. */
 .loom {
   flex: 1;
   display: flex;
-  flex-direction: column;
   min-height: 0;
 }
 
+.middle {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.side-panel {
+  flex: none;
+  width: 17rem;
+  overflow-y: auto;
+  background: var(--bar);
+  font-size: 0.9rem;
+}
+
+.side-panel-left {
+  border-right: 1px solid var(--menu-edge);
+}
+
+.side-panel-right {
+  border-left: 1px solid var(--menu-edge);
+}
+
+.side-panel-inside {
+  padding: 0.8rem 0.9rem;
+}
+
+.side-panel-title {
+  margin: 0 0 0.4rem;
+  font-size: 0.8rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--ink-quiet);
+}
+
+.side-panel-note {
+  margin: 0 0 0.6rem;
+  color: var(--ink-quiet);
+}
+
+/* A narrow window has no room for three: the sides step aside before the writing does. */
+@media (max-width: 70rem) {
+  .side-panel-right {
+    display: none;
+  }
+}
+
+@media (max-width: 55rem) {
+  .side-panel-left {
+    display: none;
+  }
+}
+
+/* The panel on the left: lists of places to go. */
+.navigation-part {
+  margin-bottom: 1rem;
+}
+
+.navigation-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.navigation-go {
+  display: block;
+  width: 100%;
+  padding: 0.15rem 0.2rem;
+  overflow: hidden;
+  background: none;
+  border: 0;
+  color: var(--ink);
+  font: inherit;
+  text-align: left;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  cursor: default;
+}
+
+.navigation-go:hover {
+  background: var(--menu);
+}
+
+.navigation-go[data-depth='2'] {
+  padding-left: 0.9rem;
+}
+
+.navigation-go[data-depth='3'] {
+  padding-left: 1.6rem;
+}
+
+/* The assistant's thinking, as it arrives. Quieter than the whisper: it is a record, not writing. */
+.thoughts-stream {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  white-space: pre-wrap;
+  color: var(--ink-quiet);
+}
+
+.thought {
+  margin: 0;
+  line-height: 1.45;
+}
+
+.thought-turn {
+  margin: 0.6rem 0 0;
+  color: var(--focus);
+  font-weight: 600;
+}
+
+/* The editing shortcuts, along the top, square like the menus. */
+.toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.15rem;
+  padding: 0.25rem 0.5rem;
+  background: var(--bar);
+  border-bottom: 1px solid var(--menu-edge);
+}
+
+.toolbar button {
+  min-width: 2rem;
+  padding: 0.2rem 0.45rem;
+  background: none;
+  border: 1px solid transparent;
+  color: var(--ink);
+  font: inherit;
+  line-height: 1.2;
+  cursor: default;
+}
+
+.toolbar button:hover:not(:disabled) {
+  background: var(--menu);
+  border-color: var(--menu-edge);
+}
+
+.toolbar button[aria-pressed='true'] {
+  background: var(--highlight);
+  border-color: var(--menu-edge);
+}
+
+.toolbar button:disabled {
+  color: var(--ink-quiet);
+}
+
+/* The faces show what they do: bold is bold, italic leans, and so on. */
+.toolbar button[data-face='bold'] { font-weight: 700; }
+.toolbar button[data-face='italic'] { font-style: italic; }
+.toolbar button[data-face='underline'] { text-decoration: underline; }
+.toolbar button[data-face='strike'] { text-decoration: line-through; }
+.toolbar button[data-face='code'] { font-family: ui-monospace, Consolas, 'DejaVu Sans Mono', monospace; }
+
+.toolbar-separator {
+  width: 1px;
+  height: 1.3rem;
+  margin-inline: 0.3rem;
+  background: var(--menu-edge);
+}
+
+/* The loom: questions from the assistant above, the whisper filling the window below them. */
 .asks {
   flex: none;
   display: flex;
@@ -154,6 +317,37 @@ body {
 
 .whisper-editor hr.ProseMirror-selectednode {
   border-top-color: var(--focus);
+}
+
+/* How much of the assistant's context window is in use: said in words, and drawn as a bar beside them. */
+.status-context {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  color: var(--ink-quiet);
+}
+
+.status-context-bar {
+  width: 4rem;
+  height: 0.55rem;
+  background: var(--menu);
+  border: 1px solid var(--menu-edge);
+}
+
+.status-context-full {
+  display: block;
+  height: 100%;
+  width: 0;
+  background: var(--focus);
+}
+
+/* Nearly full: said in the color the program uses for anything that wants the author's attention. */
+.status-context[data-room='little'] {
+  color: var(--attention);
+}
+
+.status-context[data-room='little'] .status-context-full {
+  background: var(--attention);
 }
 
 /* The bar for finding writing in the whisper: quiet, above the writing, out of the way. */

@@ -81,6 +81,8 @@ export interface WhispersBridge {
   create(title: string, xhtml: string): Promise<OpenWhisper>;
   /** Saves the whisper open, at the path it was read from. */
   save(path: string, xhtml: string): Promise<void>;
+  /** Adds to the companion document beside a whisper, where the assistant's thinking is kept. */
+  addThought(path: string, written: string): Promise<void>;
   /** Every whisper in the alcove, newest first. */
   list(): Promise<readonly WhisperInAlcove[]>;
   /** Opens the whisper a link points at, by its file name in the alcove. */
@@ -110,6 +112,7 @@ export const WHISPER_CHANNELS = {
   current: 'insanity-loom:whisper-current',
   create: 'insanity-loom:whisper-create',
   save: 'insanity-loom:whisper-save',
+  addThought: 'insanity-loom:whisper-add-thought',
   choose: 'insanity-loom:whisper-choose',
   list: 'insanity-loom:whisper-list',
   openNamed: 'insanity-loom:whisper-open-named',

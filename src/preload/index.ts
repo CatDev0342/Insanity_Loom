@@ -44,6 +44,7 @@ const bridge: InsanityLoomBridge = {
     openSignInPage: (url) => ipcRenderer.invoke(ASSISTANT_CHANNELS.openSignInPage, url),
     signOut: () => ipcRenderer.invoke(ASSISTANT_CHANNELS.signOut),
     setMode: (modeId) => ipcRenderer.invoke(ASSISTANT_CHANNELS.setMode, modeId),
+    compact: () => ipcRenderer.invoke(ASSISTANT_CHANNELS.compact),
   },
 
   connection: {
@@ -75,6 +76,7 @@ const bridge: InsanityLoomBridge = {
     current: () => ipcRenderer.invoke(WHISPER_CHANNELS.current),
     create: (title, xhtml) => ipcRenderer.invoke(WHISPER_CHANNELS.create, title, xhtml),
     save: (path, xhtml) => ipcRenderer.invoke(WHISPER_CHANNELS.save, path, xhtml),
+    addThought: (path, written) => ipcRenderer.invoke(WHISPER_CHANNELS.addThought, path, written),
     choose: () => ipcRenderer.invoke(WHISPER_CHANNELS.choose),
     list: () => ipcRenderer.invoke(WHISPER_CHANNELS.list),
     openNamed: (name) => ipcRenderer.invoke(WHISPER_CHANNELS.openNamed, name),

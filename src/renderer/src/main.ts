@@ -4,6 +4,7 @@ import { isFormatCommand, isPageCommand, type AnyCommandId, type FormatCommandId
 import { Loom } from './loom/page';
 import { ContextMenu } from './menu/context-menu';
 import { MenuBar } from './menu/menubar';
+import { Toolbar } from './menu/toolbar';
 import { MENUS } from './menu/model';
 import { LinkPanel, type WhisperHeading } from './panels/link-panel';
 import { PointsHerePanel } from './panels/points-here-panel';
@@ -43,6 +44,14 @@ const loom = new Loom(
     replacement: required<HTMLInputElement>('#find-replacement'),
     replace: required<HTMLButtonElement>('#find-replace'),
     replaceAll: required<HTMLButtonElement>('#find-replace-all'),
+    contextHolder: required<HTMLElement>('#context'),
+    contextSaid: required<HTMLElement>('#context-said'),
+    contextFull: required<HTMLElement>('#context-full'),
+    compactButton: required<HTMLButtonElement>('#compact'),
+    thoughtsPanel: required<HTMLElement>('#thoughts'),
+    thoughtsStream: required<HTMLElement>('#thoughts-stream'),
+    thoughtsSaid: required<HTMLElement>('#thoughts-said'),
+    navigationInside: required<HTMLElement>('#navigation-inside'),
     resumeDialog: required<HTMLDialogElement>('#resume-dialog'),
     connectionDialog: required<HTMLDialogElement>('#connection-dialog'),
   },
@@ -123,9 +132,15 @@ async function run(command: AnyCommandId): Promise<void> {
 
 // The menus and their keys ask the whisper how each Format command stands, every time they are used; everything else
 // is always ready.
-new MenuBar(required<HTMLElement>('#menubar'), MENUS, run, (command) =>
-  isFormatCommand(command) ? loom.formatStanding(command) : { enabled: true, checked: false },
-);
+const standingOf = (command: AnyCommandId): { enabled: boolean; checked: boolean } =>
+  isFormatCommand(command) ? loom.formatStanding(command) : { enabled: true, checked: false };
+
+new MenuBar(required<HTMLElement>('#menubar'), MENUS, run, standingOf);
+
+// The editing shortcuts along the top, saying the same about each command as the Format menu does.
+const toolbar = new Toolbar(required<HTMLElement>('#toolbar'), run, standingOf);
+loom.followTheCaret(() => toolbar.refresh());
+toolbar.refresh();
 new ContextMenu(bridge.editing, run);
 
 void loom.start();
