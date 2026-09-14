@@ -210,6 +210,23 @@ body {
   background: var(--highlight);
 }
 
+/* The line that closes a turn, with which turn it was and when it was taken written along it. */
+.whisper-editor hr[data-turn] {
+  position: relative;
+  overflow: visible;
+}
+
+.whisper-editor hr[data-turn]::after {
+  content: 'Turn ' attr(data-turn) ' · ' attr(data-shown);
+  position: absolute;
+  top: -0.75em;
+  right: 0;
+  padding-inline: 0.5rem;
+  background: var(--ground);
+  color: var(--ink-quiet);
+  font-size: 0.8rem;
+}
+
 /* The heading a link has just led to, marked for a moment so the author's eye finds it. */
 .whisper-editor .is-found {
   background: var(--highlight);

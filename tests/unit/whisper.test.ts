@@ -2,8 +2,6 @@
 // The whisper as a document, without the application around it: sections, replies woven in after them, the author's
 // undo that never takes back the assistant's writing, and the whisper's XHTML file.
 import { afterEach, describe, expect, it } from 'vitest';
-import { DOMParser as HtmlParser } from '@tiptap/pm/model';
-import { SECTION_MARK } from '../../src/renderer/src/document/extensions';
 import { WhisperEditor } from '../../src/renderer/src/document/whisper-editor';
 import { fromXhtml, toXhtml } from '../../src/renderer/src/document/xhtml';
 
@@ -38,25 +36,15 @@ function types(target: WhisperEditor, text: string): void {
   target.editor.commands.insertContent(text);
 }
 
-/** Finishes a section the way the author does: the three hyphens typed on a line of their own, then Enter. */
+/** Closes the turn the way the author does: Ctrl+Enter, wherever the caret is. */
 function finishSection(target: WhisperEditor): void {
   target.editor.commands.focus('end');
-  types(target, SECTION_MARK);
-  press(target, 'Enter');
+  press(target, 'Enter', { ctrlKey: true });
 }
 
-/** Puts writing in as a paste does — arriving whole, rather than being typed. */
-function pastes(target: WhisperEditor, html: string): void {
-  const holder = document.createElement('div');
-  holder.innerHTML = html;
-  const view = target.editor.view;
-  const slice = HtmlParser.fromSchema(target.editor.schema).parseSlice(holder);
-  view.dispatch(view.state.tr.replaceSelection(slice).setMeta('paste', true));
-}
-
-describe('finishing a section', () => {
-  it('turns a line of three hyphens into a rule when Enter is pressed, and sends the section as Markdown', () => {
-    const { whisper: w, sections } = whisper('<p>Hello <strong>loom</strong>.</p><p></p>');
+describe('closing a turn', () => {
+  it('closes it at the end of the whisper and sends what was written since the last one, as Markdown', () => {
+    const { whisper: w, sections } = whisper('<p>Hello <strong>loom</strong>.</p>');
     finishSection(w);
     expect(sections).toHaveLength(1);
     expect(sections[0]?.markdown.trim()).toBe('Hello **loom**.');
@@ -66,33 +54,42 @@ describe('finishing a section', () => {
     expect(w.html).toMatch(/<hr[^>]*><p>next thought<\/p>$/);
   });
 
-  it('leaves three hyphens inside a line as ordinary writing', () => {
-    const { whisper: w, sections } = whisper('<p>before --- after</p>');
+  it('leaves three hyphens as ordinary writing, wherever they stand', () => {
+    const { whisper: w, sections } = whisper('<p>---</p>');
     w.editor.commands.focus('end');
     press(w, 'Enter');
     expect(sections).toHaveLength(0);
     expect(w.html).not.toContain('<hr');
+    expect(w.html).toContain('---');
   });
 
-  it('leaves a pasted line of three hyphens as writing: it was never the author\'s signal', () => {
-    const { whisper: w, sections } = whisper('<p></p>');
-    w.editor.commands.focus('end');
-    // Writing pasted in from somewhere else, ending in a line that reads exactly like the signal.
-    pastes(w, '<p>a pasted note</p><p>---</p>');
-    press(w, 'Enter');
-    expect(sections).toHaveLength(0);
-    expect(w.html).not.toContain('<hr');
-    expect(w.html).toContain('<p>---</p>');
-    // Ctrl+Enter still finishes the section wherever the caret is, for when that is what the author means.
-    press(w, 'Enter', { ctrlKey: true });
-    expect(sections).toHaveLength(1);
-  });
-
-  it('sends only the section just finished, not the ones before it', () => {
-    const { whisper: w, sections } = whisper('<p>first</p><p></p>');
+  it('numbers each turn and writes down when it was taken', () => {
+    const { whisper: w } = whisper('<p>first</p>');
     finishSection(w);
     types(w, 'second');
+    finishSection(w);
+    const turns = [...w.html.matchAll(/<hr[^>]*data-turn="(\d+)"/g)].map((found) => found[1]);
+    expect(turns).toEqual(['1', '2']);
+    // The moment itself for programs, and the same moment as the author reads it, for the page.
+    expect(w.html).toMatch(/data-when="\d{4}-\d{2}-\d{2}T/);
+    expect(w.html).toMatch(/data-shown="[^"]+"/);
+  });
+
+  it('closes the turn at the end even when the author is writing further up', () => {
+    const { whisper: w, sections } = whisper('<p>an old thought</p><p>what I am asking now</p>');
+    // The caret up in the first paragraph: the conversation's horizon is still the end of the whisper.
+    w.editor.commands.setTextSelection(3);
     press(w, 'Enter', { ctrlKey: true });
+    expect(sections).toHaveLength(1);
+    expect(sections[0]?.markdown.trim()).toBe('an old thought\n\nwhat I am asking now');
+    expect(w.html).toMatch(/<p>what I am asking now<\/p><hr[^>]*>/);
+  });
+
+  it('sends only what was written since the last turn', () => {
+    const { whisper: w, sections } = whisper('<p>first</p>');
+    finishSection(w);
+    types(w, 'second');
+    finishSection(w);
     expect(sections.map((section) => section.markdown.trim())).toEqual(['first', 'second']);
   });
 });

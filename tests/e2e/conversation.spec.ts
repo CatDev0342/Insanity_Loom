@@ -21,9 +21,7 @@ async function finishSection(text: string): Promise<void> {
   await whisper().click();
   await page.keyboard.press('Control+End');
   await page.keyboard.type(text);
-  await page.keyboard.press('Enter');
-  await page.keyboard.type('---');
-  await page.keyboard.press('Enter');
+  await page.keyboard.press('Control+Enter');
 }
 
 test.beforeEach(async () => {
@@ -35,7 +33,7 @@ test.afterEach(async () => {
   await application.close();
 });
 
-test('a line of --- sends the section above it, and the reply is woven in right after it', async () => {
+test('Ctrl+Enter closes the turn and the reply follows the line that closed it', async () => {
   await finishSection('Hello, loom.');
   await expect(replies()).toHaveCount(1);
   await expect(replies().first()).toHaveText('You wrote: Hello, loom.');
@@ -46,12 +44,28 @@ test('a line of --- sends the section above it, and the reply is woven in right 
   expect(order.slice(0, 3)).toEqual(['p', 'hr', 'section']);
 });
 
-test('--- in the middle of a line is ordinary writing', async () => {
+test('three hyphens are ordinary writing, and Enter is ordinary Enter', async () => {
   await whisper().click();
-  await page.keyboard.type('before --- after');
+  await page.keyboard.type('---');
   await page.keyboard.press('Enter');
+  await page.keyboard.type('still writing');
   await expect(whisper().locator('hr')).toHaveCount(0);
   await expect(replies()).toHaveCount(0);
+  await expect(whisper()).toContainText('---');
+});
+
+test('each turn is numbered, with the local date and time it was taken', async () => {
+  await finishSection('The first thing.');
+  await expect(replies()).toHaveCount(1);
+  await finishSection('The second thing.');
+  await expect(replies()).toHaveCount(2);
+
+  const rules = whisper().locator('hr');
+  await expect(rules.nth(0)).toHaveAttribute('data-turn', '1');
+  await expect(rules.nth(1)).toHaveAttribute('data-turn', '2');
+  // Written along the line, where the author can read it.
+  const label = await rules.nth(1).evaluate((element) => getComputedStyle(element, '::after').content);
+  expect(label).toContain('Turn 2');
 });
 
 test('a permission request waits for the author above the whisper, and their choice goes back', async () => {

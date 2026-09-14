@@ -9,6 +9,7 @@ import type { Transaction } from '@tiptap/pm/state';
 import StarterKit from '@tiptap/starter-kit';
 import {
   ASSISTANT_META,
+  endOfWhisper,
   FollowLinks,
   FOUND_HEADING_META,
   HeadingIdentities,
@@ -18,6 +19,8 @@ import {
   Reply,
   SectionKeys,
   SectionRule,
+  shownTime,
+  turnsSoFar,
   type ReplyState,
 } from './extensions';
 import {
@@ -165,11 +168,19 @@ export class WhisperEditor {
   }
 
   /** Adds, at the end, a section the author wrote earlier (from a resumed conversation's history), with its rule. */
-  appendAuthorSection(markdown: string): string {
+  appendAuthorSection(markdown: string, when: Date = new Date()): string {
     const sectionId = newIdentity();
     this.asAssistant((transaction) => {
       const blocks = this.fromMarkdown(markdown).map((block) => this.editor.schema.nodeFromJSON(block));
-      transaction.insert(this.endBeforeTrailingBlank(transaction.doc), [...blocks, this.nodeType('horizontalRule').create({ sectionId })]);
+      // A turn brought in from the conversation's history is still a turn, and is numbered in its place. The time is
+      // the one this whisper learned of it, which is the best it can know: the history does not carry the hour.
+      const rule = this.nodeType('horizontalRule').create({
+        sectionId,
+        turn: String(turnsSoFar(transaction.doc) + 1),
+        when: when.toISOString(),
+        shown: shownTime(when),
+      });
+      transaction.insert(endOfWhisper(transaction.doc), [...blocks, rule]);
     });
     return sectionId;
   }
@@ -178,15 +189,8 @@ export class WhisperEditor {
   appendReply(markdown: string, answers: string | null): void {
     this.asAssistant((transaction) => {
       const reply = this.replyNode({ replyId: newIdentity(), answers, state: 'finished' }, this.fromMarkdown(markdown));
-      transaction.insert(this.endBeforeTrailingBlank(transaction.doc), reply);
+      transaction.insert(endOfWhisper(transaction.doc), reply);
     });
-  }
-
-  /** The end of the whisper, before the empty paragraph the author writes in, if it ends with one. */
-  private endBeforeTrailingBlank(doc: ProseMirrorNode): number {
-    const last = doc.lastChild;
-    const trailingBlank = last !== null && last.type.name === 'paragraph' && last.childCount === 0;
-    return trailingBlank ? doc.content.size - last.nodeSize : doc.content.size;
   }
 
   /** Puts another whisper's content in place of this one — opening a whisper — outside the author's undo. */

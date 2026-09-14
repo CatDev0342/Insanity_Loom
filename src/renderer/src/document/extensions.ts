@@ -1,8 +1,8 @@
-// What a whisper is made of, beyond ordinary rich text: the dividing line that finishes the author's section, and the
-// assistant's reply that is woven in after it.
+// What a whisper is made of, beyond ordinary rich text: the dividing line that closes a turn of the conversation, and
+// the assistant's reply that follows it.
 //
-// - A **section rule** is a dividing line with an identity. The author makes one by typing a line of three hyphens and
-//   pressing Enter (as in a word processor), or with Ctrl+Enter; it finishes the section above it, which is then sent.
+// - A **section rule** is a dividing line with an identity, a turn number and the local time the turn was taken. The
+//   author makes one with Ctrl+Enter, which closes the turn and sends everything written since the last one.
 // - A **reply** is the assistant's writing, in a block of its own, placed right after the rule of the section it
 //   answers — found by the rule's identity, so it lands there however the author has edited elsewhere meanwhile.
 //   While the assistant is still writing it, it is the assistant's; once finished, it is the author's to edit like any
@@ -24,24 +24,29 @@ export type ReplyState = 'waiting' | 'writing' | 'finished' | 'stopped' | 'faile
 /** Marks a transaction as the assistant's: it may change a reply being written, and never enters the author's undo. */
 export const ASSISTANT_META = 'insanity-loom:assistant';
 
-/** The line of the author's writing that finishes a section, once surrounding spaces are ignored. */
-export const SECTION_MARK = '---';
-
-/**
- * Where the author has just typed a line of three hyphens — the one place Enter finishes a section.
- *
- * The signal is a thing the author *does*, not a piece of text that happens to be there. Three hyphens that arrived
- * any other way — pasted, dropped, brought in from the conversation's history — read exactly the same on the page but
- * were never a signal, and Enter after one leaves it as the writing it is. (Ctrl+Enter finishes a section wherever
- * the caret is, and says so plainly, for when that is what the author means.)
- */
-const TYPED_SECTION_MARK = new PluginKey<number | null>('typedSectionMark');
-
 export function newIdentity(): string {
   return crypto.randomUUID();
 }
 
-/** The dividing line that finishes a section, carrying the section's identity. */
+/** How a turn's time is written for the author to read: the local date and time, as their own system writes them. */
+export function shownTime(when: Date): string {
+  return when.toLocaleString(undefined, {
+    year: 'numeric',
+    month: 'short',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+}
+
+/**
+ * The dividing line that closes a turn: its identity, which turn of the conversation it was, and when it was taken.
+ *
+ * The time is kept twice on purpose. `data-when` is the moment itself, as a machine reads it, for anything that must
+ * sort or reckon with it. `data-shown` is the same moment as the author reads it, in their own local way of writing
+ * dates, because that is what the page shows — in Insanity_Loom and in a browser opening the file, where there is no
+ * program to format anything.
+ */
 export const SectionRule = HorizontalRule.extend({
   addAttributes() {
     return {
@@ -51,10 +56,24 @@ export const SectionRule = HorizontalRule.extend({
         renderHTML: (attributes: { sectionId?: string | null }) =>
           attributes.sectionId ? { 'data-section-id': attributes.sectionId } : {},
       },
+      turn: {
+        default: null,
+        parseHTML: (element) => element.getAttribute('data-turn'),
+        renderHTML: (attributes: { turn?: string | null }) => (attributes.turn ? { 'data-turn': attributes.turn } : {}),
+      },
+      when: {
+        default: null,
+        parseHTML: (element) => element.getAttribute('data-when'),
+        renderHTML: (attributes: { when?: string | null }) => (attributes.when ? { 'data-when': attributes.when } : {}),
+      },
+      shown: {
+        default: null,
+        parseHTML: (element) => element.getAttribute('data-shown'),
+        renderHTML: (attributes: { shown?: string | null }) => (attributes.shown ? { 'data-shown': attributes.shown } : {}),
+      },
     };
   },
-  // The word processor's habit is kept exactly: three hyphens become a line only when Enter is pressed (see
-  // SectionKeys), not the moment the third is typed.
+  // Nothing the author types makes a rule: a turn is closed by Ctrl+Enter and by nothing else (see SectionKeys).
   addInputRules() {
     return [];
   },
@@ -95,6 +114,22 @@ export const Reply = Node.create({
     return ['section', mergeAttributes(HTMLAttributes, { class: 'reply', 'data-author': 'assistant' }), 0];
   },
 });
+
+/** How many turns the whisper already holds: the number of section rules in it. */
+export function turnsSoFar(doc: ProseMirrorNode): number {
+  let turns = 0;
+  doc.forEach((node) => {
+    if (node.type.name === 'horizontalRule') turns += 1;
+  });
+  return turns;
+}
+
+/** The end of the whisper, before the empty paragraph the author writes in, if it ends with one. */
+export function endOfWhisper(doc: ProseMirrorNode): number {
+  const last = doc.lastChild;
+  const trailingBlank = last !== null && last.type.name === 'paragraph' && last.childCount === 0;
+  return trailingBlank ? doc.content.size - last.nodeSize : doc.content.size;
+}
 
 /** Whether a reply is still the assistant's alone to change. */
 export function replyIsBusy(node: ProseMirrorNode): boolean {
@@ -344,67 +379,35 @@ export const SectionKeys = Extension.create<SectionKeysOptions>({
     return { onSectionFinished: () => undefined };
   },
 
-  addProseMirrorPlugins() {
-    return [
-      new Plugin<number | null>({
-        key: TYPED_SECTION_MARK,
-        state: {
-          init: () => null,
-          apply: (transaction, typedAt, _before, after) => {
-            // Nothing moves without the document changing, so what was remembered stays where it was.
-            if (!transaction.docChanged) return typedAt;
-            // Writing that arrived rather than being typed is not the author's signal, whatever it says.
-            const arrived =
-              transaction.getMeta('paste') === true ||
-              transaction.getMeta('uiEvent') === 'drop' ||
-              transaction.getMeta(ASSISTANT_META) === true;
-            if (arrived) return null;
-            const caret = after.selection.$from;
-            if (caret.depth !== 1 || caret.parent.type.name !== 'paragraph') return null;
-            return caret.parent.textContent.trim() === SECTION_MARK ? caret.before(1) : null;
-          },
-        },
-      }),
-    ];
-  },
-
   addKeyboardShortcuts() {
-    const finish = (replaceMarkParagraph: boolean): boolean => {
+    /**
+     * Ctrl+Enter closes the turn. It closes it **at the end of the whisper**, wherever the caret happens to be: the
+     * conversation has a horizon, and only what stands after the last turn is part of it. Writing further up is the
+     * author's to change as they please and is never sent again, so a stray Ctrl+Enter while editing something
+     * earlier cannot say it twice.
+     */
+    const closeTheTurn = (): boolean => {
       const { state, view } = this.editor;
-      const { selection, schema } = state;
-      if (!selection.empty) return false;
-      const $caret = selection.$from;
-      const block = $caret.parent;
-      if ($caret.depth < 1) return false;
-      // The three-hyphen line counts only as a paragraph of its own at the top level of the whisper, and only where
-      // the author typed it themselves (TYPED_SECTION_MARK).
-      if (
-        replaceMarkParagraph &&
-        (block.type.name !== 'paragraph' ||
-          $caret.depth !== 1 ||
-          $caret.parentOffset !== block.content.size ||
-          block.textContent.trim() !== SECTION_MARK ||
-          TYPED_SECTION_MARK.getState(state) !== $caret.before(1))
-      ) {
-        return false;
-      }
-
+      const { schema, doc } = state;
       const ruleType = schema.nodes['horizontalRule'];
       const paragraphType = schema.nodes['paragraph'];
       if (ruleType === undefined || paragraphType === undefined) return false;
+
       const sectionId = newIdentity();
-      const blockStart = $caret.before(1);
-      const blockEnd = $caret.after(1);
-      const rule = ruleType.create({ sectionId });
-      const transaction = replaceMarkParagraph
-        ? state.tr.replaceWith(blockStart, blockEnd, [rule, paragraphType.create()])
-        : state.tr.insert(blockEnd, [rule, paragraphType.create()]);
-      // The caret goes to the fresh paragraph after the rule, where the author carries on.
-      const ruleStart = replaceMarkParagraph ? blockStart : blockEnd;
-      const paragraphInside = ruleStart + rule.nodeSize + 1;
+      const when = new Date();
+      const rule = ruleType.create({
+        sectionId,
+        turn: String(turnsSoFar(doc) + 1),
+        when: when.toISOString(),
+        shown: shownTime(when),
+      });
+      const end = endOfWhisper(doc);
+      const transaction = state.tr.insert(end, [rule, paragraphType.create()]);
+      // The caret goes to the fresh paragraph after the rule, where the author carries on while the reply arrives.
+      const paragraphInside = end + rule.nodeSize + 1;
       transaction.setSelection(TextSelection.create(transaction.doc, paragraphInside)).scrollIntoView();
-      // A finished section is sent, and a sent section cannot be unsent: finishing it is not an undo step, and it
-      // closes the author's undo history there, so Ctrl+Z afterwards takes back only what they write next.
+      // A turn that has been taken cannot be untaken: closing it is not an undo step, and it closes the author's undo
+      // history there, so Ctrl+Z afterwards takes back only what they write next.
       closeHistory(transaction).setMeta('addToHistory', false);
       view.dispatch(transaction);
       this.options.onSectionFinished(sectionId);
@@ -420,8 +423,7 @@ export const SectionKeys = Extension.create<SectionKeysOptions>({
     const acrossBlocks = (): boolean => {
       const { selection } = this.editor.state;
       if (selection.empty || selection.$from.sameParent(selection.$to)) return false;
-      // The deletion is made first, on its own, so that Enter is then pressed against what is really there. The two
-      // arrive one after the other, and the author's undo takes them back together.
+      // The deletion is made first, on its own, so that Enter is then pressed against what is really there.
       this.editor.commands.deleteSelection();
       // A selection reaching into a reply the assistant is still writing cannot be deleted, and Enter goes no
       // further: nothing at all happens, rather than the key being pressed again against what is still selected.
@@ -430,8 +432,9 @@ export const SectionKeys = Extension.create<SectionKeysOptions>({
     };
 
     return {
-      Enter: () => finish(true) || acrossBlocks(),
-      'Mod-Enter': () => finish(false),
+      Enter: () => acrossBlocks(),
+      // Ctrl on Windows and Linux, Cmd on a Mac: whatever "Mod" is where the author is.
+      'Mod-Enter': () => closeTheTurn(),
     };
   },
 });

@@ -27,7 +27,18 @@ const WHISPER_STYLE = `
       article.whisper code { font-family: ui-monospace, Consolas, 'DejaVu Sans Mono', monospace; }
       article.whisper pre { padding: 0.6rem 0.8rem; overflow-x: auto; background: #26262b; }
       article.whisper blockquote { margin: 0 0 0.8em; padding-left: 0.9rem; border-left: 3px solid #45454d; color: #9a978f; }
-      article.whisper hr { height: 0; margin: 1.4em 0; border: 0; border-top: 1px solid #45454d; }
+      article.whisper hr { height: 0; margin: 1.8em 0; border: 0; border-top: 1px solid #45454d; }
+      article.whisper hr[data-turn] { position: relative; overflow: visible; }
+      article.whisper hr[data-turn]::after {
+        content: 'Turn ' attr(data-turn) ' · ' attr(data-shown);
+        position: absolute;
+        top: -0.75em;
+        right: 0;
+        padding-inline: 0.5rem;
+        background: #1e1e22;
+        color: #9a978f;
+        font-size: 0.8rem;
+      }
       article.whisper section[data-author='assistant'] {
         margin: 0 0 1em;
         padding-left: 0.9rem;

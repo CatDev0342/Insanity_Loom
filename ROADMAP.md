@@ -34,7 +34,7 @@ An empty Insanity_Loom window that opens on Windows and Linux.
 
 ### 1. Walking skeleton — the channel works — done
 A plain editor with the assistant connected. From here on, the author talks to the assistant through Insanity_Loom.
-- The author writes and marks a section finished (the `---` line).
+- The author writes and closes the turn (Ctrl+Enter).
 - A small host where the assistant runs passes the section on and streams the reply back into the document as it is
   written.
 - Approve / Deny in the application for anything the assistant needs permission for.
@@ -48,8 +48,10 @@ A plain editor with the assistant connected. From here on, the author talks to t
   where it runs; Insanity_Loom never sees a password or holds a credential.
 
 ### 2. Real editing
-One document: the author writes anywhere in the whisper, and the assistant's replies are woven in after the section
-they answer. Each conversation is a whisper, saved as XHTML. Rich text on ProseMirror and Tiptap, held to the standard
+One document: the author writes anywhere in the whisper, and the assistant answers at the end of it — the
+conversation has a horizon, and writing further up is theirs to change and is never sent again. A turn is closed with
+Ctrl+Enter, and nothing else; each turn is numbered and carries the local date and time it was taken. Each
+conversation is a whisper, saved as XHTML. Rich text on ProseMirror and Tiptap, held to the standard
 of the best word processors.
 - Desktop-grade keys: Tab, arrows, standard shortcuts; every key means what it should where the author is working.
 - The assistant's replies are the author's to edit, like any of their own text, while staying marked as the
@@ -62,8 +64,9 @@ of the best word processors.
 Whispers, alcoves and GreatHalls; sections with IDs that survive renames and moves; links between whispers and
 sections; backlinks; search.
 
-### 4. Local and web
-The same host serves the same files to a browser. One set of files; no copies to drift apart.
+### 4. Local only
+No web half, and none wanted: a whisper is an XHTML file carrying its own look, so it opens in any browser straight
+from the alcove, with its links working. Nothing is served over a network.
 
 ### 5. Polish
 Very large documents, accessibility, updates.
