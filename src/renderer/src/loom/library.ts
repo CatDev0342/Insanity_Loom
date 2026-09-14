@@ -8,7 +8,7 @@
 // again puts the document away and the list comes back, exactly where it was: the list keeps its history, so the
 // author can scroll back through everything referred to over the whole conversation.
 
-import type { GreatHall, GreatHallBridge, HallSection } from '../../../shared/greathall';
+import { documentOf, type GreatHall, type GreatHallBridge, type HallSection } from '../../../shared/greathall';
 
 export interface LibraryElements {
   readonly libraryInside: HTMLElement;
@@ -126,6 +126,18 @@ export class Library {
         return entry;
       }),
     );
+  }
+
+  /** Opens a library document at a line, whether or not it was ever cited — what Find in Files asks for. */
+  async openAt(address: string, line: number): Promise<void> {
+    if (this.hall === undefined) return;
+    try {
+      const markdown = await this.greatHall.document(address);
+      const title = this.hall.documents.find((document) => document.address === documentOf(address))?.title ?? address;
+      this.showDocument({ address, document: documentOf(address), line, text: '', title }, markdown);
+    } catch (problem) {
+      this.onProblem(problem instanceof Error ? problem.message : String(problem));
+    }
   }
 
   /** Opens a cited place as a live document, or puts it away again when it is the one already open. */

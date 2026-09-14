@@ -371,6 +371,12 @@ export class Loom {
 
   // ——— Finding writing in the whisper ———
 
+  /** Opens a place in the hall's library — what Find in Files hands back for a library document. */
+  async openLibraryAt(address: string, line: number): Promise<void> {
+    this.elements.showLibraryTab();
+    await this.library.openAt(address, line);
+  }
+
   /** File ▸ Open GreatHall: what belongs together, and the library the assistant cites (greathall.ts). */
   async openGreatHall(): Promise<void> {
     try {

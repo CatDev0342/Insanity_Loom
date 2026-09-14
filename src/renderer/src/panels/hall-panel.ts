@@ -15,7 +15,15 @@ const ROWS_SHOWN = 14;
 
 /** What the author last looked for, kept while the program runs so the window opens where they left it. */
 const LAST: { asked: HallSearch } = {
-  asked: { looked: '', everywhere: true, matchCase: false, wholeWord: false, regularExpression: false, includeThoughts: true },
+  asked: {
+    looked: '',
+    everywhere: true,
+    matchCase: false,
+    wholeWord: false,
+    regularExpression: false,
+    includeThoughts: true,
+    includeLibrary: true,
+  },
 };
 
 /** One line of the results list: a document, or a place within it. */
@@ -24,6 +32,9 @@ interface ResultRow {
   readonly path: string;
   readonly looked: string;
   readonly isDocument: boolean;
+  /** For a place in the library, the document's address and the line, so it can be opened there. */
+  readonly address: string;
+  readonly line: number;
 }
 
 export class HallPanel {
@@ -35,10 +46,11 @@ export class HallPanel {
   private readonly wholeWord: HTMLInputElement;
   private readonly regularExpression: HTMLInputElement;
   private readonly includeThoughts: HTMLInputElement;
+  private readonly includeLibrary: HTMLInputElement;
   private readonly results: HTMLSelectElement;
   private readonly said: HTMLParagraphElement;
   private rows: ResultRow[] = [];
-  private chosen: { path: string; looked: string } | undefined;
+  private chosen: { path: string; looked: string; address: string; line: number } | undefined;
   private search: (asked: HallSearch) => Promise<HallFound> = async () => ({ hits: [], found: 0, looked: 0, problem: '' });
 
   constructor(private readonly dialog: HTMLDialogElement) {
@@ -59,10 +71,12 @@ export class HallPanel {
     const wholeWord = choice('checkbox', 'hall-word', 'Match &whole word');
     const regularExpression = choice('checkbox', 'hall-regex', 'Use regular e&xpressions');
     const includeThoughts = choice('checkbox', 'hall-thoughts', "Look in the assistant's &thinking as well");
+    const includeLibrary = choice('checkbox', 'hall-library', "Look in the GreatHall's &library as well");
     this.matchCase = matchCase.input;
     this.wholeWord = wholeWord.input;
     this.regularExpression = regularExpression.input;
     this.includeThoughts = includeThoughts.input;
+    this.includeLibrary = includeLibrary.input;
 
     this.said = element('p', 'panel-note');
     this.said.setAttribute('role', 'status');
@@ -80,7 +94,7 @@ export class HallPanel {
     this.form.append(
       heading,
       row('hall-looked', 'Fi&nd what:', this.looked, find),
-      group('Look in', everywhere.row, hereOnly.row, includeThoughts.row),
+      group('Look in', everywhere.row, hereOnly.row, includeThoughts.row, includeLibrary.row),
       group('How to match', matchCase.row, wholeWord.row, regularExpression.row),
       this.said,
       row('hall-results', '&Results:', this.results),
@@ -112,6 +126,7 @@ export class HallPanel {
       wholeWord: this.wholeWord.checked,
       regularExpression: this.regularExpression.checked,
       includeThoughts: this.includeThoughts.checked,
+      includeLibrary: this.includeLibrary.checked,
     };
   }
 
@@ -146,11 +161,18 @@ export class HallPanel {
     const options: HTMLOptionElement[] = [];
     for (const hit of hits) {
       const where = hit.folder === '' || hit.folder === '.' ? '' : `${hit.folder}/`;
-      const kind = hit.kind === 'thinking' ? ' · thinking' : '';
-      this.rows.push({ label: '', path: hit.path, looked: this.looked.value, isDocument: true });
+      const kind = hit.kind === 'thinking' ? ' · thinking' : hit.kind === 'library' ? ' · library' : '';
+      this.rows.push({ label: '', path: hit.path, looked: this.looked.value, isDocument: true, address: hit.address, line: 0 });
       options.push(HallPanel.option(`${where}${hit.title}${kind}  (${hit.found})`, this.rows.length - 1, true));
       for (const line of hit.lines) {
-        this.rows.push({ label: line.text, path: hit.path, looked: this.looked.value, isDocument: false });
+        this.rows.push({
+          label: line.text,
+          path: hit.path,
+          looked: this.looked.value,
+          isDocument: false,
+          address: hit.address,
+          line: line.line,
+        });
         options.push(HallPanel.option(`    ${String(line.line).padStart(4, ' ')}:  ${line.text}`, this.rows.length - 1, false));
       }
     }
@@ -170,7 +192,7 @@ export class HallPanel {
   private goTo(): void {
     const row = this.rows[Number(this.results.value)];
     if (row === undefined) return;
-    this.chosen = { path: row.path, looked: row.looked };
+    this.chosen = { path: row.path, looked: row.looked, address: row.address, line: row.line };
     this.dialog.close();
   }
 
@@ -178,7 +200,9 @@ export class HallPanel {
    * Opens the window. Returns the whisper to open and what was looked for in it, so that the author lands on the
    * words rather than at the top of it; undefined when they chose none.
    */
-  async ask(search: (asked: HallSearch) => Promise<HallFound>): Promise<{ path: string; looked: string } | undefined> {
+  async ask(
+    search: (asked: HallSearch) => Promise<HallFound>,
+  ): Promise<{ path: string; looked: string; address: string; line: number } | undefined> {
     this.search = search;
     this.chosen = undefined;
     const asked = LAST.asked;
@@ -189,6 +213,7 @@ export class HallPanel {
     this.wholeWord.checked = asked.wholeWord;
     this.regularExpression.checked = asked.regularExpression;
     this.includeThoughts.checked = asked.includeThoughts;
+    this.includeLibrary.checked = asked.includeLibrary;
     this.show([], 'Write what to look for.');
     this.dialog.showModal();
     this.looked.focus();

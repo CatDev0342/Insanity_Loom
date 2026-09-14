@@ -74,6 +74,7 @@ function readHallSearch(value: unknown): HallSearch {
     wholeWord: asked['wholeWord'] === true,
     regularExpression: asked['regularExpression'] === true,
     includeThoughts: asked['includeThoughts'] === true,
+    includeLibrary: asked['includeLibrary'] === true,
   };
 }
 
@@ -257,7 +258,11 @@ export function startServices(dataFolder: string, logsFolder: string, journal: J
   ipcMain.handle(GREATHALL_CHANNELS.saveDocument, (_event, address: unknown, markdown: unknown) =>
     halls.saveDocument(text(address, 'address', MAXIMUM_IDENTIFIER_LENGTH), whisper(markdown)),
   );
-  ipcMain.handle(HALL_CHANNELS.search, (_event, asked: unknown) => searchHall(whispers.alcoveFolder, readHallSearch(asked)));
+  ipcMain.handle(HALL_CHANNELS.search, (_event, asked: unknown) => {
+    // A GreatHall says where its own whispers are; without one, the alcove the author chose.
+    const hall = halls.current;
+    return searchHall(hall?.alcove ?? whispers.alcoveFolder, readHallSearch(asked), hall);
+  });
   ipcMain.handle(LINK_CHANNELS.open, (_event, address: unknown) => openAddress(text(address, 'address', MAXIMUM_ADDRESS_LENGTH)));
 
   return assistant;

@@ -8,6 +8,7 @@
 
 import { readdirSync, readFileSync, statSync } from 'node:fs';
 import { basename, join, relative } from 'node:path';
+import type { GreatHall } from '../shared/greathall';
 import type { HallFound, HallHit, HallLine, HallSearch } from '../shared/hall';
 
 /** How many lines of one document are shown before the rest are counted but not listed. */
@@ -102,7 +103,37 @@ function whisperOfThoughts(path: string): string {
   return `${path.slice(0, -THOUGHTS_SUFFIX.length)}${WHISPER_SUFFIX}`;
 }
 
-export function searchHall(alcove: string, asked: HallSearch): HallFound {
+/** The library's own documents, looked through as well, when the author asks and a hall is open. */
+function searchLibrary(hall: GreatHall, looking: RegExp): { readonly hits: HallHit[]; readonly looked: number; readonly found: number } {
+  const hits: HallHit[] = [];
+  let looked = 0;
+  let found = 0;
+  for (const document of hall.documents) {
+    const path = join(hall.library, document.file);
+    let contents: string;
+    try {
+      contents = readFileSync(path, 'utf8');
+    } catch {
+      continue;
+    }
+    looked += 1;
+    const places = placesIn(contents.split(/\r?\n/), looking);
+    if (places.total === 0) continue;
+    found += places.total;
+    hits.push({
+      path,
+      title: document.title,
+      kind: 'library',
+      address: document.address,
+      folder: hall.libraryName,
+      lines: places.found,
+      found: places.total,
+    });
+  }
+  return { hits, looked, found };
+}
+
+export function searchHall(alcove: string, asked: HallSearch, hall?: GreatHall): HallFound {
   if (asked.looked.trim() === '') return { hits: [], found: 0, looked: 0, problem: '' };
   let looking: RegExp;
   try {
@@ -114,6 +145,12 @@ export function searchHall(alcove: string, asked: HallSearch): HallFound {
   const hits: HallHit[] = [];
   let looked = 0;
   let found = 0;
+  if (asked.includeLibrary && hall !== undefined) {
+    const library = searchLibrary(hall, looking);
+    hits.push(...library.hits);
+    looked += library.looked;
+    found += library.found;
+  }
   for (const path of filesIn(alcove, asked.everywhere)) {
     const isWhisper = path.toLowerCase().endsWith(WHISPER_SUFFIX);
     const isThoughts = asked.includeThoughts && path.toLowerCase().endsWith(THOUGHTS_SUFFIX);
@@ -136,12 +173,18 @@ export function searchHall(alcove: string, asked: HallSearch): HallFound {
       path: whisper,
       title: basename(whisper).replace(/\.xhtml$/i, ''),
       kind: isWhisper ? 'whisper' : 'thinking',
+      address: '',
       folder: relative(alcove, join(path, '..')).replace(/\\/g, '/'),
       lines: places.found,
       found: places.total,
     });
   }
-  // Newest first, as the alcove itself reads, and a whisper before the thinking beside it.
-  hits.sort((left, right) => right.title.localeCompare(left.title) || left.kind.localeCompare(right.kind));
+  // The library first, where a thing is defined; then the whispers, newest first, as the alcove itself reads, with a
+  // whisper before the thinking beside it.
+  hits.sort((left, right) => {
+    if (left.kind === 'library' && right.kind !== 'library') return -1;
+    if (right.kind === 'library' && left.kind !== 'library') return 1;
+    return right.title.localeCompare(left.title) || left.kind.localeCompare(right.kind);
+  });
   return { hits, found, looked, problem: '' };
 }

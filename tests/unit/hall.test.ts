@@ -4,6 +4,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import { asExpression, linesOfWhisper, searchHall } from '../../src/main/hall';
+import type { GreatHall } from '../../src/shared/greathall';
 import type { HallSearch } from '../../src/shared/hall';
 
 const made: string[] = [];
@@ -33,6 +34,7 @@ const PLAIN: HallSearch = {
   wholeWord: false,
   regularExpression: false,
   includeThoughts: true,
+  includeLibrary: false,
 };
 
 describe('reading a whisper for searching', () => {
@@ -118,5 +120,42 @@ describe('searching the hall', () => {
     const folder = alcove();
     whisper(folder, '2026-09-14 1200 First', '<p>Anything.</p>');
     expect(searchHall(folder, { ...PLAIN, looked: '   ' })).toEqual({ hits: [], found: 0, looked: 0, problem: '' });
+  });
+});
+
+describe("searching the hall's library as well", () => {
+  /** A hall whose library holds one numbered document, as a project holds its own files. */
+  function hallWith(folder: string): GreatHall {
+    const library = join(folder, 'Library');
+    mkdirSync(library, { recursive: true });
+    writeFileSync(join(library, '40_DOCUMENT.md'), '# 40 Document\n\n## 40.6 — THE WIKI\n\nLinks between whispers.\n');
+    return {
+      name: 'A hall',
+      path: join(folder, 'A hall.greathall'),
+      alcove: folder,
+      library,
+      libraryName: 'Test Library',
+      documents: [{ address: '40', file: '40_DOCUMENT.md', title: 'The document' }],
+    };
+  }
+
+  it('looks in the library when asked, and says where in it the writing stands', () => {
+    const folder = alcove();
+    const hall = hallWith(folder);
+    whisper(folder, '2026-09-14 1200 A whisper', '<p>Nothing about it here.</p>');
+
+    expect(searchHall(folder, { ...PLAIN, looked: 'whispers', includeLibrary: false }, hall).hits).toHaveLength(0);
+    const found = searchHall(folder, { ...PLAIN, looked: 'whispers', includeLibrary: true }, hall);
+    expect(found.hits).toHaveLength(1);
+    expect(found.hits[0]).toMatchObject({ kind: 'library', address: '40', title: 'The document', folder: 'Test Library' });
+    expect(found.hits[0]?.lines[0]).toMatchObject({ line: 5, text: 'Links between whispers.' });
+  });
+
+  it('puts the library first, where a thing is defined, and the whispers after it', () => {
+    const folder = alcove();
+    const hall = hallWith(folder);
+    whisper(folder, '2026-09-14 1200 A whisper', '<p>Links between whispers, as it happens.</p>');
+    const found = searchHall(folder, { ...PLAIN, looked: 'Links between whispers', includeLibrary: true }, hall);
+    expect(found.hits.map((hit) => hit.kind)).toEqual(['library', 'whisper']);
   });
 });

@@ -16,6 +16,8 @@ export interface HallSearch {
   readonly regularExpression: boolean;
   /** Look in the companion documents too, where the assistant's thinking is kept (40.8). */
   readonly includeThoughts: boolean;
+  /** Look in the GreatHall's library as well: a project is searched across everything in it (40.10). */
+  readonly includeLibrary: boolean;
 }
 
 /** One line holding what was looked for, and where in it. */
@@ -34,8 +36,10 @@ export interface HallHit {
   readonly path: string;
   /** The whisper's name, as the author reads it. */
   readonly title: string;
-  /** Where the writing was found: in the whisper itself, or in the thinking kept beside it. */
-  readonly kind: 'whisper' | 'thinking';
+  /** Where the writing was found: in a whisper, in the thinking beside it, or in the hall's library. */
+  readonly kind: 'whisper' | 'thinking' | 'library';
+  /** For a place in the library, the document's address, so it can be opened there. */
+  readonly address: string;
   /** Which folder beneath the alcove it is in, or '' for the alcove itself. */
   readonly folder: string;
   readonly lines: readonly HallLine[];

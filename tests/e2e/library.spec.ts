@@ -76,3 +76,22 @@ test('says so plainly when no GreatHall is open', async () => {
   await page.getByRole('tab', { name: 'Library' }).click();
   await expect(page.locator('#library-said')).toContainText('No GreatHall is open');
 });
+
+test('Find in Files searches the hall it belongs to, library and all', async () => {
+  await page.keyboard.press('Control+Shift+g');
+  const window = page.getByRole('dialog', { name: 'Find in Files' });
+  await expect(window).toBeVisible();
+  await expect(window.getByLabel("Look in the GreatHall's library as well")).toBeChecked();
+
+  await window.getByLabel('Find what:').fill('Links between whispers');
+  await window.getByRole('button', { name: 'Find All' }).click();
+  await expect(window.getByRole('status')).toContainText('in 1 document');
+  await expect(window.getByRole('listbox')).toContainText('library');
+
+  // A place in the library opens in the Library tab, at that place, live.
+  await window.getByRole('listbox').selectOption({ index: 1 });
+  await window.getByRole('button', { name: 'Go To' }).click();
+  await expect(window).toBeHidden();
+  await expect(page.locator('#library-pane textarea')).toHaveValue(/40\.6 — THE WIKI/);
+  await expect(page.locator('#library-pane .library-pinned')).toContainText('40');
+});

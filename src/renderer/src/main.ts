@@ -131,6 +131,11 @@ async function findInFiles(): Promise<void> {
     loom.focusWhisper();
     return;
   }
+  // A place in the library opens in the Library tab, where the library is read and edited; a whisper opens as one.
+  if (chosen.address !== '') {
+    await loom.openLibraryAt(chosen.address, chosen.line);
+    return;
+  }
   await loom.openWhisperAt(chosen.path);
   loom.findFor(chosen.looked);
 }
