@@ -147,7 +147,8 @@ test('the editing shortcuts along the top act on the writing and follow the care
 
 test('the panel on the left lists the headings and turns of the whisper, and goes to them', async () => {
   const whisper = page.locator('.whisper-editor');
-  const navigation = page.getByLabel('Navigation');
+  // The panel itself, not its tab or the pane the tab names, each of which answers to the same word.
+  const navigation = page.locator('#navigation');
   await expect(navigation).toBeVisible();
 
   await whisper.click();
