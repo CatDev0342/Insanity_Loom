@@ -617,3 +617,30 @@ button:disabled {
   border-color: var(--menu-edge);
   color: var(--ink-quiet);
 }
+
+/* The assistant's way of working, in the status bar: which steps it asks about before taking them. */
+.status-mode {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.status-mode-choice {
+  font: inherit;
+  color: var(--ink);
+  background: var(--menu);
+  border: 1px solid var(--menu-edge);
+  border-radius: 0;
+  padding: 0.05rem 0.3rem;
+}
+
+/* Working with less asking is worth noticing at a glance. */
+.status-mode-choice[data-asking='less'] {
+  color: var(--attention);
+  border-color: var(--attention);
+}
+
+.status-mode-choice:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 0;
+}

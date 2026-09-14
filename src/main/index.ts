@@ -6,6 +6,7 @@ import { startServices } from './channels';
 import { listenForCommands } from './commands';
 import { startEditingServices } from './editing';
 import { Journal } from './journal';
+import { PreferenceStore } from './preference-store';
 import { dataFoldersIn, findProgramFolder, prepareDataFolders, type DataFolders } from './portable';
 import { PAGE_PREFERENCES, restrictEveryPage } from './security';
 
@@ -102,8 +103,9 @@ function start(): void {
     listenForCommands();
     // Insanity_Loom is dark, so the system draws its window frame and title bar dark too.
     nativeTheme.themeSource = 'dark';
-    startEditingServices(folders.data);
-    const assistant = startServices(folders.data, folders.logs, new Journal(folders.data));
+    const preferences = new PreferenceStore(folders.data);
+    startEditingServices(preferences);
+    const assistant = startServices(folders.data, folders.logs, new Journal(folders.data), preferences);
     app.on('before-quit', () => void assistant.close());
     // No native menu: Insanity_Loom draws its own menu bar in the page (src/renderer/src/menu), so it looks and
     // behaves the same on Windows and Linux, square-cornered, and follows the classic Windows keyboard conventions.

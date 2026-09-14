@@ -10,7 +10,8 @@ import {
   type SpellingPreferences,
   type SpellingState,
 } from '../shared/editing';
-import { DEFAULT_PREFERENCES, loadPreferences, preferencesWith, readSpelling, savePreferences } from './preferences';
+import type { PreferenceStore } from './preference-store';
+import { readSpelling } from './preferences';
 
 // A spelling suggestion can be a pair of words ("a lot" for "alot"), so it may be longer than one dictionary word.
 const LONGEST_SUGGESTION = LONGEST_DICTIONARY_WORD * 2;
@@ -39,20 +40,9 @@ function applySpelling(preferences: SpellingPreferences, systemLanguages: readon
 }
 
 /** Relays right-clicks to the page and answers its spelling requests. Call once, when Electron is ready. */
-export function startEditingServices(dataFolder: string): void {
+export function startEditingServices(preferences: PreferenceStore): void {
   const systemLanguages = session.defaultSession.getSpellCheckerLanguages();
-  // Preferences that cannot be read are reported in the Preferences panel, and the defaults serve meanwhile; the file
-  // is left as it is until the author saves new ones.
-  let problem = '';
-  let preferences = DEFAULT_PREFERENCES;
-  try {
-    preferences = loadPreferences(dataFolder);
-    applySpelling(preferences.spelling, systemLanguages);
-  } catch (cause) {
-    problem = cause instanceof Error ? cause.message : String(cause);
-    preferences = DEFAULT_PREFERENCES;
-    applySpelling(preferences.spelling, systemLanguages);
-  }
+  applySpelling(preferences.spelling, systemLanguages);
 
   app.on('web-contents-created', (_event, contents) => {
     contents.on('context-menu', (_menuEvent, params) => {
@@ -83,15 +73,13 @@ export function startEditingServices(dataFolder: string): void {
     preferences: preferences.spelling,
     availableLanguages: [...session.defaultSession.availableSpellCheckerLanguages].sort(),
     dictionary: (await session.defaultSession.listWordsInSpellCheckerDictionary()).sort((a, b) => a.localeCompare(b)),
-    problem,
+    problem: preferences.problem,
   }));
 
   ipcMain.handle(EDITING_CHANNELS.save, (_event, candidate: unknown) => {
     const spelling = readSpelling(candidate, 'the Preferences panel');
     applySpelling(spelling, systemLanguages);
-    preferences = preferencesWith(spelling);
-    savePreferences(dataFolder, preferences);
-    problem = '';
+    preferences.setSpelling(spelling);
   });
 
   ipcMain.handle(EDITING_CHANNELS.addWord, (_event, candidate: unknown) => {

@@ -16,6 +16,7 @@ import {
   type AssistantEvent,
   type ConnectionState,
   type ConversationSummary,
+  type SessionMode,
   type SignInMethod,
 } from '../shared/assistant';
 import { describePlace, hostCommand, type ConnectionSettings } from '../shared/connection';
@@ -65,6 +66,13 @@ function readAccount(params: Record<string, unknown>): { label: string; detail: 
 const CLIENT_INFO = { name: 'insanity-loom', title: 'Insanity_Loom', version: '0.0.1' } as const;
 
 type Emit = (event: AssistantEvent) => void;
+
+/** Where the author's chosen way of working is remembered between conversations and between runs. */
+export interface ModeMemory {
+  /** The way of working last chosen; '' for the assistant's own default. */
+  readonly assistantMode: string;
+  setAssistantMode(modeId: string): void;
+}
 
 interface PendingPermission {
   readonly choiceIds: ReadonlySet<string>;
@@ -184,11 +192,15 @@ export class Assistant {
   private readonly log: WriteStream;
   private signingIn: ChildProcess | undefined;
 
+  /** The ways of working this assistant offers, and the one in use. */
+  private modes: { available: readonly SessionMode[]; current: string } = { available: [], current: '' };
+
   constructor(
     settings: ConnectionSettings,
     private readonly journal: Journal,
     logsFolder: string,
     private readonly emit: Emit,
+    private readonly memory: ModeMemory = { assistantMode: '', setAssistantMode: () => undefined },
   ) {
     this.settings = settings;
     this.log = createWriteStream(join(logsFolder, HOST_LOG_FILE_NAME), { flags: 'a' });
@@ -405,6 +417,11 @@ export class Assistant {
       case 'tool_call_update':
         this.emit({ type: 'tool', id: update.toolCallId, title: update.title ?? '', status: update.status ?? '' });
         return;
+      case 'current_mode_update':
+        // The assistant can change its own way of working — leaving Plan mode, say; the status bar follows it.
+        this.modes = { ...this.modes, current: update.currentModeId };
+        this.emit({ type: 'modes', modes: this.modes.available, current: update.currentModeId });
+        return;
       default:
         return;
     }
@@ -426,6 +443,50 @@ export class Assistant {
     this.conversationId = created.sessionId;
     this.journal.saveConversationId(created.sessionId);
     this.emit({ type: 'conversation', id: created.sessionId, title: 'New conversation', replaying: false });
+    await this.useModes(created.modes);
+  }
+
+  /**
+   * Takes the ways of working a conversation offers, and puts the author's remembered choice back in use — a
+   * conversation begins in the assistant's own default otherwise, and the author would have to choose again each time.
+   */
+  private async useModes(state: acp.SessionModeState | null | undefined): Promise<void> {
+    if (state === undefined || state === null) {
+      this.modes = { available: [], current: '' };
+      this.emit({ type: 'modes', modes: [], current: '' });
+      return;
+    }
+    const available: SessionMode[] = state.availableModes.map((mode) => ({
+      id: mode.id,
+      name: mode.name,
+      description: mode.description ?? '',
+    }));
+    this.modes = { available, current: state.currentModeId };
+    const remembered = this.memory.assistantMode;
+    if (remembered !== '' && remembered !== state.currentModeId && available.some((mode) => mode.id === remembered)) {
+      try {
+        await this.requireConnection().setSessionMode({ sessionId: this.conversationId ?? '', modeId: remembered });
+        this.modes = { available, current: remembered };
+      } catch (cause) {
+        this.emit({
+          type: 'problem',
+          message: `The way of working "${remembered}" could not be used: ${cause instanceof Error ? cause.message : String(cause)}`,
+        });
+      }
+    }
+    this.emit({ type: 'modes', modes: this.modes.available, current: this.modes.current });
+  }
+
+  /** Changes the way of working, and remembers it for later conversations. */
+  async setMode(modeId: string): Promise<void> {
+    const { connection, conversationId } = this.requireConversation();
+    if (!this.modes.available.some((mode) => mode.id === modeId)) {
+      throw new Error(`The assistant offers no way of working called "${modeId}".`);
+    }
+    await connection.setSessionMode({ sessionId: conversationId, modeId });
+    this.modes = { ...this.modes, current: modeId };
+    this.memory.setAssistantMode(modeId);
+    this.emit({ type: 'modes', modes: this.modes.available, current: modeId });
   }
 
   async resumeConversation(id: string): Promise<void> {
@@ -435,8 +496,9 @@ export class Assistant {
     this.conversationId = id;
     this.replaying = true;
     this.emit({ type: 'conversation', id, title: 'Resumed conversation', replaying: true });
+    let resumed: acp.LoadSessionResponse;
     try {
-      await connection.loadSession({ sessionId: id, cwd: this.settings.workingFolder, mcpServers: [] });
+      resumed = await connection.loadSession({ sessionId: id, cwd: this.settings.workingFolder, mcpServers: [] });
     } catch (cause) {
       this.replaying = false;
       this.emit({
@@ -449,6 +511,7 @@ export class Assistant {
     this.replaying = false;
     this.journal.saveConversationId(id);
     this.emit({ type: 'replayFinished' });
+    await this.useModes(resumed.modes);
   }
 
   async listConversations(): Promise<readonly ConversationSummary[]> {
@@ -505,6 +568,7 @@ export class Assistant {
   }
 
   private dropConnection(): void {
+    this.modes = { available: [], current: '' };
     this.cancelPendingPermissions();
     this.open = undefined;
     this.conversationId = undefined;

@@ -6,7 +6,14 @@
 // The whisper is saved to the journal on every change, crash-safely, so a crash or a closed window never costs a word.
 // A reply being written redraws at most once per frame, however fast its text arrives.
 
-import type { AssistantBridge, AssistantEvent, ConnectionBridge, ConnectionState, JournalBridge } from '../../../shared/assistant';
+import type {
+  AssistantBridge,
+  AssistantEvent,
+  ConnectionBridge,
+  ConnectionState,
+  JournalBridge,
+  SessionMode,
+} from '../../../shared/assistant';
 import type { AssistantCommandId } from '../commands';
 import type { ReplyState } from '../document/extensions';
 import { WhisperEditor } from '../document/whisper-editor';
@@ -24,6 +31,8 @@ export interface LoomElements {
   readonly reconnect: HTMLButtonElement;
   readonly signIn: HTMLButtonElement;
   readonly connectionSettings: HTMLButtonElement;
+  readonly modeLabel: HTMLElement;
+  readonly mode: HTMLSelectElement;
   readonly resumeDialog: HTMLDialogElement;
   readonly connectionDialog: HTMLDialogElement;
 }
@@ -81,6 +90,7 @@ export class Loom {
     this.connectionPanel = new ConnectionPanel(elements.connectionDialog, connection, () => void this.run('assistant.reconnect'));
     elements.connectionSettings.addEventListener('click', () => void this.run('assistant.connectionSettings'));
     elements.reconnect.addEventListener('click', () => void this.run('assistant.reconnect'));
+    elements.mode.addEventListener('change', () => void this.chooseMode(elements.mode.value));
     assistant.onEvent((event) => this.onEvent(event));
 
     // Esc stops a reply being written, wherever the author is on the page — unless a dialog or menu is open. It is
@@ -349,6 +359,9 @@ export class Loom {
       case 'signIn':
         // The Sign In panel shows a sign-in's progress (src/renderer/src/panels/sign-in-panel.ts).
         return;
+      case 'modes':
+        this.showModes(event.modes, event.current);
+        return;
     }
   }
 
@@ -424,6 +437,41 @@ export class Loom {
     }
     const said = describeCatchUp(catchUp);
     if (said !== '') this.showNotice(said);
+  }
+
+  /**
+   * The ways of working the assistant offers, in the status bar. Choosing one other than its first — Manual, for
+   * Claude — is how the author stops being asked to approve every step; the choice is remembered for later
+   * conversations. The assistant may change it itself (leaving Plan mode, say), and the status bar follows.
+   */
+  private showModes(modes: readonly SessionMode[], current: string): void {
+    const { mode, modeLabel } = this.elements;
+    modeLabel.hidden = modes.length === 0;
+    if (modes.length === 0) {
+      mode.replaceChildren();
+      return;
+    }
+    mode.replaceChildren(
+      ...modes.map((offered) => {
+        const option = document.createElement('option');
+        option.value = offered.id;
+        option.textContent = offered.name;
+        if (offered.description !== '') option.title = offered.description;
+        return option;
+      }),
+    );
+    mode.value = current;
+    mode.title = modes.find((offered) => offered.id === current)?.description ?? '';
+    // Anything but the assistant's first way of working means it is acting with less asking: said plainly, in color.
+    mode.dataset['asking'] = current === modes[0]?.id ? 'always' : 'less';
+  }
+
+  private async chooseMode(modeId: string): Promise<void> {
+    try {
+      await this.assistant.setMode(modeId);
+    } catch (problem) {
+      this.showProblem(problem instanceof Error ? problem.message : String(problem));
+    }
   }
 
   // ——— Permission questions and problems, shown above the whisper ———

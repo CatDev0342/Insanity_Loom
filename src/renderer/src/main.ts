@@ -26,6 +26,8 @@ const loom = new Loom(
     reconnect: required<HTMLButtonElement>('#reconnect'),
     signIn: required<HTMLButtonElement>('#sign-in'),
     connectionSettings: required<HTMLButtonElement>('#connection-settings'),
+    modeLabel: required<HTMLElement>('#mode-label'),
+    mode: required<HTMLSelectElement>('#mode'),
     resumeDialog: required<HTMLDialogElement>('#resume-dialog'),
     connectionDialog: required<HTMLDialogElement>('#connection-dialog'),
   },

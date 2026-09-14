@@ -41,6 +41,7 @@ const bridge: InsanityLoomBridge = {
     cancelSignIn: () => ipcRenderer.invoke(ASSISTANT_CHANNELS.cancelSignIn),
     openSignInPage: (url) => ipcRenderer.invoke(ASSISTANT_CHANNELS.openSignInPage, url),
     signOut: () => ipcRenderer.invoke(ASSISTANT_CHANNELS.signOut),
+    setMode: (modeId) => ipcRenderer.invoke(ASSISTANT_CHANNELS.setMode, modeId),
   },
 
   connection: {

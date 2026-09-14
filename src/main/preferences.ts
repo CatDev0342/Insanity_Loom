@@ -11,14 +11,27 @@ import { writeFileSafely } from './files';
 
 export const PREFERENCES_FILE_NAME = 'preferences.json';
 
-const PREFERENCES_VERSION = 1;
+// Version 1 held the spelling preferences alone; version 2 adds the assistant's way of working. An older file is
+// upgraded, and written back complete, when read.
+const PREFERENCES_VERSION = 2;
+const FIRST_VERSION = 1;
 
 export interface Preferences {
   readonly version: typeof PREFERENCES_VERSION;
   readonly spelling: SpellingPreferences;
+  /** The way of working last chosen for the assistant, used again for later conversations; '' for its own default. */
+  readonly assistantMode: string;
 }
 
-export const DEFAULT_PREFERENCES: Preferences = { version: PREFERENCES_VERSION, spelling: DEFAULT_SPELLING };
+export const DEFAULT_PREFERENCES: Preferences = { version: PREFERENCES_VERSION, spelling: DEFAULT_SPELLING, assistantMode: '' };
+
+// A mode's name as the protocol gives it: short, and without spaces or control characters.
+const MODE_ID = /^[\w.:-]{1,64}$/;
+
+export function readMode(value: unknown, where: string): string {
+  if (value === '' || (typeof value === 'string' && MODE_ID.test(value))) return value;
+  throw problem(where, '"assistantMode" must name a way of working, or be empty.');
+}
 
 // Preference files are written indented, so they can be read in any text editor.
 const JSON_INDENT = 2;
@@ -55,16 +68,25 @@ export function loadPreferences(dataFolder: string): Preferences {
     throw problem(file, `It is not valid JSON: ${cause instanceof Error ? cause.message : String(cause)}`);
   }
   if (!isObject(parsed)) throw problem(file, 'It does not hold a preferences object.');
+  if (parsed['version'] === FIRST_VERSION) {
+    const upgraded = { version: PREFERENCES_VERSION, spelling: readSpelling(parsed['spelling'], file), assistantMode: '' } as const;
+    savePreferences(dataFolder, upgraded);
+    return upgraded;
+  }
   if (parsed['version'] !== PREFERENCES_VERSION) {
     throw problem(file, `It is version ${String(parsed['version'])}, which this Insanity_Loom does not know.`);
   }
-  return { version: PREFERENCES_VERSION, spelling: readSpelling(parsed['spelling'], file) };
+  return {
+    version: PREFERENCES_VERSION,
+    spelling: readSpelling(parsed['spelling'], file),
+    assistantMode: readMode(parsed['assistantMode'], file),
+  };
 }
 
 export function savePreferences(dataFolder: string, preferences: Preferences): void {
   writeFileSafely(join(dataFolder, PREFERENCES_FILE_NAME), `${JSON.stringify(preferences, null, JSON_INDENT)}\n`);
 }
 
-export function preferencesWith(spelling: SpellingPreferences): Preferences {
-  return { version: PREFERENCES_VERSION, spelling };
+export function preferencesWith(spelling: SpellingPreferences, assistantMode: string): Preferences {
+  return { version: PREFERENCES_VERSION, spelling, assistantMode };
 }

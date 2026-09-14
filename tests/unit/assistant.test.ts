@@ -4,7 +4,7 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
-import { Assistant } from '../../src/main/assistant';
+import { Assistant, type ModeMemory } from '../../src/main/assistant';
 import { Journal } from '../../src/main/journal';
 import type { AssistantEvent } from '../../src/shared/assistant';
 import { DEFAULT_CONNECTION } from '../../src/shared/connection';
@@ -19,7 +19,10 @@ afterEach(async () => {
   }
 });
 
-function start(hostCommand: string[] = [process.execPath, FAKE_ASSISTANT]): { assistant: Assistant; events: AssistantEvent[] } {
+function start(
+  hostCommand: string[] = [process.execPath, FAKE_ASSISTANT],
+  memory: ModeMemory = { assistantMode: '', setAssistantMode: () => undefined },
+): { assistant: Assistant; events: AssistantEvent[] } {
   const folder = mkdtempSync(join(tmpdir(), 'insanity-loom-'));
   const events: AssistantEvent[] = [];
   const assistant = new Assistant(
@@ -33,6 +36,7 @@ function start(hostCommand: string[] = [process.execPath, FAKE_ASSISTANT]): { as
     new Journal(folder),
     folder,
     (event) => events.push(event),
+    memory,
   );
   running.push({ assistant, folder });
   return { assistant, events };
@@ -84,7 +88,7 @@ describe('the assistant connection', () => {
     await assistant.connect();
     expect(events).toContainEqual({ type: 'authorText', text: 'An earlier question' });
     expect(replyText(events)).toBe('An earlier answer');
-    expect(events.at(-1)).toEqual({ type: 'replayFinished' });
+    expect(events).toContainEqual({ type: 'replayFinished' });
   });
 
   it('tests settings without connecting', async () => {
@@ -138,6 +142,31 @@ describe('the assistant connection', () => {
   it('refuses to type anything but a single-line code into the sign-in', () => {
     const { assistant } = start();
     expect(() => assistant.sendSignInCode('code')).toThrow(/No sign-in is waiting/);
+  });
+
+  it('offers the assistant\'s ways of working, and remembers the one chosen', async () => {
+    const remembered: string[] = [];
+    const { assistant, events } = start(undefined, { assistantMode: '', setAssistantMode: (mode) => remembered.push(mode) });
+    await assistant.connect();
+    expect(events).toContainEqual({
+      type: 'modes',
+      current: 'default',
+      modes: [
+        { id: 'default', name: 'Manual', description: 'Always ask before making changes' },
+        { id: 'auto', name: 'Auto', description: 'The assistant decides' },
+      ],
+    });
+
+    await assistant.setMode('auto');
+    expect(remembered).toEqual(['auto']);
+    expect(events.at(-1)).toMatchObject({ type: 'modes', current: 'auto' });
+    await expect(assistant.setMode('no-such-mode')).rejects.toThrow(/no way of working called/);
+  });
+
+  it('puts the remembered way of working back in use for a new conversation', async () => {
+    const { assistant, events } = start(undefined, { assistantMode: 'auto', setAssistantMode: () => undefined });
+    await assistant.connect();
+    expect(events.at(-1)).toMatchObject({ type: 'modes', current: 'auto' });
   });
 
   it('lists earlier conversations', async () => {

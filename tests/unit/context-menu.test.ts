@@ -2,7 +2,15 @@ import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
-import { DEFAULT_PREFERENCES, loadPreferences, preferencesWith, PREFERENCES_FILE_NAME, readSpelling, savePreferences } from '../../src/main/preferences';
+import {
+  DEFAULT_PREFERENCES,
+  loadPreferences,
+  preferencesWith,
+  PREFERENCES_FILE_NAME,
+  readMode,
+  readSpelling,
+  savePreferences,
+} from '../../src/main/preferences';
 import { contextEntries, type ContextEntry } from '../../src/renderer/src/menu/context-entries';
 import type { ContextDetails } from '../../src/shared/editing';
 
@@ -75,8 +83,24 @@ describe('preferences', () => {
   it('are the defaults until saved, then read back as saved', () => {
     const data = folder();
     expect(loadPreferences(data)).toEqual(DEFAULT_PREFERENCES);
-    savePreferences(data, preferencesWith({ enabled: false, languages: ['en-GB', 'fr'] }));
+    savePreferences(data, preferencesWith({ enabled: false, languages: ['en-GB', 'fr'] }, 'auto'));
     expect(loadPreferences(data).spelling).toEqual({ enabled: false, languages: ['en-GB', 'fr'] });
+    expect(loadPreferences(data).assistantMode).toBe('auto');
+  });
+
+  it('upgrade a first-version file, keeping its spelling', () => {
+    const data = folder();
+    writeFileSync(
+      join(data, PREFERENCES_FILE_NAME),
+      JSON.stringify({ version: 1, spelling: { enabled: false, languages: [] } }),
+    );
+    expect(loadPreferences(data)).toEqual({ version: 2, spelling: { enabled: false, languages: [] }, assistantMode: '' });
+  });
+
+  it('refuse a way of working that is not one', () => {
+    expect(() => readMode('a way with spaces', 'the panel')).toThrow(/must name a way of working/);
+    expect(readMode('acceptEdits', 'the panel')).toBe('acceptEdits');
+    expect(readMode('', 'the panel')).toBe('');
   });
 
   it('name the problem in a damaged file', () => {

@@ -13,6 +13,17 @@ export interface SignInMethod {
   readonly description: string;
 }
 
+/**
+ * A way of working the assistant offers, and what it does about permission: for Claude, Manual (ask every time),
+ * Accept edits, Plan, Auto (the assistant decides) and Bypass permissions. Choosing one other than Manual is how the
+ * author stops being asked about every step.
+ */
+export interface SessionMode {
+  readonly id: string;
+  readonly name: string;
+  readonly description: string;
+}
+
 /** The steps of a sign-in, as the Sign In panel shows them. */
 export type SignInStage = 'started' | 'page' | 'finished' | 'failed';
 
@@ -51,7 +62,9 @@ export type AssistantEvent =
   /** The assistant needs the author to sign in before it can work. */
   | { readonly type: 'signInNeeded'; readonly methods: readonly SignInMethod[] }
   /** A sign-in in progress: `url` is the sign-in page once known; `message` says what happened, in words. */
-  | { readonly type: 'signIn'; readonly stage: SignInStage; readonly url: string; readonly message: string };
+  | { readonly type: 'signIn'; readonly stage: SignInStage; readonly url: string; readonly message: string }
+  /** The ways of working this assistant offers, and the one in use. Empty when it offers none. */
+  | { readonly type: 'modes'; readonly modes: readonly SessionMode[]; readonly current: string };
 
 export interface AssistantBridge {
   /** Connects, using the settings in Data/settings.json, and resumes the last conversation if there was one. */
@@ -67,6 +80,8 @@ export interface AssistantBridge {
   answerPermission(requestId: string, choiceId: string | null): Promise<void>;
   /** Listens for assistant events. Returns a function that stops listening. */
   onEvent(listener: (event: AssistantEvent) => void): () => void;
+  /** Changes the way of working (and remembers it for later conversations). */
+  setMode(modeId: string): Promise<void>;
   /** The ways the assistant offers to sign in; empty when it offers none, or is not connected. */
   signInMethods(): Promise<readonly SignInMethod[]>;
   /** Begins signing in with one of the offered methods. Its progress arrives as signIn events. */
@@ -126,6 +141,7 @@ export const ASSISTANT_CHANNELS = {
   cancelSignIn: 'insanity-loom:assistant-sign-in-cancel',
   openSignInPage: 'insanity-loom:assistant-sign-in-page',
   signOut: 'insanity-loom:assistant-sign-out',
+  setMode: 'insanity-loom:assistant-set-mode',
 } as const;
 
 /**

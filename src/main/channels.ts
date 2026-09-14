@@ -17,6 +17,7 @@ import {
 import { DEFAULT_CONNECTION, type ConnectionSettings } from '../shared/connection';
 import { Assistant, HOST_LOG_FILE_NAME } from './assistant';
 import type { Journal } from './journal';
+import type { PreferenceStore } from './preference-store';
 import { loadSettings, readConnection, saveSettings, settingsWith } from './settings';
 
 // Identifiers the page passes back (conversation ids, permission request and choice ids) are short; anything longer
@@ -70,7 +71,7 @@ function listContainers(dockerProgram: string): Promise<readonly string[]> {
  * not exist yet (a new copy of Insanity_Loom) or may not be readable; either way the page can still open the panel,
  * see why, and save settings that work.
  */
-export function startServices(dataFolder: string, logsFolder: string, journal: Journal): Assistant {
+export function startServices(dataFolder: string, logsFolder: string, journal: Journal, preferences: PreferenceStore): Assistant {
   let saved = false;
   let problem = '';
   let connection: ConnectionSettings = DEFAULT_CONNECTION;
@@ -84,7 +85,7 @@ export function startServices(dataFolder: string, logsFolder: string, journal: J
     problem = cause instanceof Error ? cause.message : String(cause);
   }
 
-  const assistant = new Assistant(connection, journal, logsFolder, sendToPages);
+  const assistant = new Assistant(connection, journal, logsFolder, sendToPages, preferences);
 
   ipcMain.handle(ASSISTANT_CHANNELS.connect, async () => {
     if (!saved) {
@@ -124,6 +125,7 @@ export function startServices(dataFolder: string, logsFolder: string, journal: J
     await shell.openExternal(page);
   });
   ipcMain.handle(ASSISTANT_CHANNELS.signOut, () => assistant.signOut());
+  ipcMain.handle(ASSISTANT_CHANNELS.setMode, (_event, modeId: unknown) => assistant.setMode(identifier(modeId, 'way of working')));
 
   ipcMain.handle(CONNECTION_CHANNELS.load, (): ConnectionPanelState => ({ settings: connection, saved, problem }));
   ipcMain.handle(CONNECTION_CHANNELS.save, (_event, candidate: unknown) => {

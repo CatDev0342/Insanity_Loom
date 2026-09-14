@@ -56,6 +56,17 @@ function startAgent() {
   let conversationNumber = 0;
   const cancelled = new Set();
 
+  // The ways of working it offers, as Claude's adapter does: asking every time, or deciding by itself.
+  const MODES = {
+    currentModeId: 'default',
+    availableModes: [
+      { id: 'default', name: 'Manual', description: 'Always ask before making changes' },
+      { id: 'auto', name: 'Auto', description: 'The assistant decides' },
+    ],
+  };
+  let currentMode = 'default';
+  const modeState = () => ({ ...MODES, currentModeId: currentMode });
+
   const stream = acp.ndJsonStream(Writable.toWeb(process.stdout), Readable.toWeb(process.stdin));
 
   new acp.AgentSideConnection(
@@ -91,7 +102,12 @@ function startAgent() {
         },
         newSession: () => {
           mustSignIn();
-          return { sessionId: `fake-conversation-${++conversationNumber}` };
+          return { sessionId: `fake-conversation-${++conversationNumber}`, modes: modeState() };
+        },
+        setSessionMode: async ({ sessionId, modeId }) => {
+          currentMode = modeId;
+          await client.sessionUpdate({ sessionId, update: { sessionUpdate: 'current_mode_update', currentModeId: modeId } });
+          return {};
         },
         listSessions: ({ cwd }) => ({
           sessions: [{ sessionId: 'fake-earlier', cwd, title: 'An earlier conversation', updatedAt: '2026-09-13T12:00:00Z' }],
@@ -107,7 +123,7 @@ function startAgent() {
             });
             await say(sessionId, answer);
           }
-          return {};
+          return { modes: modeState() };
         },
         cancel: ({ sessionId }) => {
           cancelled.add(sessionId);
@@ -115,6 +131,12 @@ function startAgent() {
         prompt: async ({ sessionId, prompt }) => {
           cancelled.delete(sessionId);
           const text = prompt.map((block) => (block.type === 'text' ? block.text : '')).join('');
+
+          if (text.includes('permission') && currentMode === 'auto') {
+            // Deciding by itself: nothing is asked of the author.
+            await say(sessionId, 'Permission answer: decided by the assistant');
+            return { stopReason: 'end_turn' };
+          }
 
           if (text.includes('permission')) {
             const answer = await client.requestPermission({
