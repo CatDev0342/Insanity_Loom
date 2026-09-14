@@ -45,4 +45,5 @@ await rename(landing, destination);
 
 const { size } = await stat(destination);
 const megabytes = (size / (1024 * 1024)).toFixed(1);
-console.log(`${destination} — ${megabytes} MB, built from ${String(said.target_commitish ?? '').slice(0, 7)}, published ${String(said.published_at ?? '')}`);
+// What the release is called says which build it is; when the file itself was last written says how fresh it is.
+console.log(`${destination} — ${megabytes} MB — ${String(said.name ?? '')}, packaged ${String(asset.updated_at ?? '')}`);
