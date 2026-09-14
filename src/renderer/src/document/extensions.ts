@@ -26,6 +26,16 @@ export const ASSISTANT_META = 'insanity-loom:assistant';
 /** The line of the author's writing that finishes a section, once surrounding spaces are ignored. */
 export const SECTION_MARK = '---';
 
+/**
+ * Where the author has just typed a line of three hyphens — the one place Enter finishes a section.
+ *
+ * The signal is a thing the author *does*, not a piece of text that happens to be there. Three hyphens that arrived
+ * any other way — pasted, dropped, brought in from the conversation's history — read exactly the same on the page but
+ * were never a signal, and Enter after one leaves it as the writing it is. (Ctrl+Enter finishes a section wherever
+ * the caret is, and says so plainly, for when that is what the author means.)
+ */
+const TYPED_SECTION_MARK = new PluginKey<number | null>('typedSectionMark');
+
 export function newIdentity(): string {
   return crypto.randomUUID();
 }
@@ -158,6 +168,30 @@ export const SectionKeys = Extension.create<SectionKeysOptions>({
     return { onSectionFinished: () => undefined };
   },
 
+  addProseMirrorPlugins() {
+    return [
+      new Plugin<number | null>({
+        key: TYPED_SECTION_MARK,
+        state: {
+          init: () => null,
+          apply: (transaction, typedAt, _before, after) => {
+            // Nothing moves without the document changing, so what was remembered stays where it was.
+            if (!transaction.docChanged) return typedAt;
+            // Writing that arrived rather than being typed is not the author's signal, whatever it says.
+            const arrived =
+              transaction.getMeta('paste') === true ||
+              transaction.getMeta('uiEvent') === 'drop' ||
+              transaction.getMeta(ASSISTANT_META) === true;
+            if (arrived) return null;
+            const caret = after.selection.$from;
+            if (caret.depth !== 1 || caret.parent.type.name !== 'paragraph') return null;
+            return caret.parent.textContent.trim() === SECTION_MARK ? caret.before(1) : null;
+          },
+        },
+      }),
+    ];
+  },
+
   addKeyboardShortcuts() {
     const finish = (replaceMarkParagraph: boolean): boolean => {
       const { state, view } = this.editor;
@@ -166,10 +200,15 @@ export const SectionKeys = Extension.create<SectionKeysOptions>({
       const $caret = selection.$from;
       const block = $caret.parent;
       if ($caret.depth < 1) return false;
-      // The three-hyphen line counts only as a paragraph of its own at the top level of the whisper.
+      // The three-hyphen line counts only as a paragraph of its own at the top level of the whisper, and only where
+      // the author typed it themselves (TYPED_SECTION_MARK).
       if (
         replaceMarkParagraph &&
-        (block.type.name !== 'paragraph' || $caret.depth !== 1 || $caret.parentOffset !== block.content.size || block.textContent.trim() !== SECTION_MARK)
+        (block.type.name !== 'paragraph' ||
+          $caret.depth !== 1 ||
+          $caret.parentOffset !== block.content.size ||
+          block.textContent.trim() !== SECTION_MARK ||
+          TYPED_SECTION_MARK.getState(state) !== $caret.before(1))
       ) {
         return false;
       }

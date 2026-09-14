@@ -2,6 +2,8 @@
 // The whisper as a document, without the application around it: sections, replies woven in after them, the author's
 // undo that never takes back the assistant's writing, and the whisper's XHTML file.
 import { afterEach, describe, expect, it } from 'vitest';
+import { DOMParser as HtmlParser } from '@tiptap/pm/model';
+import { SECTION_MARK } from '../../src/renderer/src/document/extensions';
 import { WhisperEditor } from '../../src/renderer/src/document/whisper-editor';
 import { fromXhtml, toXhtml } from '../../src/renderer/src/document/xhtml';
 
@@ -35,11 +37,26 @@ function types(target: WhisperEditor, text: string): void {
   target.editor.commands.insertContent(text);
 }
 
+/** Finishes a section the way the author does: the three hyphens typed on a line of their own, then Enter. */
+function finishSection(target: WhisperEditor): void {
+  target.editor.commands.focus('end');
+  types(target, SECTION_MARK);
+  press(target, 'Enter');
+}
+
+/** Puts writing in as a paste does — arriving whole, rather than being typed. */
+function pastes(target: WhisperEditor, html: string): void {
+  const holder = document.createElement('div');
+  holder.innerHTML = html;
+  const view = target.editor.view;
+  const slice = HtmlParser.fromSchema(target.editor.schema).parseSlice(holder);
+  view.dispatch(view.state.tr.replaceSelection(slice).setMeta('paste', true));
+}
+
 describe('finishing a section', () => {
   it('turns a line of three hyphens into a rule when Enter is pressed, and sends the section as Markdown', () => {
-    const { whisper: w, sections } = whisper('<p>Hello <strong>loom</strong>.</p><p>---</p>');
-    w.editor.commands.focus('end');
-    press(w, 'Enter');
+    const { whisper: w, sections } = whisper('<p>Hello <strong>loom</strong>.</p><p></p>');
+    finishSection(w);
     expect(sections).toHaveLength(1);
     expect(sections[0]?.markdown.trim()).toBe('Hello **loom**.');
     expect(w.html).toContain('<hr data-section-id=');
@@ -56,10 +73,23 @@ describe('finishing a section', () => {
     expect(w.html).not.toContain('<hr');
   });
 
-  it('sends only the section just finished, not the ones before it', () => {
-    const { whisper: w, sections } = whisper('<p>first</p><p>---</p>');
+  it('leaves a pasted line of three hyphens as writing: it was never the author\'s signal', () => {
+    const { whisper: w, sections } = whisper('<p></p>');
     w.editor.commands.focus('end');
+    // Writing pasted in from somewhere else, ending in a line that reads exactly like the signal.
+    pastes(w, '<p>a pasted note</p><p>---</p>');
     press(w, 'Enter');
+    expect(sections).toHaveLength(0);
+    expect(w.html).not.toContain('<hr');
+    expect(w.html).toContain('<p>---</p>');
+    // Ctrl+Enter still finishes the section wherever the caret is, for when that is what the author means.
+    press(w, 'Enter', { ctrlKey: true });
+    expect(sections).toHaveLength(1);
+  });
+
+  it('sends only the section just finished, not the ones before it', () => {
+    const { whisper: w, sections } = whisper('<p>first</p><p></p>');
+    finishSection(w);
     types(w, 'second');
     press(w, 'Enter', { ctrlKey: true });
     expect(sections.map((section) => section.markdown.trim())).toEqual(['first', 'second']);
@@ -68,18 +98,16 @@ describe('finishing a section', () => {
 
 describe('replies', () => {
   it('are placed after the rule of the section they answer, and rendered from Markdown', () => {
-    const { whisper: w, sections } = whisper('<p>question</p><p>---</p>');
-    w.editor.commands.focus('end');
-    press(w, 'Enter');
+    const { whisper: w, sections } = whisper('<p>question</p><p></p>');
+    finishSection(w);
     const replyId = w.placeReply(sections[0]?.sectionId ?? '');
     w.setReply(replyId, '## Answer\n\n- one\n- two', 'writing');
     expect(w.html).toMatch(/<hr[^>]*><section[^>]*data-state="writing"[^>]*><h2>Answer<\/h2><ul>/);
   });
 
   it('cannot be changed by the author while being written, and can once finished', () => {
-    const { whisper: w, sections } = whisper('<p>question</p><p>---</p>');
-    w.editor.commands.focus('end');
-    press(w, 'Enter');
+    const { whisper: w, sections } = whisper('<p>question</p><p></p>');
+    finishSection(w);
     const replyId = w.placeReply(sections[0]?.sectionId ?? '');
     w.setReply(replyId, 'the reply', 'writing');
     const before = w.html;
@@ -99,9 +127,8 @@ describe('replies', () => {
   });
 
   it("never enter the author's undo: Ctrl+Z takes back only the author's own writing", () => {
-    const { whisper: w, sections } = whisper('<p>question</p><p>---</p>');
-    w.editor.commands.focus('end');
-    press(w, 'Enter');
+    const { whisper: w, sections } = whisper('<p>question</p><p></p>');
+    finishSection(w);
     const replyId = w.placeReply(sections[0]?.sectionId ?? '');
     w.setReply(replyId, 'the reply', 'finished');
     w.editor.commands.focus('end');
@@ -114,9 +141,8 @@ describe('replies', () => {
 
 describe('the whisper file', () => {
   it('round-trips through XHTML, keeping replies and section rules', () => {
-    const { whisper: w, sections } = whisper('<p>Hello &amp; <em>welcome</em></p><p>---</p>');
-    w.editor.commands.focus('end');
-    press(w, 'Enter');
+    const { whisper: w, sections } = whisper('<p>Hello &amp; <em>welcome</em></p><p></p>');
+    finishSection(w);
     const replyId = w.placeReply(sections[0]?.sectionId ?? '');
     w.setReply(replyId, 'A **reply**', 'finished');
 
