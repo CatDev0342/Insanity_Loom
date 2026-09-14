@@ -145,6 +145,9 @@ function startAgent() {
             : { sessions: [{ sessionId: 'fake-earlier', cwd, title: 'An earlier conversation', updatedAt: '2026-09-13T12:00:00Z' }] },
         loadSession: async ({ sessionId }) => {
           mustSignIn();
+          // Told to be quiet about history, it answers nothing — and goes on answering nothing however many times
+          // the connection is made again, which is what a suspended container does.
+          if (process.argv.includes('--quiet-history')) return await answerNothing();
           for (let exchange = 1; exchange <= historyExchanges; exchange++) {
             const question = exchange === 1 ? 'An earlier question' : `Question ${exchange}`;
             const answer = exchange === 1 ? 'An earlier answer' : `Answer ${exchange}`;

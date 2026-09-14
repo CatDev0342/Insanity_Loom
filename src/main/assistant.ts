@@ -34,6 +34,36 @@ const REMEMBERED_ERROR_LINES = 20;
 
 const MILLISECONDS_PER_SECOND = 1000;
 
+/** How many times in a row the connection is made again with nothing heard since, before it is left to the author. */
+const MOST_RECONNECTIONS_WITHOUT_A_SIGN = 2;
+
+/**
+ * What counts as the assistant getting on with what it was asked.
+ *
+ * Greeting us is not it. A host can shake hands, name its account, offer its ways of working, and then answer nothing
+ * that was actually asked of it — which is exactly the shape of the fault this guards against. Only work arriving
+ * counts as work being done.
+ */
+const IS_PROGRESS: ReadonlySet<AssistantEvent['type']> = new Set([
+  'replyText',
+  'thought',
+  'thinking',
+  'tool',
+  'replyFinished',
+  'replayFinished',
+  'authorText',
+  'context',
+]);
+
+/**
+ * How many silences in a row a host may answer for and still say nothing about what was asked of it.
+ *
+ * A host that answers a question of its own while ignoring the turn or the history it was given is not merely slow:
+ * what was asked of it has been lost. Being patient about that forever is how a request nobody is working on comes
+ * to look exactly like one that is taking a while.
+ */
+const MOST_SILENCES_A_LIVE_HOST_MAY_HAVE = 4;
+
 // The protocol's error code for "sign in first", as the protocol library defines it.
 const SIGN_IN_REQUIRED_CODE = acp.RequestError.authRequired().code;
 
@@ -209,8 +239,17 @@ export class Assistant {
   private readonly recentErrors: string[] = [];
   private readonly log: WriteStream;
   private signingIn: ChildProcess | undefined;
-  /** Watches a turn that has gone out, so a host that has gone quiet is noticed rather than waited on forever. */
+  /** Watches whatever has been asked of the assistant, so a host that has gone quiet is noticed. */
   private readonly watchdog: Watchdog;
+  /**
+   * What is being waited for. A turn ends in a reply; a conversation's history ends in the replay finishing. Either
+   * can be waited on forever by a host that has gone quiet, and the page has to be told the right thing when it is.
+   */
+  private awaiting: 'a turn' | 'a history' | undefined;
+  /** How many times in a row the connection has been made again without a word from the assistant since. */
+  private reconnectionsWithoutASign = 0;
+  /** How many silences in a row the host has answered for while saying nothing about what was asked of it. */
+  private silencesAnsweredFor = 0;
 
   /** The ways of working this assistant offers, and the one in use. */
   private modes: { available: readonly SessionMode[]; current: string } = { available: [], current: '' };
@@ -240,6 +279,11 @@ export class Assistant {
    */
   private emit(event: AssistantEvent): void {
     this.watchdog.heard();
+    // A word from the assistant is the assistant being there: whatever went wrong before is over.
+    if (IS_PROGRESS.has(event.type)) {
+      this.reconnectionsWithoutASign = 0;
+      this.silencesAnsweredFor = 0;
+    }
     this.tell(event);
   }
 
@@ -561,6 +605,11 @@ export class Assistant {
   async resumeConversation(id: string): Promise<void> {
     const connection = this.requireConnection();
     this.cancelPendingPermissions();
+    // A history can be waited on forever by a host that has gone quiet, exactly as a turn can. It is watched the
+    // same way: **anything that can hold the one channel open must have something that closes it** (20.11.5).
+    this.awaiting = 'a history';
+    this.watchdog.waiting();
+    const askedOn = this.open;
     // The conversation's history arrives as updates while the resume is in progress; it is shown as it comes.
     this.conversationId = id;
     this.replaying = true;
@@ -570,6 +619,11 @@ export class Assistant {
       resumed = await connection.loadSession({ sessionId: id, cwd: this.settings.workingFolder, mcpServers: [] });
     } catch (cause) {
       this.replaying = false;
+      this.awaiting = undefined;
+      this.watchdog.idle();
+      // This history was already given up on — the host went quiet and the connection was let go. Its request
+      // failing afterwards is that same failure arriving late, and there is nothing here left to begin.
+      if (this.open !== askedOn) return;
       this.emit({
         type: 'problem',
         message: `The conversation ${id} could not be resumed (${cause instanceof Error ? cause.message : String(cause)}). A new one has begun.`,
@@ -578,6 +632,8 @@ export class Assistant {
       return;
     }
     this.replaying = false;
+    this.awaiting = undefined;
+    this.watchdog.idle();
     this.journal.saveConversationId(id);
     this.emit({ type: 'replayFinished' });
     await this.useModes(resumed.modes);
@@ -608,6 +664,7 @@ export class Assistant {
   async send(text: string, afterMakingRoom = false): Promise<void> {
     const { connection, conversationId } = this.requireConversation();
     const sentOn = this.open;
+    this.awaiting = 'a turn';
     this.watchdog.waiting();
     try {
       const result = await connection.prompt({ sessionId: conversationId, prompt: [{ type: 'text', text }] });
@@ -640,6 +697,7 @@ export class Assistant {
       });
       this.emit({ type: 'replyFinished', reason: 'error' });
     } finally {
+      this.awaiting = undefined;
       this.watchdog.idle();
     }
   }
@@ -655,22 +713,47 @@ export class Assistant {
     const opened = this.open;
     if (opened === undefined) return;
     if (opened.host.exitCode !== null || opened.host.signalCode !== null) return; // Its stopping is handled already.
+    const waitedFor = this.awaiting;
     const alive = await answersWithin(
       opened.connection.listSessions({ cwd: this.settings.workingFolder, cursor: null }),
       SECONDS_TO_ANSWER_A_CHECK,
     );
     if (this.open !== opened) return;
-    if (alive) {
+    if (alive && this.silencesAnsweredFor < MOST_SILENCES_A_LIVE_HOST_MAY_HAVE) {
       // The host is there and answering; this one turn is merely slow. Nothing is cancelled on a living host —
       // a turn thinking hard about a long command says nothing for a while, and killing it would be the worse
       // mistake. It is simply watched again, and asked about again if the silence goes on.
+      this.silencesAnsweredFor += 1;
       this.watchdog.waiting();
       return;
     }
-    this.emit({ type: 'problem', message: 'The assistant stopped answering. Connecting again, and sending your turn once more.' });
-    this.emit({ type: 'replyFinished', reason: 'error' });
+    // Connecting again is only worth doing while it is still getting somewhere. A host that goes quiet every time it
+    // is reached would otherwise be reached forever, each round taking a minute and saying the same thing.
+    if (this.reconnectionsWithoutASign >= MOST_RECONNECTIONS_WITHOUT_A_SIGN) {
+      this.dropConnection();
+      if (waitedFor === 'a turn') this.tell({ type: 'replyFinished', reason: 'error' });
+      this.tell({
+        type: 'status',
+        state: 'failed',
+        detail: 'The assistant is not answering. Use Assistant ▸ Reconnect when it is back.',
+      });
+      return;
+    }
+    this.reconnectionsWithoutASign += 1;
+    this.tell({
+      type: 'problem',
+      message:
+        waitedFor === 'a history'
+          ? 'The assistant stopped answering while the conversation was being brought back. Connecting again.'
+          : 'The assistant stopped answering. Connecting again, and sending your turn once more.',
+    });
+    // Whatever was being waited for is not coming; the page is freed before the connection is made again.
+    if (waitedFor === 'a turn') this.tell({ type: 'replyFinished', reason: 'error' });
+    if (waitedFor === 'a history') this.tell({ type: 'replayFinished' });
     await this.connect();
   }
+
+
 
   /**
    * Asks the assistant to make room in its context window. Claude Code offers this as a command of its own
@@ -716,6 +799,7 @@ export class Assistant {
   }
 
   private dropConnection(): void {
+    this.awaiting = undefined;
     this.watchdog.idle();
     this.modes = { available: [], current: '' };
     this.cancelPendingPermissions();

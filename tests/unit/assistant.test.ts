@@ -40,7 +40,7 @@ function start(
   hostCommand: string[] = [process.execPath, FAKE_ASSISTANT],
   memory: ModeMemory = { assistantMode: '', setAssistantMode: () => undefined },
   quietSeconds?: number,
-): { assistant: Assistant; events: AssistantEvent[] } {
+): { assistant: Assistant; events: AssistantEvent[]; folder: string } {
   const folder = mkdtempSync(join(tmpdir(), 'insanity-loom-'));
   const events: AssistantEvent[] = [];
   const assistant = new Assistant(
@@ -58,7 +58,7 @@ function start(
     quietSeconds,
   );
   running.push({ assistant, folder });
-  return { assistant, events };
+  return { assistant, events, folder };
 }
 
 const replyText = (events: AssistantEvent[]): string =>
@@ -242,8 +242,31 @@ describe('when a turn cannot get through', () => {
     expect(events.some((event) => event.type === 'replyFinished' && event.reason === 'error')).toBe(true);
     expect(events.some((event) => event.type === 'status' && event.state === 'connecting')).toBe(true);
   }, LONG_ENOUGH_FOR_A_QUIET_HOST_MS);
+
+
+  it('watches the conversation being brought back, not only a turn', async () => {
+    // A host that never answers about history. The conversation to resume is remembered, so every fresh connection
+    // asks again and is answered with the same silence — the one way this could go round forever.
+    const { assistant, events, folder } = start([process.execPath, FAKE_ASSISTANT, '--quiet-history'], undefined, 1);
+    new Journal(folder).saveConversationId('fake-earlier');
+    // Not raced: connecting resolves each time, and it is the rounds after it that this is about.
+    void assistant.connect();
+    await new Promise((resolve) => setTimeout(resolve, GIVING_UP_MS));
+
+    // The page is freed rather than left waiting on a history that is not coming.
+    expect(events.some((event) => event.type === 'replayFinished')).toBe(true);
+    const said = events.flatMap((event) => (event.type === 'problem' ? [event.message] : []));
+    expect(said.some((message) => message.includes('brought back'))).toBe(true);
+    // And each round takes the best part of a minute and says the same thing, so it is left to the author.
+    const last = lastOfType(events, 'status');
+    expect(last).toMatchObject({ state: 'failed' });
+    expect(last).toMatchObject({ detail: expect.stringContaining('Assistant ▸ Reconnect') });
+  }, LONG_ENOUGH_TO_GIVE_UP_MS);
 });
 
 /** Long enough for a one-second watch to run out and for the check after it to go unanswered. */
 const QUIET_ENOUGH_MS = 20_000;
 const LONG_ENOUGH_FOR_A_QUIET_HOST_MS = 40_000;
+/** Three rounds of the same silence: quiet, check, connect again, and again, until it is left to the author. */
+const GIVING_UP_MS = 45_000;
+const LONG_ENOUGH_TO_GIVE_UP_MS = 120_000;

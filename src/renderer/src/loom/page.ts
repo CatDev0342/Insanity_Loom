@@ -1005,6 +1005,13 @@ export class Loom {
         return;
       }
     }
+    // A conversation that is not being replayed supersedes a replay that never finished — a history the assistant
+    // gave up on, and began a new conversation instead. Left standing, it would hold the one channel open and every
+    // turn the author wrote would queue behind it silently, which is the fault 20.11 is about.
+    if (!replaying && this.replay !== undefined) {
+      this.replay = undefined;
+      this.showNotice('The conversation before this one could not be brought back. A new one has begun.');
+    }
     this.conversationId = id;
     this.showTitle();
     this.saveNow();
