@@ -1,5 +1,9 @@
-// The Resume Conversation dialog: the assistant's past conversations, newest first, one button each. Tab and the
-// arrow keys move between them, Enter chooses, Esc closes without choosing.
+// The Resume Conversation dialog: the assistant's past conversations, newest first, one button each. The arrows move
+// between them, Enter chooses, Esc closes without choosing.
+//
+// The list is a list of choices and says so plainly — a group of buttons with a name — rather than wearing the roles
+// of a listbox whose options are buttons, which is two patterns at once and neither of them properly. By the keyboard
+// it is one stop, as the editing shortcuts are: a hundred conversations must not be a hundred presses of Tab.
 
 import type { ConversationSummary } from '../../../shared/assistant';
 
@@ -17,11 +21,14 @@ export async function chooseConversation(
 ): Promise<string | undefined> {
   const listing = document.createElement('div');
   listing.className = 'resume-list';
-  listing.setAttribute('role', 'listbox');
+  listing.setAttribute('role', 'group');
+  listing.setAttribute('aria-label', 'Earlier conversations');
   listing.textContent = 'Asking the assistant for its conversations…';
 
   const heading = document.createElement('h2');
+  heading.id = 'resume-heading';
   heading.textContent = 'Resume a conversation';
+  dialog.setAttribute('aria-labelledby', heading.id);
   const close = document.createElement('button');
   close.type = 'button';
   close.textContent = 'Cancel';
@@ -44,7 +51,6 @@ export async function chooseConversation(
     const button = document.createElement('button');
     button.type = 'button';
     button.className = 'resume-choice';
-    button.setAttribute('role', 'option');
     const title = document.createElement('span');
     title.className = 'resume-title';
     title.textContent = conversation.title;
@@ -55,6 +61,9 @@ export async function chooseConversation(
     button.addEventListener('click', () => dialog.close(conversation.id));
     return button;
   });
+  buttons.forEach((button, index) => {
+    button.tabIndex = index === 0 ? 0 : -1;
+  });
   listing.append(...buttons);
   buttons[0]?.focus();
 
@@ -62,9 +71,14 @@ export async function chooseConversation(
     const index = buttons.findIndex((button) => button === document.activeElement);
     if (index === -1) return;
     const step = event.key === 'ArrowDown' ? 1 : event.key === 'ArrowUp' ? -1 : 0;
-    if (step === 0) return;
+    const next = event.key === 'Home' ? 0 : event.key === 'End' ? buttons.length - 1 : step === 0 ? -1 : (index + step + buttons.length) % buttons.length;
+    if (next === -1) return;
     event.preventDefault();
-    buttons[(index + step + buttons.length) % buttons.length]?.focus();
+    for (const button of buttons) button.tabIndex = -1;
+    const moved = buttons[next];
+    if (moved === undefined) return;
+    moved.tabIndex = 0;
+    moved.focus();
   });
 
   return new Promise((resolve) => {
