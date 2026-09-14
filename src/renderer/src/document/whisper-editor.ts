@@ -409,9 +409,26 @@ export class WhisperEditor {
   private goToPlace(looked: string, at: number, of: number): { readonly at: number; readonly of: number } {
     this.setFinding({ looked, at });
     const place = placesFound(this.editor.state, looked)[at];
-    // The caret goes to what was found, so the author may carry on writing there, and the whisper scrolls to it.
-    if (place !== undefined) this.editor.chain().setTextSelection(place).scrollIntoView().run();
+    if (place === undefined) return { at, of };
+    // The caret goes to what was found, so the author may carry on writing there.
+    this.editor.chain().setTextSelection(place).run();
+    this.showPosition(place.from);
     return { at, of };
+  }
+
+  /**
+   * Brings a place in the whisper into view.
+   *
+   * The editor's own "scroll to the selection" cannot be used here: it takes its bearings from where the *browser's*
+   * selection is, and while the author is typing in the find bar that is in the find bar, not in the whisper — so it
+   * quietly does nothing, and finding a word never moved the page. What is scrolled is therefore the writing itself,
+   * found on the page by its position.
+   */
+  private showPosition(position: number): void {
+    const at = this.editor.view.domAtPos(position);
+    const node: Node | undefined = at.node.childNodes[at.offset] ?? at.node;
+    const element = node.nodeType === Node.ELEMENT_NODE ? (node as HTMLElement) : node.parentElement;
+    element?.scrollIntoView({ block: 'center' });
   }
 
   /**
