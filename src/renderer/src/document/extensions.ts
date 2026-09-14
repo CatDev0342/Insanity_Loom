@@ -150,6 +150,98 @@ export const ProtectBusyReplies = Extension.create({
   },
 });
 
+/** What a heading with no words of its own is called, so that it can still be linked to. */
+const UNNAMED_HEADING = 'section';
+
+/** How long a heading's identity may be, so that a link stays readable. */
+const LONGEST_HEADING_IDENTITY = 60;
+
+/**
+ * A heading's identity, from the words it was written with: lower case, spaces as hyphens, nothing else — the shape
+ * of a wiki's anchors, so `a-whisper.xhtml#what-the-loom-is` reads as what it points at.
+ */
+export function headingIdentity(text: string): string {
+  const slug = text
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, LONGEST_HEADING_IDENTITY)
+    .replace(/-+$/, '');
+  return slug === '' ? UNNAMED_HEADING : slug;
+}
+
+/** The same identity, made one no other heading in the whisper has yet. */
+function freeIdentity(wanted: string, taken: ReadonlySet<string>): string {
+  if (!taken.has(wanted)) return wanted;
+  for (let next = 2; ; next++) {
+    const tried = `${wanted}-${next}`;
+    if (!taken.has(tried)) return tried;
+  }
+}
+
+/**
+ * Every heading in a whisper carries an identity of its own, so a link can point at it: `#what-the-loom-is`, in this
+ * whisper or from another.
+ *
+ * The identity is made from the heading's words when it is first written, and **never changes afterwards** — not when
+ * the heading is reworded, not when it is moved, not when the whisper is renamed. A link that was right once stays
+ * right. Two headings never share one: a heading copied from elsewhere is given a fresh identity, because the link
+ * would otherwise land on whichever came first.
+ *
+ * Headings inside a reply the assistant is still writing are left until it is finished; nothing may change one of
+ * those (ProtectBusyReplies), and the reply is rewritten with every piece that arrives in any case.
+ */
+export const HeadingIdentities = Extension.create({
+  name: 'headingIdentities',
+
+  addGlobalAttributes() {
+    return [
+      {
+        types: ['heading'],
+        attributes: {
+          id: {
+            default: null,
+            parseHTML: (element) => element.getAttribute('id'),
+            renderHTML: (attributes: { id?: string | null }) => (attributes.id ? { id: attributes.id } : {}),
+          },
+        },
+      },
+    ];
+  },
+
+  addProseMirrorPlugins() {
+    return [
+      new Plugin({
+        key: new PluginKey('headingIdentities'),
+        appendTransaction: (transactions, _before, after) => {
+          if (!transactions.some((transaction) => transaction.docChanged)) return null;
+          const taken = new Set<string>();
+          const toName: { readonly position: number; readonly identity: string }[] = [];
+          after.doc.descendants((node, position) => {
+            if (replyIsBusy(node)) return false;
+            if (node.type.name !== 'heading') return node.isBlock && !node.isTextblock;
+            const identity = node.attrs['id'];
+            if (typeof identity === 'string' && identity !== '' && !taken.has(identity)) {
+              taken.add(identity);
+              return false;
+            }
+            const made = freeIdentity(headingIdentity(node.textContent), taken);
+            taken.add(made);
+            toName.push({ position, identity: made });
+            return false;
+          });
+          if (toName.length === 0) return null;
+          const transaction = after.tr;
+          for (const { position, identity } of toName) transaction.setNodeAttribute(position, 'id', identity);
+          // Naming a heading is the program's own housekeeping: it is not a change the author made, and Ctrl+Z has
+          // nothing to take back.
+          return transaction.setMeta('addToHistory', false);
+        },
+      }),
+    ];
+  },
+});
+
 export interface FollowLinksOptions {
   /** Called when the author asks to follow a link, with the address it carries. */
   onFollow: (address: string) => void;

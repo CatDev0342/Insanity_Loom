@@ -5,7 +5,7 @@ import { Loom } from './loom/page';
 import { ContextMenu } from './menu/context-menu';
 import { MenuBar } from './menu/menubar';
 import { MENUS } from './menu/model';
-import { LinkPanel } from './panels/link-panel';
+import { LinkPanel, type WhisperHeading } from './panels/link-panel';
 import { PreferencesPanel } from './panels/preferences-panel';
 import { SignInPanel } from './panels/sign-in-panel';
 
@@ -45,13 +45,26 @@ const signIn = new SignInPanel(required<HTMLDialogElement>('#sign-in-dialog'), b
 const link = new LinkPanel(required<HTMLDialogElement>('#link-dialog'));
 required<HTMLButtonElement>('#sign-in').addEventListener('click', () => void signIn.show());
 
+/**
+ * The headings of a whisper in the alcove, read from its file: what a link may point at inside it. The file is XHTML,
+ * so the page reads it with the browser's own parser (src/renderer/src/document/xhtml.ts writes it).
+ */
+async function headingsOf(name: string): Promise<readonly WhisperHeading[]> {
+  const parsed = new DOMParser().parseFromString(await bridge.whispers.contents(name), 'application/xhtml+xml');
+  if (parsed.getElementsByTagName('parsererror').length > 0) return [];
+  return [...parsed.querySelectorAll('h1[id], h2[id], h3[id]')].map((heading) => ({
+    identity: heading.getAttribute('id') ?? '',
+    text: heading.textContent ?? '',
+  }));
+}
+
 /** Format ▸ …: the whisper's own. Only the link asks for anything; the rest act where the caret is. */
 async function runFormat(command: FormatCommandId): Promise<void> {
   if (command !== 'format.link') {
     loom.runFormatCommand(command);
     return;
   }
-  const chosen = await link.show(loom.linkAddress, await bridge.whispers.list());
+  const chosen = await link.show(loom.linkAddress, await bridge.whispers.list(), headingsOf);
   if (chosen.kind === 'set') loom.setLink(chosen.address);
   else if (chosen.kind === 'remove') loom.runFormatCommand('format.removeLink');
   loom.focusWhisper();

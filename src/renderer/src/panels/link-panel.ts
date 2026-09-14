@@ -8,7 +8,7 @@
 // address, as a browser's own address bar takes it, and what is not an address at all is named as a problem before
 // the dialog closes, never silently turned into one.
 
-import { isWhisperAddress, type WhisperInAlcove } from '../../../shared/whispers';
+import { isWhisperAddress, readWhisperLink, type WhisperInAlcove } from '../../../shared/whispers';
 import { button, dialogButtons, element, enableAccessKeys, row } from './kit';
 
 /** What the author decided: a link to this address, no link at all, or nothing (the dialog was cancelled). */
@@ -22,6 +22,19 @@ const ASSUMED_SCHEME = 'https://';
 
 /** The first entry of the whisper list, which chooses none. */
 const NO_WHISPER_CHOSEN = '';
+
+/** The first entry of the section list: the whisper as a whole, rather than a place inside it. */
+const WHOLE_WHISPER = '';
+
+/** A heading in a whisper, as a link may point at it. */
+export interface WhisperHeading {
+  readonly identity: string;
+  /** The heading's words, as the author wrote them. */
+  readonly text: string;
+}
+
+/** Asked for the headings of a whisper in the alcove, when one is chosen to link to. */
+export type HeadingsOf = (name: string) => Promise<readonly WhisperHeading[]>;
 
 /** An address as the author reads and writes it: a whisper's link is shown as its plain file name. */
 function asWritten(address: string): string {
@@ -37,9 +50,13 @@ function asWritten(address: string): string {
 export function readAddress(written: string): { readonly address: string } | { readonly problem: string } {
   const trimmed = written.trim();
   if (trimmed === '') return { problem: 'Give an address for the link.' };
-  // A whisper is named by its file name; the link carries it as a web address does, so spaces and the like are
-  // written the way a browser expects to read them back.
-  if (isWhisperAddress(trimmed)) return { address: encodeURIComponent(trimmed) };
+  // A whisper is named by its file name, and may be pointed into by a heading's identity; the link carries both as a
+  // web address does, so spaces and the like are written the way a browser expects to read them back.
+  const whisper = readWhisperLink(trimmed);
+  if (whisper !== undefined) {
+    const name = encodeURIComponent(whisper.name);
+    return { address: whisper.heading === '' ? name : `${name}#${encodeURIComponent(whisper.heading)}` };
+  }
   const withScheme = /^[a-z][a-z0-9+.-]*:/i.test(trimmed) ? trimmed : `${ASSUMED_SCHEME}${trimmed}`;
   try {
     return { address: new URL(withScheme).href };
@@ -52,6 +69,8 @@ export class LinkPanel {
   private readonly form: HTMLFormElement;
   private readonly address: HTMLInputElement;
   private readonly whispers: HTMLSelectElement;
+  private readonly headings: HTMLSelectElement;
+  private headingsOf: HeadingsOf = async () => [];
   private readonly problem: HTMLParagraphElement;
   private readonly remove: HTMLButtonElement;
   private choice: LinkChoice = { kind: 'unchanged' };
@@ -67,6 +86,8 @@ export class LinkPanel {
     this.address.type = 'text';
     this.address.spellcheck = false;
     this.whispers = element('select');
+    this.headings = element('select');
+    this.headings.disabled = true;
     this.remove = button('&Remove Link');
     const whispersNote = element('p', 'panel-note');
     whispersNote.textContent =
@@ -84,6 +105,7 @@ export class LinkPanel {
       this.problem,
       row('link-address', '&Address:', this.address),
       row('link-whisper', 'Or a &whisper:', this.whispers),
+      row('link-heading', '&Section:', this.headings),
       whispersNote,
       bar,
     );
@@ -105,9 +127,19 @@ export class LinkPanel {
     });
     // Choosing a whisper fills the address in; it can still be edited by hand afterwards.
     this.whispers.addEventListener('change', () => {
-      if (this.whispers.value === NO_WHISPER_CHOSEN) return;
+      if (this.whispers.value === NO_WHISPER_CHOSEN) {
+        this.showHeadings([], WHOLE_WHISPER);
+        return;
+      }
       this.address.value = this.whispers.value;
       this.problem.hidden = true;
+      void this.loadHeadings(this.whispers.value, WHOLE_WHISPER);
+    });
+    // Choosing a section points the link inside that whisper, at the heading's own identity.
+    this.headings.addEventListener('change', () => {
+      const whisper = this.whispers.value;
+      if (whisper === NO_WHISPER_CHOSEN) return;
+      this.address.value = this.headings.value === WHOLE_WHISPER ? whisper : `${whisper}#${this.headings.value}`;
     });
     cancel.addEventListener('click', () => this.dialog.close());
     this.remove.addEventListener('click', () => {
@@ -116,8 +148,35 @@ export class LinkPanel {
     });
   }
 
+  /** The sections of the whisper chosen, so a link can point inside it rather than only at it. */
+  private async loadHeadings(name: string, chosen: string): Promise<void> {
+    try {
+      this.showHeadings(await this.headingsOf(name), chosen);
+    } catch {
+      // A whisper that cannot be read offers no sections; the link to the whisper itself still stands.
+      this.showHeadings([], WHOLE_WHISPER);
+    }
+  }
+
+  private showHeadings(headings: readonly WhisperHeading[], chosen: string): void {
+    const whole = element('option');
+    whole.value = WHOLE_WHISPER;
+    whole.textContent = '(the whole whisper)';
+    this.headings.replaceChildren(
+      whole,
+      ...headings.map((heading) => {
+        const option = element('option');
+        option.value = heading.identity;
+        option.textContent = heading.text;
+        return option;
+      }),
+    );
+    this.headings.disabled = headings.length === 0;
+    this.headings.value = headings.some((heading) => heading.identity === chosen) ? chosen : WHOLE_WHISPER;
+  }
+
   /** Asks for an address, starting from the one the caret is already in ('' when it is in none). */
-  async show(current: string, whispers: readonly WhisperInAlcove[]): Promise<LinkChoice> {
+  async show(current: string, whispers: readonly WhisperInAlcove[], headingsOf: HeadingsOf): Promise<LinkChoice> {
     this.choice = { kind: 'unchanged' };
     const none = element('option');
     none.value = NO_WHISPER_CHOSEN;
@@ -132,7 +191,12 @@ export class LinkPanel {
       }),
     );
     const written = asWritten(current);
-    this.whispers.value = whispers.some((whisper) => whisper.name === written) ? written : NO_WHISPER_CHOSEN;
+    const link = readWhisperLink(written);
+    const named = link !== undefined && whispers.some((whisper) => whisper.name === link.name);
+    this.whispers.value = named && link !== undefined ? link.name : NO_WHISPER_CHOSEN;
+    this.headingsOf = headingsOf;
+    this.showHeadings([], WHOLE_WHISPER);
+    if (named && link !== undefined) void this.loadHeadings(link.name, link.heading);
     this.address.value = written;
     this.problem.hidden = true;
     this.remove.hidden = current === '';

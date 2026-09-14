@@ -19,9 +19,37 @@ export interface WhisperInAlcove {
   readonly title: string;
 }
 
-/** Whether an address is a link to another whisper — a plain file name in the alcove, with no scheme of its own. */
+/** A link from one whisper into another, or into a place in this one. */
+export interface WhisperLink {
+  /** The whisper's file name, or '' for a link within the whisper the author is in. */
+  readonly name: string;
+  /** The identity of the heading it points at, or '' for the whisper as a whole. */
+  readonly heading: string;
+}
+
+/**
+ * Reads an address as a link to a whisper, or says it is not one. A whisper link is a plain file name in the alcove —
+ * nothing with a scheme of its own, nothing that reaches out of the alcove — and may end in `#` and the identity of a
+ * heading within it. `#a-heading` alone points into the whisper the author is already in.
+ */
+export function readWhisperLink(address: string): WhisperLink | undefined {
+  let written: string;
+  try {
+    written = decodeURIComponent(address);
+  } catch {
+    // An address that is not written the way a browser writes them is not a whisper's.
+    return undefined;
+  }
+  const hash = written.indexOf('#');
+  const name = hash === -1 ? written : written.slice(0, hash);
+  const heading = hash === -1 ? '' : written.slice(hash + 1);
+  if (name === '') return heading === '' ? undefined : { name, heading };
+  return /^[^/\\:?#]+\.xhtml$/i.test(name) ? { name, heading } : undefined;
+}
+
+/** Whether an address is a link to a whisper at all. */
 export function isWhisperAddress(address: string): boolean {
-  return /^[^/\\:?#]+\.xhtml$/i.test(address);
+  return readWhisperLink(address) !== undefined;
 }
 
 export interface WhispersBridge {
@@ -39,6 +67,8 @@ export interface WhispersBridge {
   list(): Promise<readonly WhisperInAlcove[]>;
   /** Opens the whisper a link points at, by its file name in the alcove. */
   openNamed(name: string): Promise<OpenWhisper>;
+  /** Reads a whisper in the alcove without opening it — to list what a link may point at inside it. */
+  contents(name: string): Promise<string>;
   /** Asks the author for a whisper to open. Undefined when they choose none. */
   choose(): Promise<OpenWhisper | undefined>;
   /** Names the whisper's file after the conversation's title, keeping the date it began; returns where it now is. */
@@ -56,6 +86,7 @@ export const WHISPER_CHANNELS = {
   choose: 'insanity-loom:whisper-choose',
   list: 'insanity-loom:whisper-list',
   openNamed: 'insanity-loom:whisper-open-named',
+  contents: 'insanity-loom:whisper-contents',
   rename: 'insanity-loom:whisper-rename',
   showAlcove: 'insanity-loom:alcove-show',
 } as const;

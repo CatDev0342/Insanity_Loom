@@ -111,3 +111,31 @@ test('a link to another whisper opens it, and a web link is left to the browser'
   await expect(page.locator('#whisper-name')).toHaveText(first ?? '');
   await expect(whisper).toContainText('the first whisper');
 });
+
+test('a link can point at a section, and following it goes there', async () => {
+  const whisper = page.locator('.whisper-editor');
+  await whisper.click();
+  await page.keyboard.type('What the loom is');
+  await page.keyboard.press('Control+Alt+2');
+  await page.keyboard.press('Enter');
+  await page.keyboard.type('and a line about it');
+  // The heading carries an identity of its own, made from its words.
+  await expect(whisper.locator('h2')).toHaveAttribute('id', 'what-the-loom-is');
+
+  await page.keyboard.press('Enter');
+  await page.keyboard.type('back up to the top');
+  await page.keyboard.press('Shift+Home');
+  await page.keyboard.press('Control+k');
+
+  const dialog = page.getByRole('dialog', { name: 'Link' });
+  const open = await page.locator('#whisper-name').textContent();
+  await dialog.getByLabel('Or a whisper:').selectOption({ label: (open ?? '').replace(/\.xhtml$/, '') });
+  await dialog.getByLabel('Section:').selectOption({ label: 'What the loom is' });
+  await expect(dialog.getByLabel('Address:')).toHaveValue(/#what-the-loom-is$/);
+  await dialog.getByRole('button', { name: 'OK' }).click();
+  await expect(dialog).toBeHidden();
+
+  await whisper.locator('a').click({ modifiers: ['Control'] });
+  // The heading a link leads to is marked for a moment, so the author's eye finds it.
+  await expect(whisper.locator('h2')).toHaveClass(/is-found/);
+});

@@ -6,7 +6,8 @@ import { DOMParser as HtmlParser, Slice } from '@tiptap/pm/model';
 import { WhisperEditor } from '../../src/renderer/src/document/whisper-editor';
 import { pasteWithoutRecord } from '../../src/renderer/src/document/paste';
 import { readAddress } from '../../src/renderer/src/panels/link-panel';
-import { isWhisperAddress } from '../../src/shared/whispers';
+import { headingIdentity } from '../../src/renderer/src/document/extensions';
+import { isWhisperAddress, readWhisperLink } from '../../src/shared/whispers';
 import { MenuBar } from '../../src/renderer/src/menu/menubar';
 import { MENUS } from '../../src/renderer/src/menu/model';
 import type { AnyCommandId } from '../../src/renderer/src/commands';
@@ -57,7 +58,8 @@ describe('the Format commands', () => {
     const w = whisper('<p>a title</p>');
     w.editor.commands.focus('end');
     w.format('format.heading2');
-    expect(w.html).toContain('<h2>a title</h2>');
+    // Every heading is given an identity of its own, so a link can point at it (see "a heading's identity").
+    expect(w.html).toContain('<h2 id="a-title">a title</h2>');
     expect(w.formatStanding('format.heading2').checked).toBe(true);
     expect(w.formatStanding('format.paragraph').checked).toBe(false);
     w.format('format.paragraph');
@@ -124,6 +126,46 @@ describe('links', () => {
     expect(isWhisperAddress('../elsewhere/secret.xhtml')).toBe(false);
     expect(isWhisperAddress('https://example.com/page.xhtml')).toBe(false);
     expect(isWhisperAddress('notes.txt')).toBe(false);
+  });
+
+  it('point into a whisper, at a heading, and keep the two apart', () => {
+    expect(readAddress('A whisper.xhtml#what-the-loom-is')).toEqual({ address: 'A%20whisper.xhtml#what-the-loom-is' });
+    expect(readWhisperLink('A%20whisper.xhtml#what-the-loom-is')).toEqual({ name: 'A whisper.xhtml', heading: 'what-the-loom-is' });
+    // A heading alone points into the whisper the author is already in.
+    expect(readWhisperLink('#what-the-loom-is')).toEqual({ name: '', heading: 'what-the-loom-is' });
+    expect(readWhisperLink('https://example.com/#section')).toBeUndefined();
+  });
+});
+
+describe('a heading\'s identity', () => {
+  it('is made from the words it was written with', () => {
+    expect(headingIdentity('What the loom is')).toBe('what-the-loom-is');
+    expect(headingIdentity('  Spaces, and punctuation!  ')).toBe('spaces-and-punctuation');
+    expect(headingIdentity('!!!')).toBe('section');
+  });
+
+  it('is made when the heading is, and never taken back when it is reworded', () => {
+    const w = whisper('<p>What the loom is</p>');
+    w.editor.commands.focus('end');
+    w.format('format.heading2');
+    expect(w.html).toContain('<h2 id="what-the-loom-is">');
+
+    // Reworded, the heading keeps the identity a link may already point at.
+    const heading = w.editor.state.doc.firstChild;
+    w.editor.commands.setTextSelection({ from: 1, to: (heading?.nodeSize ?? 2) - 1 });
+    w.editor.commands.insertContent('Something else entirely');
+    expect(w.html).toContain('<h2 id="what-the-loom-is">Something else entirely</h2>');
+  });
+
+  it('is never shared by two headings, however one of them arrived', () => {
+    const w = whisper('<h2 id="a-heading">A heading</h2><p>words</p>');
+    w.editor.commands.focus('end');
+    // A second heading of the same words — pasted, or written again — takes an identity of its own.
+    w.editor.commands.insertContent('<h2>A heading</h2>');
+    const identities = [...w.html.matchAll(/<h2 id="([^"]+)"/g)].map((found) => found[1]);
+    expect(identities).toHaveLength(2);
+    expect(new Set(identities).size).toBe(2);
+    expect(identities).toContain('a-heading');
   });
 });
 

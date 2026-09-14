@@ -45,9 +45,18 @@ export class Whispers {
 
   /** Opens the whisper a link points at, by its file name in the alcove. */
   openNamed(name: string): OpenWhisper {
+    return this.open(this.pathOf(name));
+  }
+
+  /** Reads a whisper without opening it, so that what is inside it can be listed. */
+  contents(name: string): string {
+    return this.alcove.read(this.pathOf(name));
+  }
+
+  private pathOf(name: string): string {
     const path = this.alcove.find(name);
     if (path === undefined) throw new Error(`The whisper "${decodeURIComponent(name)}" is not in your alcove.`);
-    return this.open(path);
+    return path;
   }
 
   /** A whisper's name as the author reads it: its file name without the suffix. */

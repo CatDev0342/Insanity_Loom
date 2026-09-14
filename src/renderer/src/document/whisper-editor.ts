@@ -10,6 +10,7 @@ import StarterKit from '@tiptap/starter-kit';
 import {
   ASSISTANT_META,
   FollowLinks,
+  HeadingIdentities,
   newIdentity,
   ProtectBusyReplies,
   Reply,
@@ -56,6 +57,7 @@ export class WhisperEditor {
         ProtectBusyReplies,
         SectionKeys.configure({ onSectionFinished: (sectionId) => this.sectionFinished(sectionId, options.onSectionFinished) }),
         WhisperPaste,
+        HeadingIdentities,
         FollowLinks.configure({ onFollow: (address) => options.onFollowLink(address) }),
         Markdown,
       ],

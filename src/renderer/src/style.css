@@ -149,6 +149,12 @@ body {
   border-top-color: var(--focus);
 }
 
+/* The heading a link has just led to, marked for a moment so the author's eye finds it. */
+.whisper-editor .is-found {
+  background: var(--highlight);
+  transition: background 0.6s ease-out;
+}
+
 /* The assistant's reply: marked by a line down its left side, and its state shown above it while it matters. */
 .whisper-editor section.reply {
   margin: 0 0 1.1rem;

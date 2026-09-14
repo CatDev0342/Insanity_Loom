@@ -15,7 +15,7 @@ import type {
   SessionMode,
 } from '../../../shared/assistant';
 import type { LinksBridge } from '../../../shared/links';
-import { isWhisperAddress, type OpenWhisper, type WhispersBridge } from '../../../shared/whispers';
+import { readWhisperLink, type OpenWhisper, type WhispersBridge } from '../../../shared/whispers';
 import type { AssistantCommandId } from '../commands';
 import type { ReplyState } from '../document/extensions';
 import type { FormatCommandId, FormatStanding } from '../document/formatting';
@@ -43,6 +43,9 @@ export interface LoomElements {
 
 const PAGE_TITLE = 'Insanity_Loom';
 const UNTITLED = 'Untitled whisper';
+
+/** How long a heading a link has just led to is marked, so the author's eye finds it. */
+const HEADING_FOUND_MS = 2000;
 
 
 /** A finished section, with its reply already in place, waiting to be sent. */
@@ -557,14 +560,28 @@ export class Loom {
    */
   private async follow(address: string): Promise<void> {
     try {
-      if (isWhisperAddress(decodeURIComponent(address))) {
-        await this.showWhisper(await this.whispers.openNamed(address));
+      const link = readWhisperLink(address);
+      if (link === undefined) {
+        await this.links.open(address);
         return;
       }
-      await this.links.open(address);
+      if (link.name !== '') await this.showWhisper(await this.whispers.openNamed(link.name));
+      if (link.heading !== '') this.goToHeading(link.heading);
     } catch (problem) {
       this.showProblem(problem instanceof Error ? problem.message : String(problem));
     }
+  }
+
+  /** Takes the author to the heading a link points at, and marks it for a moment so their eye finds it. */
+  private goToHeading(identity: string): void {
+    const heading = this.elements.whisper.querySelector(`[id="${CSS.escape(identity)}"]`);
+    if (heading === null) {
+      this.showNotice(`This whisper has no section called "${identity}".`);
+      return;
+    }
+    heading.scrollIntoView({ block: 'center' });
+    heading.classList.add('is-found');
+    window.setTimeout(() => heading.classList.remove('is-found'), HEADING_FOUND_MS);
   }
 
   /** Puts a whisper from the alcove in the window, and takes up the conversation it records. */
