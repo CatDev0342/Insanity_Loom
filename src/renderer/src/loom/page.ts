@@ -484,6 +484,9 @@ export class Loom {
     const editor = this.requireEditor();
     this.abandonWriting('stopped');
     this.waiting.length = 0;
+    // Nothing is saved until the new whisper has a file of its own: emptying the document while the whisper being
+    // left is still the one open would write the emptiness over it.
+    this.whisperPath = '';
     editor.clear();
     this.title = UNTITLED;
     this.conversationId = '';
@@ -504,6 +507,9 @@ export class Loom {
     const editor = this.requireEditor();
     this.abandonWriting('stopped');
     this.waiting.length = 0;
+    // As with a new whisper: nothing is saved while the document is being swapped, so the whisper being left keeps
+    // what it holds.
+    this.whisperPath = '';
     editor.replaceAll(whisper.bodyHtml);
     this.whisperPath = chosen.path;
     this.whisperName = chosen.name;

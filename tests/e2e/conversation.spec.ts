@@ -2,9 +2,9 @@
 // assistant's reply is woven in right after it. A stand-in assistant (tests/fixtures/fake-assistant.mjs) answers, so
 // nothing depends on a real one being reachable.
 import { expect, test, type ElectronApplication, type Page } from '@playwright/test';
-import { readFileSync } from 'node:fs';
+import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { DATA, launch, prepareData } from './helpers';
+import { ALCOVE, launch, prepareData } from './helpers';
 
 let application: ElectronApplication;
 let page: Page;
@@ -101,7 +101,8 @@ test('the whisper survives closing the window, without its history being written
   await expect
     .poll(() => {
       try {
-        return readFileSync(join(DATA, 'Journal', 'whisper.xhtml'), 'utf8');
+        const whispers = readdirSync(ALCOVE).filter((name) => name.endsWith('.xhtml'));
+        return whispers.map((name) => readFileSync(join(ALCOVE, name), 'utf8')).join('');
       } catch {
         return '';
       }
