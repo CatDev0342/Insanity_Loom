@@ -32,3 +32,16 @@ test('opens a window, through the bridge only, keeping its data beside itself', 
     await application.close();
   }
 });
+
+test('nothing the program has put away is on the page when it starts', async () => {
+  prepareData('fake assistant');
+  const { application, page } = await launch();
+  try {
+    // The hidden attribute means hidden; a rule of ours setting `display` must not quietly win over it.
+    await expect(page.locator('#find-bar')).toBeHidden();
+    await expect(page.locator('#asks')).toBeHidden();
+    await expect(page.locator('#mode-label')).toBeHidden();
+  } finally {
+    await application.close();
+  }
+});

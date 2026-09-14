@@ -16,6 +16,13 @@
   color-scheme: dark;
 }
 
+/* Hidden means hidden. The browser's own rule for the hidden attribute only sets `display: none`, so any rule of ours
+   that sets `display` quietly wins over it and something the program has put away stays on the page — which is what
+   happened to the find bar, the strip above the whisper and the status bar's mode label. */
+[hidden] {
+  display: none !important;
+}
+
 html,
 body {
   margin: 0;

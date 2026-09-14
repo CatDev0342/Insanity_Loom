@@ -82,8 +82,10 @@ test('Ctrl+F finds writing in the whisper, F3 goes on, Esc puts it away', async 
   await whisper.click();
   await page.keyboard.type('one loom, two loom, three looms');
 
-  await page.keyboard.press('Control+f');
   const bar = page.getByRole('search', { name: 'Find in this whisper' });
+  // Put away until it is asked for: the hidden attribute must mean hidden, whatever the styling says.
+  await expect(bar).toBeHidden();
+  await page.keyboard.press('Control+f');
   await expect(bar).toBeVisible();
   await page.keyboard.type('loom');
   await expect(page.locator('#find-said')).toHaveText('1 of 3');
