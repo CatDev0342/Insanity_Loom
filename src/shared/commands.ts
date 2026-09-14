@@ -8,6 +8,7 @@ export const COMMANDS = [
   'edit.cut',
   'edit.copy',
   'edit.paste',
+  'edit.pasteAsText',
   'edit.selectAll',
   'view.zoomIn',
   'view.zoomOut',

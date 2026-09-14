@@ -1,6 +1,7 @@
 // Commands the page carries out itself, alongside those it asks the layer underneath for (src/shared/commands.ts).
 
 import { isCommandId, type CommandId } from '../../shared/commands';
+import { isFormatCommand, type FormatCommandId } from './document/formatting';
 
 export const PAGE_COMMANDS = [
   'whisper.new',
@@ -22,8 +23,10 @@ export type PageCommandId = (typeof PAGE_COMMANDS)[number];
 export type AssistantCommandId = Exclude<PageCommandId, 'app.preferences' | 'assistant.signIn'>;
 
 /** Any command a menu entry may name. */
-export type AnyCommandId = CommandId | PageCommandId;
+export type AnyCommandId = CommandId | PageCommandId | FormatCommandId;
 
 export function isPageCommand(command: AnyCommandId): command is PageCommandId {
-  return !isCommandId(command);
+  return !isCommandId(command) && !isFormatCommand(command);
 }
+
+export { isFormatCommand, type FormatCommandId };

@@ -91,9 +91,29 @@ export function replyIsBusy(node: ProseMirrorNode): boolean {
   return node.type.name === 'reply' && (state === 'waiting' || state === 'writing');
 }
 
+/** Every reply in a document, by its identity. */
+function repliesById(doc: ProseMirrorNode): Map<string, ProseMirrorNode> {
+  const found = new Map<string, ProseMirrorNode>();
+  doc.descendants((node) => {
+    if (node.type.name !== 'reply') return true;
+    const replyId = node.attrs['replyId'];
+    if (typeof replyId === 'string') found.set(replyId, node);
+    // A reply holds no other reply.
+    return false;
+  });
+  return found;
+}
+
 /**
- * Keeps a reply being written the assistant's alone: any change the author's typing would make inside it (or to it)
- * is refused. Once the reply is finished it is the author's like the rest of the document.
+ * Keeps a reply the assistant is still writing the assistant's alone: the author may not change a word of it, nor
+ * take it away, until it is finished. Afterwards it is theirs like the rest of the whisper.
+ *
+ * What is asked of a change is only this: every reply being written is still there when the change is done, holding
+ * exactly what the assistant wrote. Writing in one, or deleting one, fails that and is refused. Everything else is
+ * allowed — including changes that reach across a reply without touching what is inside it, such as making a list of
+ * the writing around it, or undoing something done before the reply arrived. Asking instead whether a change *reaches*
+ * a reply would refuse those too, and an undo refused is an undo lost: the author would press Ctrl+Z and nothing at
+ * all would happen, from then on.
  */
 export const ProtectBusyReplies = Extension.create({
   name: 'protectBusyReplies',
@@ -103,21 +123,17 @@ export const ProtectBusyReplies = Extension.create({
         key: new PluginKey('protectBusyReplies'),
         filterTransaction: (transaction, state) => {
           if (!transaction.docChanged || transaction.getMeta(ASSISTANT_META) === true) return true;
-          const size = state.doc.content.size;
-          let touchesBusyReply = false;
-          for (const step of transaction.steps) {
-            step.getMap().forEach((oldStart, oldEnd) => {
-              state.doc.nodesBetween(Math.max(0, oldStart - 1), Math.min(size, oldEnd + 1), (node, position) => {
-                if (touchesBusyReply) return false;
-                if (!replyIsBusy(node)) return true;
-                // A change overlapping the reply is refused; one that only meets its outer edge — typing just before
-                // or just after it — is not.
-                if (oldStart < position + node.nodeSize && oldEnd > position) touchesBusyReply = true;
-                return false;
-              });
-            });
+          const before = repliesById(state.doc);
+          let busy = false;
+          for (const node of before.values()) busy = busy || replyIsBusy(node);
+          if (!busy) return true;
+          const after = repliesById(transaction.doc);
+          for (const [replyId, node] of before) {
+            if (!replyIsBusy(node)) continue;
+            const now = after.get(replyId);
+            if (now === undefined || !now.content.eq(node.content)) return false;
           }
-          return !touchesBusyReply;
+          return true;
         },
       }),
     ];
@@ -180,8 +196,26 @@ export const SectionKeys = Extension.create<SectionKeysOptions>({
       return true;
     };
 
+    /**
+     * Enter with writing selected across two blocks — from a list item down into the paragraph below, say — is
+     * carried out in two moves: what is selected goes first, and only then is the block split where the caret is
+     * left. Splitting across the two at once asks ProseMirror to put the new block deeper than the place it goes,
+     * which it refuses by throwing, and the author would lose the key entirely.
+     */
+    const acrossBlocks = (): boolean => {
+      const { selection } = this.editor.state;
+      if (selection.empty || selection.$from.sameParent(selection.$to)) return false;
+      // The deletion is made first, on its own, so that Enter is then pressed against what is really there. The two
+      // arrive one after the other, and the author's undo takes them back together.
+      this.editor.commands.deleteSelection();
+      // A selection reaching into a reply the assistant is still writing cannot be deleted, and Enter goes no
+      // further: nothing at all happens, rather than the key being pressed again against what is still selected.
+      if (!this.editor.state.selection.empty) return true;
+      return this.editor.commands.keyboardShortcut('Enter');
+    };
+
     return {
-      Enter: () => finish(true),
+      Enter: () => finish(true) || acrossBlocks(),
       'Mod-Enter': () => finish(false),
     };
   },

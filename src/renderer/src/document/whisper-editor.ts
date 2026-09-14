@@ -8,6 +8,8 @@ import { DOMParser as HtmlParser, type NodeType, type Node as ProseMirrorNode } 
 import type { Transaction } from '@tiptap/pm/state';
 import StarterKit from '@tiptap/starter-kit';
 import { ASSISTANT_META, newIdentity, ProtectBusyReplies, Reply, SectionKeys, SectionRule, type ReplyState } from './extensions';
+import { applyFormat, formatStanding, type FormatCommandId, type FormatStanding } from './formatting';
+import { WhisperPaste } from './paste';
 import type { WhisperRecord } from '../loom/catch-up';
 import { afterRule, findReply, isBlank, sectionContent } from './sections';
 
@@ -42,6 +44,7 @@ export class WhisperEditor {
         Reply,
         ProtectBusyReplies,
         SectionKeys.configure({ onSectionFinished: (sectionId) => this.sectionFinished(sectionId, options.onSectionFinished) }),
+        WhisperPaste,
         Markdown,
       ],
       editorProps: {
@@ -193,6 +196,36 @@ export class WhisperEditor {
 
   focus(): void {
     this.editor.commands.focus('end');
+  }
+
+  /** Carries out a Format command where the caret is (src/renderer/src/document/formatting.ts). */
+  format(command: FormatCommandId): void {
+    applyFormat(this.editor, command);
+  }
+
+  /** Whether a Format command can act where the caret is, and whether what it does is already so. */
+  formatStanding(command: FormatCommandId): FormatStanding {
+    return formatStanding(this.editor, command);
+  }
+
+  /** The address of the link the caret is in, or '' when it is in none. */
+  get linkAddress(): string {
+    const href: unknown = this.editor.getAttributes('link')['href'];
+    return typeof href === 'string' ? href : '';
+  }
+
+  /**
+   * Makes the selected writing a link to this address. With nothing selected, the address itself is written in and
+   * linked, as a word processor does.
+   */
+  setLink(address: string): void {
+    if (this.editor.state.selection.empty && this.linkAddress === '') {
+      const linked = { type: 'text', text: address, marks: [{ type: 'link', attrs: { href: address } }] };
+      this.editor.chain().focus().insertContent(linked).run();
+      return;
+    }
+    // With writing selected, or the caret inside a link already, the whole of that link is given the new address.
+    this.editor.chain().focus().extendMarkRange('link').setMark('link', { href: address }).run();
   }
 
   undo(): void {

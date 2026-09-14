@@ -344,6 +344,31 @@ button:focus-visible {
   color: var(--ink-quiet);
 }
 
+/* An entry that cannot act where the author is standing: greyed, as in any desktop menu, and not choosable. */
+.menu-entry.is-disabled,
+.menu-entry.is-disabled .menu-entry-shortcut {
+  color: var(--ink-quiet);
+}
+
+.menu-entry.is-disabled.is-current {
+  background: none;
+}
+
+/* A menu with ticks keeps a column for them, so its labels line up whether an entry is ticked or not. */
+.menu-popup.has-ticks .menu-entry {
+  padding-left: 0.6rem;
+}
+
+.menu-entry-tick {
+  width: 1rem;
+  flex: none;
+  color: var(--ink);
+}
+
+.menu-popup.has-ticks .menu-entry-label {
+  flex: 1;
+}
+
 .menu-separator {
   height: 1px;
   margin: 0.2rem 0.4rem;

@@ -3,6 +3,7 @@ import { parseLabel } from '../../src/renderer/src/menu/labels';
 import { MENUS } from '../../src/renderer/src/menu/model';
 import { matchesShortcut, parseShortcut, type KeyPress } from '../../src/renderer/src/menu/shortcuts';
 import { PAGE_COMMANDS } from '../../src/renderer/src/commands';
+import { FORMAT_COMMANDS } from '../../src/renderer/src/document/formatting';
 import { COMMANDS } from '../../src/shared/commands';
 
 function press(key: string, modifiers: Partial<Omit<KeyPress, 'key'>> = {}): KeyPress {
@@ -57,10 +58,17 @@ describe('the menus', () => {
     for (const menu of MENUS) {
       for (const entry of menu.entries) {
         if (entry.kind !== 'command') continue;
-        expect([...COMMANDS, ...PAGE_COMMANDS]).toContain(entry.command);
+        expect([...COMMANDS, ...PAGE_COMMANDS, ...FORMAT_COMMANDS]).toContain(entry.command);
         for (const shortcut of entry.shortcuts) expect(() => parseShortcut(shortcut)).not.toThrow();
       }
     }
+  });
+
+  it('bind a key in one place only, so nothing is ever carried out twice', () => {
+    const bound = MENUS.flatMap((menu) =>
+      menu.entries.flatMap((entry) => (entry.kind === 'command' && !entry.boundElsewhere ? [...entry.shortcuts] : [])),
+    );
+    expect(new Set(bound).size).toBe(bound.length);
   });
 
   it('give every menu, and every entry within one menu, its own access key', () => {

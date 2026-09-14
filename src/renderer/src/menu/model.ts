@@ -10,10 +10,13 @@ export interface MenuCommand {
   /** The shortcuts shown beside the label; the first is the one displayed. */
   readonly shortcuts: readonly string[];
   /**
-   * True when the shortcut is the system's own and already works wherever the author types — Ctrl+C in a text box,
-   * say. The menu shows it but leaves the key itself to the system, so it is never carried out twice.
+   * True when the key is already handled where the author is working — by the system (Ctrl+C in a text box) or by the
+   * whisper itself (Tab, which indents a list item). The menu shows the key but does not bind it, so what it does is
+   * never carried out twice.
    */
-  readonly handledBySystem: boolean;
+  readonly boundElsewhere: boolean;
+  /** True for an entry that is either on or off where the caret is: the menu draws a tick beside it when it is on. */
+  readonly checkable: boolean;
 }
 
 export interface MenuSeparator {
@@ -33,9 +36,14 @@ function command(
   label: string,
   commandId: AnyCommandId,
   shortcuts: readonly string[] = [],
-  handledBySystem = false,
+  boundElsewhere = false,
 ): MenuCommand {
-  return { kind: 'command', label, command: commandId, shortcuts, handledBySystem };
+  return { kind: 'command', label, command: commandId, shortcuts, boundElsewhere, checkable: false };
+}
+
+/** A Format entry that shows whether it is already on where the caret is. */
+function toggle(label: string, commandId: AnyCommandId, shortcuts: readonly string[] = []): MenuCommand {
+  return { kind: 'command', label, command: commandId, shortcuts, boundElsewhere: false, checkable: true };
 }
 
 export const MENUS: readonly TopMenu[] = [
@@ -61,9 +69,41 @@ export const MENUS: readonly TopMenu[] = [
       command('&Copy', 'edit.copy', ['Ctrl+C'], true),
       command('&Paste', 'edit.paste', ['Ctrl+V'], true),
       SEPARATOR,
+      command('Paste as Te&xt', 'edit.pasteAsText', ['Ctrl+Shift+V']),
+      SEPARATOR,
       command('Select &All', 'edit.selectAll', ['Ctrl+A'], true),
       SEPARATOR,
       command('Pr&eferences…', 'app.preferences'),
+    ],
+  },
+  {
+    // The whisper's own shaping of the writing. The ticks follow the caret: what is on where the author is standing.
+    label: 'F&ormat',
+    entries: [
+      toggle('&Bold', 'format.bold', ['Ctrl+B']),
+      toggle('&Italic', 'format.italic', ['Ctrl+I']),
+      toggle('&Underline', 'format.underline', ['Ctrl+U']),
+      toggle('Stri&kethrough', 'format.strikethrough', ['Ctrl+Shift+X']),
+      toggle('Inline C&ode', 'format.code', ['Ctrl+E']),
+      SEPARATOR,
+      toggle('&Normal Text', 'format.paragraph', ['Ctrl+Alt+0']),
+      toggle('Heading &1', 'format.heading1', ['Ctrl+Alt+1']),
+      toggle('Heading &2', 'format.heading2', ['Ctrl+Alt+2']),
+      toggle('Heading &3', 'format.heading3', ['Ctrl+Alt+3']),
+      SEPARATOR,
+      toggle('Bulleted &List', 'format.bulletList', ['Ctrl+Shift+L']),
+      toggle('Nu&mbered List', 'format.orderedList', ['Ctrl+Shift+O']),
+      toggle('&Quote', 'format.blockquote', ['Ctrl+Shift+Q']),
+      toggle('&Code Block', 'format.codeBlock', ['Ctrl+Alt+C']),
+      SEPARATOR,
+      // Tab and Shift+Tab are the whisper's own keys, and only inside a list; the menu says so without binding them.
+      command('Increase Inden&t', 'format.indent', ['Tab'], true),
+      command('&Decrease Indent', 'format.outdent', ['Shift+Tab'], true),
+      SEPARATOR,
+      command('&Add Link…', 'format.link', ['Ctrl+K']),
+      command('&Remove Link', 'format.removeLink'),
+      SEPARATOR,
+      command('Cl&ear Formatting', 'format.clear', ['Ctrl+Space']),
     ],
   },
   {

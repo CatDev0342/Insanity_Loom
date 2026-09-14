@@ -1,10 +1,11 @@
 // The page: the menu bar, and the loom beneath it.
 
-import { isPageCommand, type AnyCommandId } from './commands';
+import { isFormatCommand, isPageCommand, type AnyCommandId, type FormatCommandId } from './commands';
 import { Loom } from './loom/page';
 import { ContextMenu } from './menu/context-menu';
 import { MenuBar } from './menu/menubar';
 import { MENUS } from './menu/model';
+import { LinkPanel } from './panels/link-panel';
 import { PreferencesPanel } from './panels/preferences-panel';
 import { SignInPanel } from './panels/sign-in-panel';
 
@@ -40,18 +41,36 @@ const loom = new Loom(
 
 const preferences = new PreferencesPanel(required<HTMLDialogElement>('#preferences-dialog'), bridge.editing, bridge.whispers);
 const signIn = new SignInPanel(required<HTMLDialogElement>('#sign-in-dialog'), bridge.assistant);
+const link = new LinkPanel(required<HTMLDialogElement>('#link-dialog'));
 required<HTMLButtonElement>('#sign-in').addEventListener('click', () => void signIn.show());
+
+/** Format ▸ …: the whisper's own. Only the link asks for anything; the rest act where the caret is. */
+async function runFormat(command: FormatCommandId): Promise<void> {
+  if (command !== 'format.link') {
+    loom.runFormatCommand(command);
+    return;
+  }
+  const chosen = await link.show(loom.linkAddress);
+  if (chosen.kind === 'set') loom.setLink(chosen.address);
+  else if (chosen.kind === 'remove') loom.runFormatCommand('format.removeLink');
+  loom.focusWhisper();
+}
 
 async function run(command: AnyCommandId): Promise<void> {
   // Undo and Redo in the whisper are the whisper's own: its history holds only the author's changes.
   if ((command === 'edit.undo' || command === 'edit.redo') && loom.runEditCommand(command)) return;
+  if (isFormatCommand(command)) return runFormat(command);
   if (!isPageCommand(command)) return bridge.runCommand(command);
   if (command === 'app.preferences') return preferences.show();
   if (command === 'assistant.signIn') return signIn.show();
   return loom.run(command);
 }
 
-new MenuBar(required<HTMLElement>('#menubar'), MENUS, run);
+// The menus and their keys ask the whisper how each Format command stands, every time they are used; everything else
+// is always ready.
+new MenuBar(required<HTMLElement>('#menubar'), MENUS, run, (command) =>
+  isFormatCommand(command) ? loom.formatStanding(command) : { enabled: true, checked: false },
+);
 new ContextMenu(bridge.editing, run);
 
 void loom.start();

@@ -52,6 +52,10 @@ async function run(command: CommandId, page: WebContents): Promise<void> {
     case 'edit.paste':
       page.paste();
       return;
+    // Paste as Text drops the formatting the writing was copied with and keeps only the words.
+    case 'edit.pasteAsText':
+      page.pasteAndMatchStyle();
+      return;
     case 'edit.selectAll':
       page.selectAll();
       return;

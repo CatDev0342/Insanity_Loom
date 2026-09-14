@@ -31,15 +31,40 @@ const ALT = 'Alt';
 const CLASS_IN_USE = 'is-in-use';
 const CLASS_SHOW_ACCESS_KEYS = 'shows-access-keys';
 const CLASS_CURRENT = 'is-current';
+const CLASS_DISABLED = 'is-disabled';
+// The menu draws ticks in a column of their own, so labels line up whether an entry is ticked or not.
+const CLASS_HAS_TICKS = 'has-ticks';
+const TICK = '\u2713';
 
 type RunCommand = (command: AnyCommandId) => Promise<void>;
+
+/** How a command stands where the author is working: whether it can act, and whether what it does is already so. */
+export interface CommandStanding {
+  readonly enabled: boolean;
+  readonly checked: boolean;
+}
+
+/** Asked, as a menu opens and before a shortcut acts, how each command stands. */
+export type CommandStandingSource = (command: AnyCommandId) => CommandStanding;
+
+const ALWAYS_READY: CommandStanding = { enabled: true, checked: false };
+
+interface DrawnEntry {
+  readonly element: HTMLElement;
+  readonly command: MenuCommand;
+  readonly accessKey: string;
+  /** Where the tick is drawn, in a menu that has ticks at all. */
+  readonly tick: HTMLElement | null;
+  /** False while the command cannot act where the author is: the entry is drawn grey and cannot be chosen. */
+  enabled: boolean;
+}
 
 interface DrawnMenu {
   readonly button: HTMLButtonElement;
   readonly popup: HTMLElement;
   readonly accessKey: string;
   /** The menu's choosable entries, in order (separators left out). */
-  readonly entries: readonly { readonly element: HTMLElement; readonly command: MenuCommand; readonly accessKey: string }[];
+  readonly entries: readonly DrawnEntry[];
 }
 
 function drawLabel(into: HTMLElement, label: string): string {
@@ -75,6 +100,7 @@ export class MenuBar {
     container: HTMLElement,
     menus: readonly TopMenu[],
     private readonly runCommand: RunCommand,
+    private readonly standingOf: CommandStandingSource = () => ALWAYS_READY,
   ) {
     this.bar = container;
     this.bar.setAttribute('role', 'menubar');
@@ -108,7 +134,9 @@ export class MenuBar {
     popup.setAttribute('aria-labelledby', button.id);
     popup.hidden = true;
 
-    const entries: DrawnMenu['entries'][number][] = [];
+    const entries: DrawnEntry[] = [];
+    const hasTicks = menu.entries.some((entry) => entry.kind === 'command' && entry.checkable);
+    if (hasTicks) popup.classList.add(CLASS_HAS_TICKS);
     for (const entry of menu.entries) {
       if (entry.kind === 'separator') {
         const line = document.createElement('div');
@@ -128,15 +156,22 @@ export class MenuBar {
       const shortcut = document.createElement('span');
       shortcut.className = 'menu-entry-shortcut';
       shortcut.textContent = entry.shortcuts[0] ?? '';
+      let tick: HTMLElement | null = null;
+      if (hasTicks) {
+        tick = document.createElement('span');
+        tick.className = 'menu-entry-tick';
+        tick.setAttribute('aria-hidden', 'true');
+        element.append(tick);
+      }
       element.append(label, shortcut);
       popup.append(element);
 
       element.addEventListener('mousedown', (event) => event.preventDefault());
       element.addEventListener('mouseenter', () => this.highlightEntry(entryIndex, false));
       element.addEventListener('click', () => this.choose(menuIndex, entryIndex));
-      entries.push({ element, command: entry, accessKey: entryAccessKey });
+      entries.push({ element, command: entry, accessKey: entryAccessKey, tick, enabled: true });
 
-      if (!entry.handledBySystem) {
+      if (!entry.boundElsewhere) {
         for (const written of entry.shortcuts) this.shortcuts.push({ shortcut: parseShortcut(written), command: entry.command });
       }
     }
@@ -180,11 +215,29 @@ export class MenuBar {
     const menu = this.menus[menuIndex];
     if (menu === undefined) return;
     this.openMenu = menuIndex;
+    this.showStanding(menu);
     menu.popup.hidden = false;
     menu.button.setAttribute('aria-expanded', 'true');
     menu.button.classList.add(CLASS_CURRENT);
     this.focusMenuName(menuIndex);
     if (entryIndex !== NOTHING) this.highlightEntry(entryIndex, true);
+  }
+
+  /**
+   * Asks how each of the menu's commands stands where the author is working, and draws it so: grey when it cannot
+   * act, ticked when what it does is already so. Asked afresh every time the menu opens, never remembered.
+   */
+  private showStanding(menu: DrawnMenu): void {
+    for (const entry of menu.entries) {
+      const standing = this.standingOf(entry.command.command);
+      entry.enabled = standing.enabled;
+      entry.element.classList.toggle(CLASS_DISABLED, !standing.enabled);
+      entry.element.setAttribute('aria-disabled', standing.enabled ? 'false' : 'true');
+      if (entry.tick === null) continue;
+      entry.tick.textContent = standing.checked ? TICK : '';
+      entry.element.setAttribute('role', 'menuitemcheckbox');
+      entry.element.setAttribute('aria-checked', standing.checked ? 'true' : 'false');
+    }
   }
 
   private closeOpenMenu(): void {
@@ -225,6 +278,8 @@ export class MenuBar {
   private choose(menuIndex: number, entryIndex: number): void {
     const entry = this.menus[menuIndex]?.entries[entryIndex];
     if (entry === undefined) return;
+    // An entry that cannot act is not chosen: the menu stays open, as a desktop menu does.
+    if (!entry.enabled) return;
     // Focus goes back first, so the command acts on what the author was working on.
     this.leave();
     void this.runCommand(entry.command.command);
@@ -269,10 +324,14 @@ export class MenuBar {
     }
 
     const match = this.shortcuts.find(({ shortcut }) => matchesShortcut(shortcut, event));
-    if (match !== undefined) {
-      event.preventDefault();
-      void this.runCommand(match.command);
-    }
+    if (match === undefined) return;
+    // A command that cannot act where the author is leaves its key alone, so it keeps whatever meaning it has there.
+    if (!this.standingOf(match.command).enabled) return;
+    event.preventDefault();
+    // The key is the menu bar's alone: nothing below it — the whisper's own keys among them — sees it as well, so
+    // what it does is never carried out twice.
+    event.stopPropagation();
+    void this.runCommand(match.command);
   }
 
   private onKeyUp(event: KeyboardEvent): void {

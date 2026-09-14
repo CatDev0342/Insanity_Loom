@@ -17,6 +17,7 @@ import type {
 import type { WhispersBridge } from '../../../shared/whispers';
 import type { AssistantCommandId } from '../commands';
 import type { ReplyState } from '../document/extensions';
+import type { FormatCommandId, FormatStanding } from '../document/formatting';
 import { WhisperEditor } from '../document/whisper-editor';
 import { fromXhtml, toXhtml } from '../document/xhtml';
 import { ConnectionPanel } from '../panels/connection-panel';
@@ -85,6 +86,13 @@ export class Loom {
   private saving = false;
   private unsaved = false;
 
+  /**
+   * True while the whisper is where the author is working. The menu bar and the dialogs take focus to carry out what
+   * they are asked, so neither counts as leaving the whisper: Format ▸ Bold acts on the writing the author left, and
+   * Ctrl+B typed in a dialog's field does nothing.
+   */
+  private authorIsInWhisper = true;
+
   constructor(
     private readonly elements: LoomElements,
     private readonly assistant: AssistantBridge,
@@ -98,6 +106,14 @@ export class Loom {
     elements.reconnect.addEventListener('click', () => void this.run('assistant.reconnect'));
     elements.mode.addEventListener('change', () => void this.chooseMode(elements.mode.value));
     assistant.onEvent((event) => this.onEvent(event));
+
+    // Where the author is working, followed as focus moves. The menu bar and open dialogs are passed over: they stand
+    // in front of the whisper for a moment, they do not take the author away from it.
+    window.addEventListener('focusin', (event) => {
+      const target = event.target;
+      if (!(target instanceof Element) || target.closest('.menubar, dialog') !== null) return;
+      this.authorIsInWhisper = elements.whisper.contains(target);
+    });
 
     // Esc stops a reply being written, wherever the author is on the page — unless a dialog or menu is open. It is
     // caught before the whisper sees it (the editor has its own use for Esc, selecting the block around the caret),
@@ -269,6 +285,32 @@ export class Loom {
     } catch (problem) {
       this.showProblem(problem instanceof Error ? problem.message : String(problem));
     }
+  }
+
+  // ——— Formatting ———
+
+  /** Format ▸ …, carried out on the whisper (src/renderer/src/document/formatting.ts). */
+  runFormatCommand(command: FormatCommandId): void {
+    this.requireEditor().format(command);
+  }
+
+  /** How a Format command stands where the author is working; nothing can be formatted anywhere else. */
+  formatStanding(command: FormatCommandId): FormatStanding {
+    if (this.editor === undefined || !this.authorIsInWhisper) return { enabled: false, checked: false };
+    return this.editor.formatStanding(command);
+  }
+
+  /** The address of the link the caret is in, or '' when it is in none. */
+  get linkAddress(): string {
+    return this.editor === undefined ? '' : this.editor.linkAddress;
+  }
+
+  setLink(address: string): void {
+    this.requireEditor().setLink(address);
+  }
+
+  focusWhisper(): void {
+    this.editor?.editor.commands.focus();
   }
 
   /** Edit ▸ Undo and Redo, when the whisper has focus: the whisper's own history, which holds only the author's changes. */
