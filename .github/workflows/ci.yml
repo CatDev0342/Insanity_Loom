@@ -69,11 +69,13 @@ jobs:
       - name: Package (portable)
         run: npx electron-builder --publish never
 
+      # GitHub zips every download itself, so the Windows package is uploaded unpacked: one unzip then gives the
+      # folder with Insanity_Loom.exe in it, rather than a zip inside a zip. The Linux AppImage is a single file.
       - name: Keep the portable package
         uses: actions/upload-artifact@v7
         with:
           name: Insanity_Loom-${{ runner.os }}
           path: |
-            dist/*.zip
+            dist/win-unpacked/**
             dist/*.AppImage
           if-no-files-found: error
