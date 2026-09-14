@@ -205,6 +205,6 @@ const besideTheWhisper = new PanelTabs(required<HTMLElement>('#thoughts-tabs'), 
 const toolbar = new Toolbar(required<HTMLElement>('#toolbar'), run, standingOf);
 loom.followTheCaret(() => toolbar.refresh());
 toolbar.refresh();
-new ContextMenu(bridge.editing, run);
+new ContextMenu(bridge.editing, run, (where) => loom.quote(where));
 
 void loom.start();

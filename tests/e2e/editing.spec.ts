@@ -211,3 +211,42 @@ test('Section Isolation keeps Select All inside the turn the author is in', asyn
   await page.keyboard.press('Control+a');
   expect(await selected()).toContain('The first question.');
 });
+
+test('each section is drawn in a box of its own, and Quote answers what was said', async () => {
+  const whisper = page.locator('.whisper-editor');
+  await whisper.click();
+  await page.keyboard.type('The thing I asked.');
+  await page.keyboard.press('Control+Enter');
+  await expect(page.locator('.reply')).toHaveCount(1);
+
+  // The box is drawn around each section, in the gold the status bar uses. Nothing inside it is changed.
+  const gold = await page.locator('.whisper-editor .section-opens').first().evaluate((element) => getComputedStyle(element).borderTopColor);
+  expect(gold).toBe('rgb(176, 138, 62)');
+  await expect(page.locator('.whisper-editor .section-closes')).not.toHaveCount(0);
+
+  // The turn's own line says which turn it was, on the left.
+  const label = await page.locator('.whisper-editor hr').first().evaluate((element) => ({
+    content: getComputedStyle(element, '::after').content,
+    left: getComputedStyle(element, '::after').left,
+  }));
+  expect(label.content).toContain('Turn 1');
+  expect(label.left).toBe('0px');
+
+  // Quoting from the right-click menu puts what was said at the end, to write an answer under.
+  await page.locator('.reply').first().click({ button: 'right' });
+  const menu = page.getByRole('menu', { name: 'Context menu' });
+  await expect(menu).toBeVisible();
+  await menu.getByRole('menuitem', { name: 'Quote' }).click();
+  await expect(whisper.locator('blockquote')).toContainText('You wrote: The thing I asked.');
+});
+
+test('the editing shortcuts hold a button for section isolation', async () => {
+  const toolbar = page.getByRole('toolbar', { name: 'Editing' });
+  const button = toolbar.getByRole('button', { name: 'Section isolation' });
+  await expect(button).toHaveAttribute('aria-pressed', 'false');
+  await button.click();
+  await expect(button).toHaveAttribute('aria-pressed', 'true');
+  await expect(page.locator('#isolation')).toBeVisible();
+  await button.click();
+  await expect(button).toHaveAttribute('aria-pressed', 'false');
+});

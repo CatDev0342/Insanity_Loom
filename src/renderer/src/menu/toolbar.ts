@@ -62,6 +62,9 @@ export const TOOLBAR: readonly ToolbarEntry[] = [
   SEPARATOR,
   button('🔗', 'Add link', 'format.link', 'Ctrl+K'),
   button('⌫', 'Clear formatting', 'format.clear', 'Ctrl+Space'),
+  SEPARATOR,
+  // Not a way of shaping writing, but a way of working with it, and the author asked for it where their hands are.
+  button('⌗', 'Section isolation', 'edit.isolateSections', 'Ctrl+Shift+I'),
 ];
 
 export class Toolbar {

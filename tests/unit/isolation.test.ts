@@ -124,3 +124,28 @@ describe('Select All', () => {
     expect(w.isolatingSections).toBe(false);
   });
 });
+
+describe('quoting what was said', () => {
+  it('puts what is selected at the end of the whisper, as a quotation to answer under', () => {
+    const w = conversation();
+    // The author selects a piece of the first answer.
+    const doc = w.editor.state.doc;
+    let insideReply = -1;
+    doc.descendants((node, position) => {
+      if (insideReply === -1 && node.type.name === 'reply') insideReply = position + 2;
+      return insideReply === -1;
+    });
+    const around = sectionAround(doc, insideReply);
+    w.editor.commands.setTextSelection({ from: around.from + 2, to: around.to - 2 });
+
+    expect(w.quote({ x: 0, y: 0 })).toBe(true);
+    expect(w.html).toContain('<blockquote><p>The first answer.</p></blockquote>');
+    // The quotation goes at the end, where the conversation is, not where it was taken from.
+    expect(w.html.indexOf('<blockquote>')).toBeGreaterThan(w.html.indexOf('What I am writing now.'));
+  });
+
+  it('says there is nothing to quote when there is nothing there', () => {
+    const w = whisper('<p></p>');
+    expect(w.quote({ x: 0, y: 0 })).toBe(false);
+  });
+});

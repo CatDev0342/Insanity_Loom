@@ -34,6 +34,13 @@ const enabled = (entries: readonly ContextEntry[], label: string): boolean | und
 };
 
 describe('the right-click menu', () => {
+  it('offers to quote only where the author is writing, never in the program\'s own fields', () => {
+    const inAField = contextEntries({ ...NOTHING_POSSIBLE, isEditable: true });
+    expect(inAField.some((entry) => entry.kind === 'entry' && entry.label === '&Quote')).toBe(false);
+    const inTheWhisper = contextEntries({ ...NOTHING_POSSIBLE, isEditable: true }, true);
+    expect(inTheWhisper[0]).toMatchObject({ label: '&Quote', action: { kind: 'quote' } });
+  });
+
   it('offers the editing commands in a text field, enabled only when they can act', () => {
     const entries = contextEntries({ ...NOTHING_POSSIBLE, isEditable: true, canPaste: true, canSelectAll: true });
     expect(labels(entries)).toEqual(['&Undo', '&Redo', '—', 'Cu&t', '&Copy', '&Paste', '—', 'Select &All']);

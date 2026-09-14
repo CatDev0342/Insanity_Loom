@@ -667,6 +667,31 @@ body {
   background: var(--highlight);
 }
 
+/* Each section of the conversation in a box of its own, in the gold the status bar uses for what is worth noticing.
+   Only the box is added: nothing about the writing inside it — its size, spacing or colour — is touched. */
+.whisper-editor .section-inside {
+  border-inline: 1px solid var(--attention);
+  padding-inline: 0.9rem;
+}
+
+.whisper-editor .section-opens {
+  border-top: 1px solid var(--attention);
+  padding-top: 0.7rem;
+}
+
+.whisper-editor .section-closes {
+  border-bottom: 1px solid var(--attention);
+  padding-bottom: 0.7rem;
+}
+
+/* The assistant's reply is a section of its own, and wears the same box; the line down its left side stays, so it is
+   still plain at a glance whose writing it is. */
+.whisper-editor section.reply {
+  border: 1px solid var(--attention);
+  border-left: 3px solid var(--reply-mark);
+  padding: 0.7rem 0.9rem;
+}
+
 /* The line that closes a turn, with which turn it was and when it was taken written along it. */
 .whisper-editor hr[data-turn] {
   position: relative;
@@ -677,7 +702,7 @@ body {
   content: 'Turn ' attr(data-turn) ' · ' attr(data-shown);
   position: absolute;
   top: -0.75em;
-  right: 0;
+  left: 0;
   padding-inline: 0.5rem;
   background: var(--ground);
   color: var(--ink-quiet);

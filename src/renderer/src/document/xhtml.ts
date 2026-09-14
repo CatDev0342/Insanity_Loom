@@ -33,7 +33,7 @@ const WHISPER_STYLE = `
         content: 'Turn ' attr(data-turn) ' · ' attr(data-shown);
         position: absolute;
         top: -0.75em;
-        right: 0;
+        left: 0;
         padding-inline: 0.5rem;
         background: #1e1e22;
         color: #9a978f;
@@ -41,7 +41,8 @@ const WHISPER_STYLE = `
       }
       article.whisper section[data-author='assistant'] {
         margin: 0 0 1em;
-        padding-left: 0.9rem;
+        padding: 0.7rem 0.9rem;
+        border: 1px solid #b08a3e;
         border-left: 3px solid #4d6a9a;
         color: #cfd8e6;
       }

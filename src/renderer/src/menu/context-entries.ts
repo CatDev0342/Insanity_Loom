@@ -7,7 +7,9 @@ import type { ContextDetails } from '../../../shared/editing';
 export type ContextAction =
   | { readonly kind: 'command'; readonly command: CommandId }
   | { readonly kind: 'replace'; readonly suggestion: string }
-  | { readonly kind: 'addToDictionary'; readonly word: string };
+  | { readonly kind: 'addToDictionary'; readonly word: string }
+  /** Quote what was right-clicked at the end of the whisper, to write an answer under it. */
+  | { readonly kind: 'quote' };
 
 export type ContextEntry =
   | {
@@ -31,8 +33,13 @@ function command(label: string, commandId: CommandId, shortcut: string, enabled:
   return { kind: 'entry', label, shortcut, enabled, action: { kind: 'command', command: commandId }, emphasized: false };
 }
 
-/** The entries for a right-click, in order. Empty when there is nothing to offer. */
-export function contextEntries(details: ContextDetails): readonly ContextEntry[] {
+/**
+ * The entries for a right-click, in order. Empty when there is nothing to offer.
+ *
+ * `inTheWhisper` says whether the author clicked in their writing rather than in one of the program's own fields:
+ * quoting what was said means nothing in a settings box.
+ */
+export function contextEntries(details: ContextDetails, inTheWhisper = false): readonly ContextEntry[] {
   const entries: ContextEntry[] = [];
 
   if (details.misspelledWord !== '') {
@@ -63,6 +70,13 @@ export function contextEntries(details: ContextDetails): readonly ContextEntry[]
   }
 
   if (details.isEditable) {
+    // Quoting comes first, as it does in a chat program: it is what a right-click on something said is usually for.
+    if (inTheWhisper) {
+      entries.push(
+        { kind: 'entry', label: '&Quote', shortcut: '', enabled: true, action: { kind: 'quote' }, emphasized: false },
+        SEPARATOR,
+      );
+    }
     entries.push(
       command('&Undo', 'edit.undo', 'Ctrl+Z', details.canUndo),
       command('&Redo', 'edit.redo', 'Ctrl+Y', details.canRedo),

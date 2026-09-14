@@ -44,6 +44,8 @@ export class ContextMenu {
   constructor(
     private readonly editing: EditingBridge,
     private readonly runCommand: RunCommand,
+    /** Quotes what the author right-clicked at the end of the whisper; where they clicked is remembered here. */
+    private readonly quote: (where: { readonly x: number; readonly y: number }) => void = () => undefined,
   ) {
     this.menu = document.createElement('div');
     this.menu.className = 'context-menu';
@@ -73,7 +75,8 @@ export class ContextMenu {
       },
       true,
     );
-    editing.onContextMenu((details) => this.open(contextEntries(details)));
+    // Whether the author clicked in their own writing decides what a right-click may offer there.
+    editing.onContextMenu((details) => this.open(contextEntries(details, this.clickedInTheWhisper())));
 
     this.menu.addEventListener('keydown', (event) => this.onKeyDown(event));
     window.addEventListener('mousedown', (event) => {
@@ -81,6 +84,12 @@ export class ContextMenu {
     }, true);
     window.addEventListener('blur', () => this.close(false));
     window.addEventListener('resize', () => this.close(false));
+  }
+
+  /** Whether the last right-click landed in the whisper itself, rather than in one of the program's own fields. */
+  private clickedInTheWhisper(): boolean {
+    const under = document.elementFromPoint(this.pointX, this.pointY);
+    return under instanceof Element && under.closest('.whisper-editor') !== null;
   }
 
   get isOpen(): boolean {
@@ -218,6 +227,9 @@ export class ContextMenu {
         return;
       case 'addToDictionary':
         await this.editing.addToDictionary(action.word);
+        return;
+      case 'quote':
+        this.quote({ x: this.pointX, y: this.pointY });
         return;
     }
   }

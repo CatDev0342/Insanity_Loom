@@ -523,6 +523,11 @@ export class Loom {
     return this.editor?.isolatingSections ?? false;
   }
 
+  /** Quotes what the author right-clicked at the end of the whisper, to write an answer under it. */
+  quote(where: { readonly x: number; readonly y: number }): void {
+    if (!this.requireEditor().quote(where)) this.showNotice('There is nothing there to quote.');
+  }
+
   /** Whatever must follow the caret — the editing shortcuts along the top — is told so here. */
   followTheCaret(follower: () => void): void {
     this.caretMoved = follower;

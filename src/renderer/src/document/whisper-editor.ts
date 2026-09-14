@@ -34,7 +34,8 @@ import {
   NOTHING_FOUND,
   type Finding,
 } from './finding';
-import { SectionIsolation } from './isolation';
+import { SectionIsolation, sectionAround } from './isolation';
+import { SectionsDrawn } from './sections-drawn';
 import { applyFormat, formatStanding, type FormatCommandId, type FormatStanding } from './formatting';
 import { WhisperPaste } from './paste';
 import { readWhisperLink } from '../../../shared/whispers';
@@ -86,6 +87,7 @@ export class WhisperEditor {
         Picture,
         ProtectBusyReplies,
         SectionKeys.configure({ onSectionFinished: (sectionId) => this.sectionFinished(sectionId, options.onSectionFinished) }),
+        SectionsDrawn,
         WhisperPaste,
         HeadingIdentities,
         MarkFoundHeading,
@@ -383,6 +385,39 @@ export class WhisperEditor {
       });
     });
     return found;
+  }
+
+  /**
+   * Quotes something said earlier at the end of the whisper, to write an answer under it — what a chat program does
+   * when you right-click a message and choose Quote.
+   *
+   * What is quoted is whatever the author has selected; with nothing selected, the whole of the section they clicked
+   * in. The quotation goes at the end, where the conversation is, and the caret is left beneath it, ready to write.
+   */
+  quote(where: { readonly x: number; readonly y: number }): boolean {
+    const said = this.whatToQuote(where);
+    if (said.trim() === '') return false;
+    const quotation = {
+      type: 'blockquote',
+      content: said.split(/\n{2,}/).map((line) => ({ type: 'paragraph', content: [{ type: 'text', text: line.trim() }] })),
+    };
+    const end = endOfWhisper(this.doc);
+    this.editor
+      .chain()
+      .insertContentAt(end, [quotation, { type: 'paragraph' }])
+      .focus()
+      .run();
+    return true;
+  }
+
+  /** What the author meant to quote: their selection, or the section they clicked in. */
+  private whatToQuote(where: { readonly x: number; readonly y: number }): string {
+    const { state } = this.editor;
+    if (!state.selection.empty) return state.doc.textBetween(state.selection.from, state.selection.to, '\n\n');
+    const at = this.editor.view.posAtCoords({ left: where.x, top: where.y });
+    if (at === null) return '';
+    const section = sectionAround(state.doc, at.pos);
+    return state.doc.textBetween(section.from, section.to, '\n\n');
   }
 
   /** Which turn a reply answers: the turn of the rule it was placed after. */
