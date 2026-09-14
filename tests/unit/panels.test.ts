@@ -16,7 +16,7 @@ function whisper(html: string): WhisperEditor {
   const made = new WhisperEditor({
     element,
     html,
-    onSectionFinished: () => undefined,
+    onSectionFinished: () => undefined, onNothingToSend: () => undefined,
     onChange: () => undefined,
     onFollowLink: () => undefined,
   });

@@ -17,6 +17,7 @@ import { closeHistory } from '@tiptap/pm/history';
 import { Plugin, PluginKey, TextSelection } from '@tiptap/pm/state';
 import { Decoration, DecorationSet } from '@tiptap/pm/view';
 import type { Node as ProseMirrorNode } from '@tiptap/pm/model';
+import { wordsSinceTheLastTurn } from './sections';
 
 /** How a reply stands. Only a finished (or stopped, or failed) reply may be edited by the author. */
 export type ReplyState = 'waiting' | 'writing' | 'finished' | 'stopped' | 'failed';
@@ -406,6 +407,8 @@ export const FollowLinks = Extension.create<FollowLinksOptions>({
 export interface SectionKeysOptions {
   /** Called when the author finishes a section, with the identity of the rule that finished it. */
   onSectionFinished: (sectionId: string) => void;
+  /** Called when there is nothing written to send, so that the author is told rather than left guessing. */
+  onNothingToSend: () => void;
 }
 
 /**
@@ -418,7 +421,7 @@ export const SectionKeys = Extension.create<SectionKeysOptions>({
   name: 'sectionKeys',
 
   addOptions() {
-    return { onSectionFinished: () => undefined };
+    return { onSectionFinished: () => undefined, onNothingToSend: () => undefined };
   },
 
   addKeyboardShortcuts() {
@@ -434,6 +437,12 @@ export const SectionKeys = Extension.create<SectionKeysOptions>({
       const ruleType = schema.nodes['horizontalRule'];
       const paragraphType = schema.nodes['paragraph'];
       if (ruleType === undefined || paragraphType === undefined) return false;
+
+      // Nothing written since the last turn: there is nothing to send, and a rule saying otherwise would be a lie.
+      if (!wordsSinceTheLastTurn(doc)) {
+        this.options.onNothingToSend();
+        return true;
+      }
 
       const sectionId = newIdentity();
       const when = new Date();

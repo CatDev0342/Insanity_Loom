@@ -11,19 +11,27 @@ afterEach(() => {
   document.body.replaceChildren();
 });
 
-function whisper(html: string): { whisper: WhisperEditor; sections: { sectionId: string; markdown: string }[] } {
+function whisper(html: string): {
+  whisper: WhisperEditor;
+  sections: { sectionId: string; markdown: string }[];
+  nothingToSend: { times: number };
+} {
   const sections: { sectionId: string; markdown: string }[] = [];
+  const nothingToSend = { times: 0 };
   const element = document.createElement('div');
   document.body.append(element);
   const made = new WhisperEditor({
     element,
     html,
     onSectionFinished: (sectionId, markdown) => sections.push({ sectionId, markdown }),
+    onNothingToSend: () => {
+      nothingToSend.times += 1;
+    },
     onChange: () => undefined,
     onFollowLink: () => undefined,
   });
   open.push(made);
-  return { whisper: made, sections };
+  return { whisper: made, sections, nothingToSend };
 }
 
 /** Presses a key in the editor as the keyboard would, through the editor's own key handling. */
@@ -229,5 +237,36 @@ describe('pictures', () => {
     const file = toXhtml({ title: 'With a picture', conversationId: '', bodyHtml: w.html });
     const { whisper: reopened } = whisper(fromXhtml(file).bodyHtml);
     expect(reopened.html).toContain('src="a.png"');
+  });
+});
+
+describe('closing a turn with nothing written', () => {
+  it('does not leave a rule behind that says a turn was taken', () => {
+    const { whisper: w, sections, nothingToSend } = whisper('<p></p>');
+    finishSection(w);
+
+    // Nothing sent, nothing marked, and the author told why rather than left to wonder.
+    expect(sections).toHaveLength(0);
+    expect(nothingToSend.times).toBe(1);
+    expect(w.editor.getHTML()).not.toContain('<hr');
+  });
+
+  it('says the same when everything written has already been sent', () => {
+    const { whisper: w, sections, nothingToSend } = whisper('<p>Already said.</p>');
+    types(w, '');
+    finishSection(w);
+    expect(sections).toHaveLength(1);
+
+    // A second Ctrl+Enter with nothing new written closes nothing.
+    finishSection(w);
+    expect(sections).toHaveLength(1);
+    expect(nothingToSend.times).toBe(1);
+  });
+
+  it('closes a turn that holds a picture and no words at all', () => {
+    const { whisper: w, sections, nothingToSend } = whisper('<p><img src="pictures/a.png" alt="A drawing"></p>');
+    finishSection(w);
+    expect(nothingToSend.times).toBe(0);
+    expect(sections).toHaveLength(1);
   });
 });

@@ -50,7 +50,7 @@ const open: WhisperEditor[] = [];
 function whisper(html: string): WhisperEditor {
   const element = document.createElement('div');
   document.body.append(element);
-  const made = new WhisperEditor({ element, html, onSectionFinished: () => undefined, onChange: () => undefined, onFollowLink: () => undefined });
+  const made = new WhisperEditor({ element, html, onSectionFinished: () => undefined, onNothingToSend: () => undefined, onChange: () => undefined, onFollowLink: () => undefined });
   open.push(made);
   return made;
 }

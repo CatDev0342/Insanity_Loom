@@ -7,6 +7,7 @@
 // the next start resumes it.
 
 import * as acp from '@agentclientprotocol/sdk';
+import { version } from '../../package.json';
 import { spawn, type ChildProcess } from 'node:child_process';
 import { createWriteStream, type WriteStream } from 'node:fs';
 import { join } from 'node:path';
@@ -106,7 +107,14 @@ function readAccount(params: Record<string, unknown>): { label: string; detail: 
 }
 
 // The name Insanity_Loom gives itself to the assistant.
-const CLIENT_INFO = { name: 'insanity-loom', title: 'Insanity_Loom', version: '0.0.1' } as const;
+/**
+ * The name Insanity_Loom gives itself to the assistant. The version said here was frozen at 0.0.1 while the program
+ * moved on; what a program tells another program about itself should be true. It is taken from the same place the
+ * program's own version comes from, so the two cannot drift apart again.
+ */
+function clientInfo(): { name: string; title: string; version: string } {
+  return { name: 'insanity-loom', title: 'Insanity_Loom', version };
+}
 
 type Emit = (event: AssistantEvent) => void;
 
@@ -201,7 +209,7 @@ async function openHost(
     const greeting = await Promise.race([
       connection.initialize({
         protocolVersion: acp.PROTOCOL_VERSION,
-        clientInfo: CLIENT_INFO,
+        clientInfo: clientInfo(),
         // Sign-in by running the host's own sign-in program is offered to clients that say they can run one.
         clientCapabilities: { fs: { readTextFile: false, writeTextFile: false }, terminal: false, auth: { terminal: true } },
       }),

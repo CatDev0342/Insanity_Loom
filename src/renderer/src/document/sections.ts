@@ -59,3 +59,21 @@ export function isBlank(doc: ProseMirrorNode): boolean {
   });
   return blank;
 }
+
+/**
+ * Whether there is anything to send: words written since the last turn was closed, or since the last reply.
+ *
+ * Closing an empty turn used to leave a rule behind — numbered, timed, looking exactly like a turn — with nothing
+ * sent and nothing said. A mark that means one thing and does another is worse than no mark at all, so now the turn
+ * is not closed and the author is told why.
+ */
+export function wordsSinceTheLastTurn(doc: ProseMirrorNode): boolean {
+  for (let index = doc.childCount - 1; index >= 0; index--) {
+    const node = doc.child(index);
+    if (node.type.name === RULE || node.type.name === REPLY) return false;
+    if (node.textContent.trim() !== '') return true;
+    // A picture is writing too, even with no words in it.
+    if (node.type.name !== 'paragraph' || node.childCount !== 0) return true;
+  }
+  return false;
+}

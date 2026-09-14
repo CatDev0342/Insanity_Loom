@@ -299,6 +299,7 @@ export class Loom {
       element: this.elements.whisper,
       html,
       onSectionFinished: (sectionId, markdown) => this.sectionFinished(sectionId, markdown),
+      onNothingToSend: () => this.showNotice('There is nothing written to send. Write something, then Ctrl+Enter.'),
       onChange: () => {
         this.saveNow();
         this.navigation.changed();
@@ -694,7 +695,8 @@ export class Loom {
 
   private sectionFinished(sectionId: string, markdown: string): void {
     if (markdown.trim() === '') {
-      // An empty turn has nothing to answer. Saying so beats a rule that looks like a turn and never was one.
+      // Ctrl+Enter no longer closes an empty turn at all (extensions.ts), so this is the way in that is left: a turn
+      // closed some other way with nothing in it. Saying so beats a rule that looks like a turn and never was one.
       this.showNotice('That turn was empty, so there was nothing to send.');
       this.navigation.changed();
       this.saveNow();

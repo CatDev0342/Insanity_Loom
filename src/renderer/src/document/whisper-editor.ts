@@ -54,6 +54,8 @@ export interface WhisperEditorOptions {
   readonly html: string;
   /** Called when the author finishes a section, with its identity and its writing as Markdown. */
   readonly onSectionFinished: (sectionId: string, markdown: string) => void;
+  /** Called when Ctrl+Enter is pressed with nothing written to send. */
+  readonly onNothingToSend: () => void;
   /** Called after every change to the document, by the author or the assistant. */
   readonly onChange: () => void;
   /** Called when the author Ctrl+clicks a link, with the address it carries. */
@@ -86,7 +88,10 @@ export class WhisperEditor {
         Reply,
         Picture,
         ProtectBusyReplies,
-        SectionKeys.configure({ onSectionFinished: (sectionId) => this.sectionFinished(sectionId, options.onSectionFinished) }),
+        SectionKeys.configure({
+          onSectionFinished: (sectionId) => this.sectionFinished(sectionId, options.onSectionFinished),
+          onNothingToSend: () => options.onNothingToSend(),
+        }),
         SectionsDrawn.configure({ isolating: () => this.isolating }),
         WhisperPaste,
         HeadingIdentities,
