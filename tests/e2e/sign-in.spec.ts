@@ -42,6 +42,8 @@ test('signing in with the code from the sign-in page connects', async () => {
 });
 
 test('a wrong code is reported, and the sign-in can be tried again', async () => {
+  // Keys go to the page only once it has started: wait for it to say where the assistant stands.
+  await expect(page.locator('#status-text')).toHaveText(/is not signed in/);
   await page.keyboard.press('Alt+A');
   await page.keyboard.press('i');
   const panel = page.getByRole('dialog', { name: 'Sign In' });
