@@ -60,9 +60,10 @@ of the best word processors.
   types elsewhere.
 - Heavy automated testing of typing, pasting and undo, including thousands of random editing sequences.
 
-### 3. The wiki
+### 3. The wiki — done
 Whispers, alcoves and GreatHalls; sections with IDs that survive renames and moves; links between whispers and
-sections; backlinks; search.
+sections; backlinks; search within a whisper, across the alcove, and across a whole GreatHall in an advanced find
+window.
 
 ### 4. Local only
 No web half, and none wanted: a whisper is an XHTML file carrying its own look, so it opens in any browser straight

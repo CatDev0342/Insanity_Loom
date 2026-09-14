@@ -87,6 +87,8 @@ export interface WhispersBridge {
   list(): Promise<readonly WhisperInAlcove[]>;
   /** Opens the whisper a link points at, by its file name in the alcove. */
   openNamed(name: string): Promise<OpenWhisper>;
+  /** Opens a whisper by where its file is, which Find in Files gives in full. */
+  openAt(path: string): Promise<OpenWhisper>;
   /** Reads a whisper in the alcove without opening it — to list what a link may point at inside it. */
   contents(name: string): Promise<string>;
   /** The whispers that link to this one. */
@@ -116,6 +118,7 @@ export const WHISPER_CHANNELS = {
   choose: 'insanity-loom:whisper-choose',
   list: 'insanity-loom:whisper-list',
   openNamed: 'insanity-loom:whisper-open-named',
+  openAt: 'insanity-loom:whisper-open-at',
   contents: 'insanity-loom:whisper-contents',
   pointingHere: 'insanity-loom:whisper-pointing-here',
   search: 'insanity-loom:whisper-search',

@@ -384,6 +384,15 @@ export class Loom {
     return this.whisperName;
   }
 
+  /** Opens a whisper by where its file is: what Find in Files hands back. */
+  async openWhisperAt(path: string): Promise<void> {
+    try {
+      await this.showWhisper(await this.whispers.openAt(path));
+    } catch (problem) {
+      this.showProblem(problem instanceof Error ? problem.message : String(problem));
+    }
+  }
+
   /** Opens a whisper of the alcove by its file name — what points here, and links. */
   async openNamedWhisper(name: string): Promise<void> {
     try {

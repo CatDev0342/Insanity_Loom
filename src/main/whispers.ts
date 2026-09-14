@@ -68,6 +68,13 @@ export class Whispers {
     }));
   }
 
+  /** Opens a whisper by where its file is — what Find in Files hands back, which may be beneath the alcove. */
+  openAt(path: string): OpenWhisper {
+    if (!Alcove.isWhisper(path)) throw new Error(`"${basename(path)}" is not a whisper: a whisper is an .xhtml file.`);
+    if (!existsSync(path)) throw new Error(`"${basename(path)}" is no longer there.`);
+    return this.open(path);
+  }
+
   /** Reads a whisper without opening it, so that what is inside it can be listed. */
   contents(name: string): string {
     return this.alcove.read(this.pathOf(name));

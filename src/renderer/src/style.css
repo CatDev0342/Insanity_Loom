@@ -867,6 +867,22 @@ button:disabled {
   text-decoration: underline;
 }
 
+/* The advanced find window: wider than a panel, with its results in a fixed-width list so lines stand under lines. */
+.panel-wide {
+  min-width: 46rem;
+}
+
+.hall-results {
+  font-family: ui-monospace, Consolas, 'DejaVu Sans Mono', monospace;
+  font-size: 0.85rem;
+  white-space: pre;
+}
+
+.hall-result-document {
+  font-weight: 600;
+  color: var(--ink);
+}
+
 /* A scrolling list of checkboxes, as for spelling languages. */
 .panel-checklist {
   flex: 1;

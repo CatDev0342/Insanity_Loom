@@ -18,6 +18,8 @@ import { DEFAULT_CONNECTION, type ConnectionSettings } from '../shared/connectio
 import { Assistant, HOST_LOG_FILE_NAME } from './assistant';
 import type { Journal } from './journal';
 import type { PreferenceStore } from './preference-store';
+import { HALL_CHANNELS, type HallSearch } from '../shared/hall';
+import { searchHall } from './hall';
 import { LINK_CHANNELS } from '../shared/links';
 import { openAddress } from './links';
 import { WHISPER_CHANNELS } from '../shared/whispers';
@@ -36,6 +38,19 @@ const MAXIMUM_PATH_LENGTH = 4096;
 const CONTAINER_LIST_TIME_LIMIT_MS = 15_000;
 
 const PANEL = 'the Connection Settings panel';
+
+/** What the page asked to search for, checked: the layer underneath trusts nothing it is handed. */
+function readHallSearch(value: unknown): HallSearch {
+  const asked = (typeof value === 'object' && value !== null ? value : {}) as Record<string, unknown>;
+  return {
+    looked: text(asked['looked'], 'search', MAXIMUM_IDENTIFIER_LENGTH),
+    everywhere: asked['everywhere'] === true,
+    matchCase: asked['matchCase'] === true,
+    wholeWord: asked['wholeWord'] === true,
+    regularExpression: asked['regularExpression'] === true,
+    includeThoughts: asked['includeThoughts'] === true,
+  };
+}
 
 function text(value: unknown, what: string, longest: number): string {
   if (typeof value !== 'string' || value.length > longest) throw new Error(`Insanity_Loom received an invalid ${what}.`);
@@ -180,6 +195,7 @@ export function startServices(dataFolder: string, logsFolder: string, journal: J
   ipcMain.handle(WHISPER_CHANNELS.openNamed, (_event, name: unknown) =>
     whispers.openNamed(text(name, 'whisper name', MAXIMUM_PATH_LENGTH)),
   );
+  ipcMain.handle(WHISPER_CHANNELS.openAt, (_event, path: unknown) => whispers.openAt(whisperPath(path)));
   ipcMain.handle(WHISPER_CHANNELS.contents, (_event, name: unknown) =>
     whispers.contents(text(name, 'whisper name', MAXIMUM_PATH_LENGTH)),
   );
@@ -189,6 +205,7 @@ export function startServices(dataFolder: string, logsFolder: string, journal: J
   ipcMain.handle(WHISPER_CHANNELS.search, (_event, looked: unknown) =>
     whispers.search(text(looked, 'search', MAXIMUM_IDENTIFIER_LENGTH)),
   );
+  ipcMain.handle(HALL_CHANNELS.search, (_event, asked: unknown) => searchHall(whispers.alcoveFolder, readHallSearch(asked)));
   ipcMain.handle(LINK_CHANNELS.open, (_event, address: unknown) => openAddress(text(address, 'address', MAXIMUM_ADDRESS_LENGTH)));
 
   return assistant;

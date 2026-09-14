@@ -199,3 +199,44 @@ test('File ▸ Find in the Alcove finds a whisper by its writing, and opens it',
   await expect(page.getByRole('search', { name: 'Find in this whisper' })).toBeVisible();
   await expect(page.locator('#find-said')).toHaveText('1 of 1');
 });
+
+test('Find in Files searches everything written, and goes to the words', async () => {
+  const whisper = page.locator('.whisper-editor');
+  await whisper.click();
+  await page.keyboard.type('a thought about weaving in the first whisper');
+  const holding = await page.locator('#whisper-name').textContent();
+
+  await page.keyboard.press('Control+n');
+  await whisper.click();
+  await page.keyboard.type('the second whisper, about nothing in particular');
+
+  await page.keyboard.press('Control+Shift+g');
+  const window = page.getByRole('dialog', { name: 'Find in Files' });
+  await expect(window).toBeVisible();
+  // The shape of an advanced find window: what to find, where to look, how to match, and the results.
+  await expect(window.getByLabel('The whole GreatHall (every folder beneath the alcove)')).toBeChecked();
+  await expect(window.getByLabel('Match case')).not.toBeChecked();
+
+  await window.getByLabel('Find what:').fill('weaving');
+  await window.getByRole('button', { name: 'Find All' }).click();
+  await expect(window.getByRole('status')).toContainText('1 match in 1 document');
+  await expect(window.getByRole('listbox')).toContainText('a thought about weaving');
+
+  // Match case, held against writing that does not match it.
+  await window.getByLabel('Find what:').fill('WEAVING');
+  await window.getByLabel('Match case').check();
+  await window.getByRole('button', { name: 'Find All' }).click();
+  await expect(window.getByRole('status')).toContainText('No matches');
+
+  await window.getByLabel('Match case').uncheck();
+  await window.getByLabel('Find what:').fill('weaving');
+  await window.getByRole('button', { name: 'Find All' }).click();
+  await window.getByRole('listbox').selectOption({ index: 1 });
+  await window.getByRole('button', { name: 'Go To' }).click();
+  await expect(window).toBeHidden();
+
+  // The whisper holding it is open, and the author has landed on the words.
+  await expect(page.locator('#whisper-name')).toHaveText(holding ?? '');
+  await expect(page.getByRole('search', { name: 'Find in this whisper' })).toBeVisible();
+  await expect(page.locator('#find-said')).toHaveText('1 of 1');
+});

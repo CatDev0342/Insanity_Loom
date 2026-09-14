@@ -10,6 +10,7 @@ export const PAGE_COMMANDS = [
   'whisper.exportMarkdown',
   'whisper.pointsHere',
   'whisper.search',
+  'whisper.searchHall',
   'find.show',
   'find.replace',
   'find.next',
@@ -32,6 +33,7 @@ export type AssistantCommandId = Exclude<
   | 'assistant.signIn'
   | 'whisper.pointsHere'
   | 'whisper.search'
+  | 'whisper.searchHall'
   | 'find.show'
   | 'find.replace'
   | 'find.next'
