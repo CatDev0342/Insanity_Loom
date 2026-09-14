@@ -103,6 +103,8 @@ export class Loom {
   private readonly referenceBar: ReferenceBar;
   /** Called whenever the caret moves or the whisper changes, so the toolbar can follow the author. */
   private caretMoved: () => void = () => undefined;
+  /** The whisper whose unanswered turns have already been offered, so the author is asked once and not again. */
+  private offeredUnansweredFor = '';
   private readonly waiting: Waiting[] = [];
   private state: ConnectionState = 'disconnected';
   private conversationId = '';
@@ -294,6 +296,10 @@ export class Loom {
   private offerUnansweredTurns(): void {
     const editor = this.editor;
     if (editor === undefined) return;
+    // Once for each whisper opened. The title arriving, or the file moving, is not another reason to ask again.
+    const here = this.saving.file;
+    if (here === '' || here === this.offeredUnansweredFor) return;
+    this.offeredUnansweredFor = here;
     // A turn being answered right now is not unanswered: the reply is on its way, or waiting its turn to be sent.
     const inFlight = new Set([this.writing?.replyId ?? '', ...this.waiting.map((one) => one.replyId)]);
     const unanswered = editor.unansweredTurns().filter((turn) => !inFlight.has(turn.replyId));
