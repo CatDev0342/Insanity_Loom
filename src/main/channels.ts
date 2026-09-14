@@ -7,6 +7,7 @@ import { join } from 'node:path';
 import {
   ASSISTANT_CHANNELS,
   CONNECTION_CHANNELS,
+  isSignInPage,
   JOURNAL_CHANNELS,
   MAXIMUM_SECTION_LENGTH,
   type AssistantEvent,
@@ -20,6 +21,9 @@ import { loadSettings, readConnection, saveSettings, settingsWith } from './sett
 // Identifiers the page passes back (conversation ids, permission request and choice ids) are short; anything longer
 // is not one of them. The same bound serves for a Docker program's path.
 const MAXIMUM_IDENTIFIER_LENGTH = 512;
+
+// A sign-in page's address, with its one-time parameters, is long but bounded.
+const MAXIMUM_ADDRESS_LENGTH = 4096;
 
 // How long Docker may take to list its running containers, in milliseconds, before Insanity_Loom stops waiting.
 const CONTAINER_LIST_TIME_LIMIT_MS = 15_000;
@@ -105,6 +109,20 @@ export function startServices(dataFolder: string, logsFolder: string, journal: J
       choiceId === null ? null : identifier(choiceId, 'permission choice'),
     ),
   );
+
+  ipcMain.handle(ASSISTANT_CHANNELS.signInMethods, () => assistant.signInMethods());
+  ipcMain.handle(ASSISTANT_CHANNELS.signIn, (_event, methodId: unknown) => assistant.signIn(identifier(methodId, 'sign-in method')));
+  ipcMain.handle(ASSISTANT_CHANNELS.signInCode, (_event, code: unknown) =>
+    assistant.sendSignInCode(text(code, 'sign-in code', MAXIMUM_IDENTIFIER_LENGTH)),
+  );
+  ipcMain.handle(ASSISTANT_CHANNELS.cancelSignIn, () => assistant.cancelSignIn());
+  ipcMain.handle(ASSISTANT_CHANNELS.openSignInPage, async (_event, address: unknown) => {
+    // The address came from the host's output: only the assistant makers' own sign-in sites are ever opened.
+    const page = text(address, 'sign-in page', MAXIMUM_ADDRESS_LENGTH);
+    if (!isSignInPage(page)) throw new Error('Insanity_Loom opens only the assistant\'s own sign-in pages.');
+    await shell.openExternal(page);
+  });
+  ipcMain.handle(ASSISTANT_CHANNELS.signOut, () => assistant.signOut());
 
   ipcMain.handle(CONNECTION_CHANNELS.load, (): ConnectionPanelState => ({ settings: connection, saved, problem }));
   ipcMain.handle(CONNECTION_CHANNELS.save, (_event, candidate: unknown) => {

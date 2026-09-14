@@ -73,3 +73,16 @@ describe('the menus', () => {
     }
   });
 });
+
+describe('sign-in pages', () => {
+  it('are opened only on the assistant makers\' own sites, over https', async () => {
+    const { isSignInPage } = await import('../../src/shared/assistant');
+    expect(isSignInPage('https://claude.com/cai/oauth/authorize?code=true')).toBe(true);
+    expect(isSignInPage('https://platform.claude.com/oauth/code/callback')).toBe(true);
+    expect(isSignInPage('https://console.anthropic.com/login')).toBe(true);
+    expect(isSignInPage('http://claude.com/oauth')).toBe(false);
+    expect(isSignInPage('https://claude.com.evil.example/oauth')).toBe(false);
+    expect(isSignInPage('https://notclaude.com/oauth')).toBe(false);
+    expect(isSignInPage('javascript:alert(1)')).toBe(false);
+  });
+});

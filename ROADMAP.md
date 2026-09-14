@@ -32,7 +32,7 @@ An empty Insanity_Loom window that opens on Windows and Linux.
 - **A license check on every build**: any GPL or AGPL part is refused, and the third-party notices file is generated
   automatically.
 
-### 1. Walking skeleton — the channel works (in progress)
+### 1. Walking skeleton — the channel works — done
 A plain editor with the assistant connected. From here on, the author talks to the assistant through Insanity_Loom.
 - The author writes and marks a section finished (the `---` line).
 - A small host where the assistant runs passes the section on and streams the reply back into the document as it is
@@ -40,19 +40,20 @@ A plain editor with the assistant connected. From here on, the author talks to t
 - Approve / Deny in the application for anything the assistant needs permission for.
 - **Nothing typed is ever lost.** Every keystroke is journaled to disk first; after a crash or a power cut the
   application reopens where the author was.
-- **Connecting is one click, and after the first time, none.** The application starts or reuses wherever the
-  assistant runs (a Docker container, say), signs in, and trusts the author's alcoves itself. The author signs in once
-  and trusts a folder once; both are remembered.
-- **Credentials are kept the way browsers keep them.** Stored encrypted with the operating system's own protection —
-  Electron's `safeStorage`, which is Chromium's own mechanism: Windows' data protection tied to the user account, the
-  desktop keyring on Linux. The encrypted file lives in the portable `Data` folder, so a copied folder on another
-  machine or account signs in again. On Linux with no keyring, the application says so rather than storing
-  credentials weakly.
+- **Connecting is one click, and after the first time, none.** Every connection option is on show in Assistant ▸
+  Connection Settings, which opens by itself on the first start. There is no folder-trust prompt.
+- **Signing in happens inside Insanity_Loom, and only when the author asks.** When the assistant is not signed in,
+  the status bar says so and offers Sign In; the Sign In panel starts the assistant's own sign-in, opens the sign-in
+  page in the browser at the press of a button, and takes the code the page shows. The assistant keeps the sign-in
+  where it runs; Insanity_Loom never sees a password or holds a credential.
 
 ### 2. Real editing
-Rich text on ProseMirror and Tiptap, held to the standard of the best word processors.
+One document: the author writes anywhere in the whisper, and the assistant's replies are woven in after the section
+they answer. Each conversation is a whisper, saved as XHTML. Rich text on ProseMirror and Tiptap, held to the standard
+of the best word processors.
 - Desktop-grade keys: Tab, arrows, standard shortcuts; every key means what it should where the author is working.
-- Separate undo for author and assistant: the author's Ctrl+Z never takes back the assistant's reply, and the reverse.
+- The assistant's replies are the author's to edit, like any of their own text, while staying marked as the
+  assistant's. Separate undo: the author's Ctrl+Z never takes back the assistant's writing, and the reverse.
 - The assistant's replies are anchored to the section they answer, so they land in the right place while the author
   types elsewhere.
 - Heavy automated testing of typing, pasting and undo, including thousands of random editing sequences.

@@ -57,17 +57,32 @@ export interface HostCommand {
   readonly cwd: string | undefined;
 }
 
-export function hostCommand(settings: ConnectionSettings): HostCommand {
+/** Something to run with the host program instead of the host itself: more arguments, and environment variables. */
+export interface HostVariant {
+  /** Added after the host's own arguments (a sign-in method's, say). */
+  readonly extraArguments: readonly string[];
+  /**
+   * Environment variables the program needs. Inside a container they are passed by name alone (`-e NAME`), so
+   * Docker takes each value from Insanity_Loom's own environment and it never appears in the command line.
+   */
+  readonly environmentNames: readonly string[];
+}
+
+const NO_VARIANT: HostVariant = { extraArguments: [], environmentNames: [] };
+
+export function hostCommand(settings: ConnectionSettings, variant: HostVariant = NO_VARIANT): HostCommand {
+  const hostArguments = [...settings.hostArguments, ...variant.extraArguments];
   if (settings.place === 'docker') {
     // -i keeps the host's input open: the protocol travels on it. -w sets the folder inside the container.
     const user = settings.containerUser.trim() === '' ? [] : ['-u', settings.containerUser];
+    const environment = variant.environmentNames.flatMap((name) => ['-e', name]);
     return {
       program: settings.dockerProgram,
-      args: ['exec', '-i', ...user, '-w', settings.workingFolder, settings.container, settings.hostProgram, ...settings.hostArguments],
+      args: ['exec', '-i', ...user, ...environment, '-w', settings.workingFolder, settings.container, settings.hostProgram, ...hostArguments],
       cwd: undefined,
     };
   }
-  return { program: settings.hostProgram, args: [...settings.hostArguments], cwd: settings.workingFolder };
+  return { program: settings.hostProgram, args: hostArguments, cwd: settings.workingFolder };
 }
 
 /** The command as one line, the way it would be typed, for showing to the author. */

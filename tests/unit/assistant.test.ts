@@ -102,6 +102,44 @@ describe('the assistant connection', () => {
     expect(events).toEqual([]);
   });
 
+  it('says when the assistant needs signing in, and signs in with the code from the sign-in page', async () => {
+    const authFolder = mkdtempSync(join(tmpdir(), 'insanity-loom-'));
+    const { assistant, events } = start([process.execPath, FAKE_ASSISTANT, '--auth-file', join(authFolder, 'auth.txt')]);
+    await assistant.connect();
+    expect(events.at(-1)).toEqual({ type: 'signInNeeded', methods: [{ id: 'fake-login', name: 'Fake Account', description: 'Sign in to the fake account' }] });
+    expect(events.some((event) => event.type === 'status' && event.state === 'signedOut')).toBe(true);
+
+    await assistant.signIn('fake-login');
+    await expect.poll(() => events.find((event) => event.type === 'signIn' && event.stage === 'page')).toBeDefined();
+    const page = events.find((event) => event.type === 'signIn' && event.stage === 'page');
+    expect(page?.type === 'signIn' && page.url).toBe('https://claude.com/fake/oauth/authorize?code=true&state=fake');
+
+    assistant.sendSignInCode('good-code');
+    await expect.poll(() => events.some((event) => event.type === 'signIn' && event.stage === 'finished')).toBe(true);
+    // Signed in, it connects again and the conversation begins.
+    await expect.poll(() => events.some((event) => event.type === 'conversation')).toBe(true);
+    await expect.poll(() => events.find((event) => event.type === 'account' && event.label === 'Fake Plan')).toBeDefined();
+    rmSync(authFolder, { recursive: true, force: true });
+  });
+
+  it('reports a sign-in that fails', async () => {
+    const authFolder = mkdtempSync(join(tmpdir(), 'insanity-loom-'));
+    const { assistant, events } = start([process.execPath, FAKE_ASSISTANT, '--auth-file', join(authFolder, 'auth.txt')]);
+    await assistant.connect();
+    await assistant.signIn('fake-login');
+    await expect.poll(() => events.some((event) => event.type === 'signIn' && event.stage === 'page')).toBe(true);
+    assistant.sendSignInCode('wrong-code');
+    await expect.poll(() => events.find((event) => event.type === 'signIn' && event.stage === 'failed')).toBeDefined();
+    const failed = events.find((event) => event.type === 'signIn' && event.stage === 'failed');
+    expect(failed?.type === 'signIn' && failed.message).toMatch(/did not complete[\s\S]*Invalid code/);
+    rmSync(authFolder, { recursive: true, force: true });
+  });
+
+  it('refuses to type anything but a single-line code into the sign-in', () => {
+    const { assistant } = start();
+    expect(() => assistant.sendSignInCode('code')).toThrow(/No sign-in is waiting/);
+  });
+
   it('lists earlier conversations', async () => {
     const { assistant } = start();
     await assistant.connect();

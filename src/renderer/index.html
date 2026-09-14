@@ -24,12 +24,15 @@
     </main>
     <footer class="status">
       <span id="status-text" class="status-text" role="status">Starting…</span>
+      <span id="account" class="status-account" aria-label="Signed in as"></span>
       <button id="reconnect" class="status-action" type="button" hidden>Reconnect</button>
+      <button id="sign-in" class="status-action" type="button" hidden>Sign In…</button>
       <button id="connection-settings" class="status-action" type="button">Connection Settings…</button>
     </footer>
     <dialog id="resume-dialog" class="resume-dialog" aria-label="Resume a conversation"></dialog>
     <dialog id="connection-dialog" class="panel-dialog"></dialog>
     <dialog id="preferences-dialog" class="panel-dialog"></dialog>
+    <dialog id="sign-in-dialog" class="panel-dialog"></dialog>
     <script type="module" src="./src/main.ts"></script>
   </body>
 </html>

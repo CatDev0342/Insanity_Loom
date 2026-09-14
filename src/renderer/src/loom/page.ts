@@ -16,6 +16,8 @@ export interface LoomElements {
   readonly resumeDialog: HTMLDialogElement;
   readonly connectionDialog: HTMLDialogElement;
   readonly connectionSettings: HTMLButtonElement;
+  readonly account: HTMLElement;
+  readonly signIn: HTMLButtonElement;
 }
 
 const PAGE_TITLE = 'Insanity_Loom';
@@ -95,6 +97,9 @@ export class Loom {
           await this.connectionPanel.show();
           this.compose.focus();
           return;
+        case 'assistant.signOut':
+          await this.assistant.signOut();
+          return;
       }
     } catch (problem) {
       this.conversation.showProblem(problem instanceof Error ? problem.message : String(problem));
@@ -125,7 +130,9 @@ export class Loom {
         this.state = event.state;
         this.elements.statusText.textContent = event.detail;
         this.elements.statusText.dataset['state'] = event.state;
-        this.elements.reconnect.hidden = event.state === 'connected' || event.state === 'connecting';
+        this.elements.reconnect.hidden = event.state === 'connected' || event.state === 'connecting' || event.state === 'signedOut';
+        // Signing in is offered, never started: the author presses Sign In when they choose to.
+        this.elements.signIn.hidden = event.state !== 'signedOut';
         if (event.state !== 'connected') this.replying = false;
         return;
       case 'conversation':
@@ -161,6 +168,16 @@ export class Loom {
         return;
       case 'problem':
         this.conversation.showProblem(event.message);
+        return;
+      case 'account':
+        this.elements.account.textContent = event.detail === '' ? event.label : `${event.label} · ${event.detail}`;
+        return;
+      case 'signInNeeded':
+        // Shown in the status bar, with its Sign In button; nothing opens by itself.
+        this.elements.account.textContent = 'Not signed in';
+        return;
+      case 'signIn':
+        // The Sign In panel shows a sign-in's progress (src/renderer/src/panels/sign-in-panel.ts).
         return;
     }
   }

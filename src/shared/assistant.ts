@@ -4,7 +4,17 @@
 import type { ConnectionSettings } from './connection';
 
 /** How the connection stands, in words the author can act on. */
-export type ConnectionState = 'disconnected' | 'connecting' | 'connected' | 'failed';
+export type ConnectionState = 'disconnected' | 'connecting' | 'connected' | 'signedOut' | 'failed';
+
+/** A way the assistant offers to sign in ("Claude Subscription", "Anthropic Console"…). */
+export interface SignInMethod {
+  readonly id: string;
+  readonly name: string;
+  readonly description: string;
+}
+
+/** The steps of a sign-in, as the Sign In panel shows them. */
+export type SignInStage = 'started' | 'page' | 'finished' | 'failed';
 
 /** A past conversation the assistant can resume. */
 export interface ConversationSummary {
@@ -35,7 +45,13 @@ export type AssistantEvent =
   | { readonly type: 'tool'; readonly id: string; readonly title: string; readonly status: string }
   | { readonly type: 'permission'; readonly requestId: string; readonly title: string; readonly choices: readonly PermissionChoice[] }
   | { readonly type: 'replyFinished'; readonly reason: string }
-  | { readonly type: 'problem'; readonly message: string };
+  | { readonly type: 'problem'; readonly message: string }
+  /** Who the assistant is signed in as ("Claude Max", and the account), whenever the assistant reports it. */
+  | { readonly type: 'account'; readonly label: string; readonly detail: string }
+  /** The assistant needs the author to sign in before it can work. */
+  | { readonly type: 'signInNeeded'; readonly methods: readonly SignInMethod[] }
+  /** A sign-in in progress: `url` is the sign-in page once known; `message` says what happened, in words. */
+  | { readonly type: 'signIn'; readonly stage: SignInStage; readonly url: string; readonly message: string };
 
 export interface AssistantBridge {
   /** Connects, using the settings in Data/settings.json, and resumes the last conversation if there was one. */
@@ -51,6 +67,16 @@ export interface AssistantBridge {
   answerPermission(requestId: string, choiceId: string | null): Promise<void>;
   /** Listens for assistant events. Returns a function that stops listening. */
   onEvent(listener: (event: AssistantEvent) => void): () => void;
+  /** The ways the assistant offers to sign in; empty when it offers none, or is not connected. */
+  signInMethods(): Promise<readonly SignInMethod[]>;
+  /** Begins signing in with one of the offered methods. Its progress arrives as signIn events. */
+  signIn(methodId: string): Promise<void>;
+  /** Gives the sign-in the code the sign-in page showed the author. */
+  sendSignInCode(code: string): Promise<void>;
+  cancelSignIn(): Promise<void>;
+  /** Opens the sign-in page in the system's browser. Only the assistant's own sign-in sites are opened. */
+  openSignInPage(url: string): Promise<void>;
+  signOut(): Promise<void>;
 }
 
 export interface JournalBridge {
@@ -92,7 +118,29 @@ export const ASSISTANT_CHANNELS = {
   stop: 'insanity-loom:assistant-stop',
   answer: 'insanity-loom:assistant-answer',
   event: 'insanity-loom:assistant-event',
+  signInMethods: 'insanity-loom:assistant-sign-in-methods',
+  signIn: 'insanity-loom:assistant-sign-in',
+  signInCode: 'insanity-loom:assistant-sign-in-code',
+  cancelSignIn: 'insanity-loom:assistant-sign-in-cancel',
+  openSignInPage: 'insanity-loom:assistant-sign-in-page',
+  signOut: 'insanity-loom:assistant-sign-out',
 } as const;
+
+/**
+ * The sites a sign-in page may be on. A sign-in page's address comes from the host's output, so it is checked before
+ * the browser is asked to open it: only the assistant makers' own sign-in sites are opened.
+ */
+export const SIGN_IN_SITES = ['claude.com', 'claude.ai', 'anthropic.com'] as const;
+
+export function isSignInPage(address: string): boolean {
+  let url: URL;
+  try {
+    url = new URL(address);
+  } catch {
+    return false;
+  }
+  return url.protocol === 'https:' && SIGN_IN_SITES.some((site) => url.hostname === site || url.hostname.endsWith(`.${site}`));
+}
 
 export const CONNECTION_CHANNELS = {
   load: 'insanity-loom:connection-load',

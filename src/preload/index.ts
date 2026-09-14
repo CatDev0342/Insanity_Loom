@@ -35,6 +35,12 @@ const bridge: InsanityLoomBridge = {
         ipcRenderer.removeListener(ASSISTANT_CHANNELS.event, relay);
       };
     },
+    signInMethods: () => ipcRenderer.invoke(ASSISTANT_CHANNELS.signInMethods),
+    signIn: (methodId) => ipcRenderer.invoke(ASSISTANT_CHANNELS.signIn, methodId),
+    sendSignInCode: (code) => ipcRenderer.invoke(ASSISTANT_CHANNELS.signInCode, code),
+    cancelSignIn: () => ipcRenderer.invoke(ASSISTANT_CHANNELS.cancelSignIn),
+    openSignInPage: (url) => ipcRenderer.invoke(ASSISTANT_CHANNELS.openSignInPage, url),
+    signOut: () => ipcRenderer.invoke(ASSISTANT_CHANNELS.signOut),
   },
 
   connection: {

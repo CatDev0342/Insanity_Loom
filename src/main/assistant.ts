@@ -11,7 +11,13 @@ import { spawn, type ChildProcess } from 'node:child_process';
 import { createWriteStream, type WriteStream } from 'node:fs';
 import { join } from 'node:path';
 import { Readable, Writable } from 'node:stream';
-import type { AssistantEvent, ConnectionState, ConversationSummary } from '../shared/assistant';
+import {
+  isSignInPage as isSignInPageAddress,
+  type AssistantEvent,
+  type ConnectionState,
+  type ConversationSummary,
+  type SignInMethod,
+} from '../shared/assistant';
 import { describePlace, hostCommand, type ConnectionSettings } from '../shared/connection';
 import type { Journal } from './journal';
 
@@ -24,6 +30,36 @@ export const HOST_LOG_FILE_NAME = 'assistant-host.log';
 const REMEMBERED_ERROR_LINES = 20;
 
 const MILLISECONDS_PER_SECOND = 1000;
+
+// The protocol's error code for "sign in first", as the protocol library defines it.
+const SIGN_IN_REQUIRED_CODE = acp.RequestError.authRequired().code;
+
+// The assistant reports who it is signed in as with this notification (the Claude adapter's authStatus extension).
+const ACCOUNT_NOTIFICATION = '_auth/status_update';
+
+// A sign-in code is short; anything longer, or holding a line break, is not one.
+const LONGEST_SIGN_IN_CODE = 2048;
+
+// The addresses in a sign-in program's output: the first one on a sign-in site is the sign-in page.
+const ADDRESS = /https:\/\/[^\s"'<>]+/g;
+
+// Terminal color and cursor codes, removed from a sign-in program's output before it is shown or searched. They are
+// control characters by definition, which is what the rule below would otherwise forbid.
+// eslint-disable-next-line no-control-regex
+const TERMINAL_CODES = /\u001b\[[0-9;?]*[A-Za-z]|\u001b\][^\u0007]*\u0007/g;
+
+function isSignInRequired(cause: unknown): boolean {
+  return typeof cause === 'object' && cause !== null && (cause as { code?: unknown }).code === SIGN_IN_REQUIRED_CODE;
+}
+
+/** Who the assistant says it is signed in as, from its account notification; undefined when it says nothing usable. */
+function readAccount(params: Record<string, unknown>): { label: string; detail: string } | undefined {
+  const status = params['authStatus'];
+  if (typeof status !== 'object' || status === null) return undefined;
+  const { label, detail } = status as { label?: unknown; detail?: unknown };
+  if (typeof label !== 'string') return undefined;
+  return { label, detail: typeof detail === 'string' ? detail : '' };
+}
 
 // The name Insanity_Loom gives itself to the assistant.
 const CLIENT_INFO = { name: 'insanity-loom', title: 'Insanity_Loom', version: '0.0.1' } as const;
@@ -49,6 +85,9 @@ interface OpenHost {
   readonly host: ChildProcess;
   readonly connection: acp.ClientSideConnection;
   readonly agentTitle: string;
+  /** The ways the assistant offers to sign in. */
+  readonly signInMethods: readonly acp.AuthMethod[];
+  readonly canSignOut: boolean;
   /** Rejects, with the reason in words, when the host stops or fails; it never resolves. */
   readonly lost: Promise<never>;
 }
@@ -112,12 +151,20 @@ async function openHost(
       connection.initialize({
         protocolVersion: acp.PROTOCOL_VERSION,
         clientInfo: CLIENT_INFO,
-        clientCapabilities: { fs: { readTextFile: false, writeTextFile: false }, terminal: false },
+        // Sign-in by running the host's own sign-in program is offered to clients that say they can run one.
+        clientCapabilities: { fs: { readTextFile: false, writeTextFile: false }, terminal: false, auth: { terminal: true } },
       }),
       lost,
       tooSlow,
     ]);
-    return { host, connection, lost, agentTitle: greeting.agentInfo?.title ?? greeting.agentInfo?.name ?? 'the assistant' };
+    return {
+      host,
+      connection,
+      lost,
+      agentTitle: greeting.agentInfo?.title ?? greeting.agentInfo?.name ?? 'the assistant',
+      signInMethods: greeting.authMethods ?? [],
+      canSignOut: greeting.agentCapabilities?.auth?.logout !== undefined && greeting.agentCapabilities.auth.logout !== null,
+    };
   } catch (cause) {
     await stopHost(host);
     throw cause;
@@ -135,6 +182,7 @@ export class Assistant {
   private nextRequestNumber = 1;
   private readonly recentErrors: string[] = [];
   private readonly log: WriteStream;
+  private signingIn: ChildProcess | undefined;
 
   constructor(
     settings: ConnectionSettings,
@@ -178,9 +226,116 @@ export class Assistant {
     });
 
     this.status('connected', `Connected to ${opened.agentTitle} ${place}.`);
-    const last = this.journal.loadConversationId();
-    if (last === undefined) await this.startConversation();
-    else await this.resumeConversation(last);
+    try {
+      const last = this.journal.loadConversationId();
+      if (last === undefined) await this.startConversation();
+      else await this.resumeConversation(last);
+    } catch (cause) {
+      if (!isSignInRequired(cause)) throw cause;
+      this.needSignIn();
+    }
+  }
+
+  /** Says the assistant needs the author to sign in, and how it offers to do it. */
+  private needSignIn(): void {
+    const place = describePlace(this.settings);
+    this.status('signedOut', `${this.open?.agentTitle ?? 'The assistant'} ${place} is not signed in. Use Assistant ▸ Sign In.`);
+    this.emit({ type: 'signInNeeded', methods: this.signInMethods() });
+  }
+
+  signInMethods(): readonly SignInMethod[] {
+    return (this.open?.signInMethods ?? []).map((method) => ({
+      id: method.id,
+      name: method.name,
+      description: method.description ?? '',
+    }));
+  }
+
+  /**
+   * Signs in with one of the assistant's own methods. A "terminal" method is the host's own sign-in program: it is
+   * run with the method's arguments, the sign-in page it names is passed to the page, and the code the author pastes
+   * is typed into it. Any other method the assistant carries out itself. Either way the connection is made again
+   * afterwards, so the conversation can begin.
+   */
+  async signIn(methodId: string): Promise<void> {
+    const method = this.open?.signInMethods.find((candidate) => candidate.id === methodId);
+    const connection = this.open?.connection;
+    if (method === undefined || connection === undefined) throw new Error(`The assistant offers no sign-in method "${methodId}".`);
+    this.cancelSignIn();
+
+    if (!('type' in method) || method.type !== 'terminal') {
+      this.emit({ type: 'signIn', stage: 'started', url: '', message: `Signing in with ${method.name}…` });
+      await connection.authenticate({ methodId });
+      this.emit({ type: 'signIn', stage: 'finished', url: '', message: 'Signed in.' });
+      await this.connect();
+      return;
+    }
+
+    const environment = method.env ?? {};
+    const command = hostCommand(this.settings, { extraArguments: method.args ?? [], environmentNames: Object.keys(environment) });
+    const program = spawn(command.program, [...command.args], {
+      cwd: command.cwd,
+      env: { ...process.env, ...environment },
+      stdio: ['pipe', 'pipe', 'pipe'],
+      windowsHide: true,
+    });
+    this.signingIn = program;
+    this.emit({ type: 'signIn', stage: 'started', url: '', message: `Starting ${method.name} sign-in…` });
+
+    let output = '';
+    let pageFound = false;
+    const read = (chunk: Buffer): void => {
+      output += chunk.toString('utf8').replace(TERMINAL_CODES, '');
+      if (pageFound) return;
+      const page = [...output.matchAll(ADDRESS)].map((match) => match[0]).find((address) => isSignInPageAddress(address));
+      if (page === undefined) return;
+      pageFound = true;
+      this.emit({
+        type: 'signIn',
+        stage: 'page',
+        url: page,
+        message: 'Open the sign-in page, sign in there, and paste the code it shows you here.',
+      });
+    };
+    program.stdout.on('data', read);
+    program.stderr.on('data', read);
+    program.once('error', (cause) => {
+      if (this.signingIn !== program) return;
+      this.signingIn = undefined;
+      this.emit({ type: 'signIn', stage: 'failed', url: '', message: explainStartFailure(this.settings, cause) });
+    });
+    program.once('exit', (code) => {
+      if (this.signingIn !== program) return;
+      this.signingIn = undefined;
+      if (code === 0) {
+        this.emit({ type: 'signIn', stage: 'finished', url: '', message: 'Signed in.' });
+        void this.connect();
+        return;
+      }
+      const lastLines = output.trim().split(/\r?\n/).slice(-2).join('\n');
+      this.emit({ type: 'signIn', stage: 'failed', url: '', message: `The sign-in did not complete.${lastLines === '' ? '' : `\n${lastLines}`}` });
+    });
+  }
+
+  sendSignInCode(code: string): void {
+    const program = this.signingIn;
+    if (program === undefined) throw new Error('No sign-in is waiting for a code.');
+    if (code.trim() === '' || code.length > LONGEST_SIGN_IN_CODE || /[\r\n]/.test(code)) throw new Error('That is not a sign-in code.');
+    program.stdin?.write(`${code.trim()}\n`);
+  }
+
+  cancelSignIn(): void {
+    const program = this.signingIn;
+    this.signingIn = undefined;
+    if (program !== undefined) void stopHost(program);
+  }
+
+  async signOut(): Promise<void> {
+    const opened = this.open;
+    if (opened === undefined) throw new Error('Insanity_Loom is not connected to the assistant.');
+    if (!opened.canSignOut) throw new Error(`${opened.agentTitle} cannot be signed out from Insanity_Loom.`);
+    await opened.connection.logout({});
+    await this.connect();
   }
 
   /**
@@ -201,6 +356,11 @@ export class Assistant {
       requestPermission: (params) => this.askPermission(params),
       sessionUpdate: async (params) => {
         if (params.sessionId === this.conversationId) this.onUpdate(params.update);
+      },
+      extNotification: async (method, params) => {
+        if (method !== ACCOUNT_NOTIFICATION) return;
+        const account = readAccount(params);
+        if (account !== undefined) this.emit({ type: 'account', ...account });
       },
     };
   }
@@ -312,6 +472,11 @@ export class Assistant {
       const result = await connection.prompt({ sessionId: conversationId, prompt: [{ type: 'text', text }] });
       this.emit({ type: 'replyFinished', reason: result.stopReason });
     } catch (cause) {
+      if (isSignInRequired(cause)) {
+        this.emit({ type: 'replyFinished', reason: 'error' });
+        this.needSignIn();
+        return;
+      }
       this.emit({ type: 'problem', message: cause instanceof Error ? cause.message : String(cause) });
       this.emit({ type: 'replyFinished', reason: 'error' });
     }
@@ -352,6 +517,7 @@ export class Assistant {
    */
   disconnect(): Promise<void> {
     const opened = this.open;
+    this.cancelSignIn();
     this.dropConnection();
     return opened === undefined ? Promise.resolve() : stopHost(opened.host);
   }

@@ -508,3 +508,21 @@ button:disabled {
   outline: 2px solid var(--focus);
   outline-offset: 0;
 }
+
+.status-account {
+  margin-left: auto;
+}
+
+.status-account:empty {
+  display: none;
+}
+
+.panel-choices {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.panel-control input[readonly] {
+  color: var(--ink-quiet);
+}
