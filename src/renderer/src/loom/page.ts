@@ -75,13 +75,20 @@ export class Loom {
     elements.reconnect.addEventListener('click', () => void this.run('assistant.reconnect'));
     assistant.onEvent((event) => this.onEvent(event));
 
-    // Esc stops a reply being written, wherever the author is on the page — unless a dialog or menu is open.
-    document.addEventListener('keydown', (event) => {
-      if (event.key !== 'Escape' || event.defaultPrevented || this.writing === undefined) return;
-      if (document.querySelector('dialog[open], :popover-open') !== null) return;
-      event.preventDefault();
-      void this.run('assistant.stop');
-    });
+    // Esc stops a reply being written, wherever the author is on the page — unless a dialog or menu is open. It is
+    // caught before the whisper sees it (the editor has its own use for Esc, selecting the block around the caret),
+    // and only while a reply is being written; otherwise Esc keeps its ordinary meaning.
+    window.addEventListener(
+      'keydown',
+      (event) => {
+        if (event.key !== 'Escape' || this.writing === undefined) return;
+        if (document.querySelector('dialog[open], :popover-open') !== null) return;
+        event.preventDefault();
+        event.stopPropagation();
+        void this.run('assistant.stop');
+      },
+      true,
+    );
   }
 
   /**
