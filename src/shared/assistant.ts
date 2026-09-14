@@ -1,6 +1,8 @@
 // What passes between the page and the layer underneath about the assistant. The layer underneath owns the
 // connection itself (src/main/assistant.ts); the page only shows it and answers for the author.
 
+import type { ConnectionSettings } from './connection';
+
 /** How the connection stands, in words the author can act on. */
 export type ConnectionState = 'disconnected' | 'connecting' | 'connected' | 'failed';
 
@@ -58,6 +60,28 @@ export interface JournalBridge {
   saveDraft(text: string): Promise<void>;
 }
 
+/** What the Connection Settings panel opens with. */
+export interface ConnectionPanelState {
+  /** The settings in use, or the generic defaults when none have been saved yet. */
+  readonly settings: ConnectionSettings;
+  /** False until the author has saved connection settings for the first time. */
+  readonly saved: boolean;
+  /** Why the saved settings could not be read, or '' when they could. */
+  readonly problem: string;
+}
+
+export interface ConnectionBridge {
+  load(): Promise<ConnectionPanelState>;
+  /** Checks and saves settings; they are used from the next connection on. Throws, in words, when they cannot be used. */
+  save(settings: ConnectionSettings): Promise<void>;
+  /** Tries settings without saving them. Resolves with what answered; throws, in words, when nothing did. */
+  test(settings: ConnectionSettings): Promise<string>;
+  /** The names of the Docker containers now running, found with the given Docker program. */
+  listContainers(dockerProgram: string): Promise<readonly string[]>;
+  /** Opens the assistant host's log file in the system's text viewer. */
+  openLog(): Promise<void>;
+}
+
 // The channels these travel on.
 export const ASSISTANT_CHANNELS = {
   connect: 'insanity-loom:assistant-connect',
@@ -68,6 +92,14 @@ export const ASSISTANT_CHANNELS = {
   stop: 'insanity-loom:assistant-stop',
   answer: 'insanity-loom:assistant-answer',
   event: 'insanity-loom:assistant-event',
+} as const;
+
+export const CONNECTION_CHANNELS = {
+  load: 'insanity-loom:connection-load',
+  save: 'insanity-loom:connection-save',
+  test: 'insanity-loom:connection-test',
+  containers: 'insanity-loom:connection-containers',
+  openLog: 'insanity-loom:connection-open-log',
 } as const;
 
 export const JOURNAL_CHANNELS = {

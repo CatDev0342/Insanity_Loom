@@ -7,6 +7,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { Assistant } from '../../src/main/assistant';
 import { Journal } from '../../src/main/journal';
 import type { AssistantEvent } from '../../src/shared/assistant';
+import { DEFAULT_CONNECTION } from '../../src/shared/connection';
 
 const FAKE_ASSISTANT = join(__dirname, '..', 'fixtures', 'fake-assistant.mjs');
 
@@ -22,7 +23,13 @@ function start(hostCommand: string[] = [process.execPath, FAKE_ASSISTANT]): { as
   const folder = mkdtempSync(join(tmpdir(), 'insanity-loom-'));
   const events: AssistantEvent[] = [];
   const assistant = new Assistant(
-    { kind: 'local', workingFolder: folder, hostCommand },
+    {
+      ...DEFAULT_CONNECTION,
+      place: 'local',
+      workingFolder: folder,
+      hostProgram: hostCommand[0] ?? '',
+      hostArguments: hostCommand.slice(1),
+    },
     new Journal(folder),
     folder,
     (event) => events.push(event),
@@ -78,6 +85,21 @@ describe('the assistant connection', () => {
     expect(events).toContainEqual({ type: 'authorText', text: 'An earlier question' });
     expect(replyText(events)).toBe('An earlier answer');
     expect(events.at(-1)).toEqual({ type: 'replayFinished' });
+  });
+
+  it('tests settings without connecting', async () => {
+    const { assistant, events } = start();
+    const folder = mkdtempSync(join(tmpdir(), 'insanity-loom-'));
+    const answer = await assistant.test({
+      ...DEFAULT_CONNECTION,
+      place: 'local',
+      workingFolder: folder,
+      hostProgram: process.execPath,
+      hostArguments: [FAKE_ASSISTANT],
+    });
+    rmSync(folder, { recursive: true, force: true });
+    expect(answer).toBe('Fake Assistant answered on this computer.');
+    expect(events).toEqual([]);
   });
 
   it('lists earlier conversations', async () => {

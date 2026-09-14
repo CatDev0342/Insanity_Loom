@@ -7,6 +7,7 @@ export const PAGE_COMMANDS = [
   'assistant.newConversation',
   'assistant.resumeConversation',
   'assistant.stop',
+  'assistant.connectionSettings',
 ] as const;
 
 export type PageCommandId = (typeof PAGE_COMMANDS)[number];

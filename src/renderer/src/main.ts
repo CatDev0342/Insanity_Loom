@@ -20,8 +20,11 @@ const loom = new Loom(
     statusText: required<HTMLElement>('#status-text'),
     reconnect: required<HTMLButtonElement>('#reconnect'),
     resumeDialog: required<HTMLDialogElement>('#resume-dialog'),
+    connectionDialog: required<HTMLDialogElement>('#connection-dialog'),
+    connectionSettings: required<HTMLButtonElement>('#connection-settings'),
   },
   bridge.assistant,
+  bridge.connection,
   bridge.journal,
 );
 

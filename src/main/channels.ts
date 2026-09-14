@@ -1,14 +1,30 @@
-// The layer underneath's answers to the page's assistant and journal requests. Everything arriving from the page is
-// checked here before it is used: the page is never trusted to send only what it should.
+// The layer underneath's answers to the page's assistant, connection and journal requests. Everything arriving from
+// the page is checked here before it is used: the page is never trusted to send only what it should.
 
-import { BrowserWindow, ipcMain } from 'electron';
-import { ASSISTANT_CHANNELS, JOURNAL_CHANNELS, MAXIMUM_SECTION_LENGTH, type AssistantEvent } from '../shared/assistant';
-import type { Assistant } from './assistant';
+import { BrowserWindow, ipcMain, shell } from 'electron';
+import { execFile } from 'node:child_process';
+import { join } from 'node:path';
+import {
+  ASSISTANT_CHANNELS,
+  CONNECTION_CHANNELS,
+  JOURNAL_CHANNELS,
+  MAXIMUM_SECTION_LENGTH,
+  type AssistantEvent,
+  type ConnectionPanelState,
+} from '../shared/assistant';
+import { DEFAULT_CONNECTION, type ConnectionSettings } from '../shared/connection';
+import { Assistant, HOST_LOG_FILE_NAME } from './assistant';
 import type { Journal } from './journal';
+import { loadSettings, readConnection, saveSettings, settingsWith } from './settings';
 
 // Identifiers the page passes back (conversation ids, permission request and choice ids) are short; anything longer
-// is not one of them.
+// is not one of them. The same bound serves for a Docker program's path.
 const MAXIMUM_IDENTIFIER_LENGTH = 512;
+
+// How long Docker may take to list its running containers, in milliseconds, before Insanity_Loom stops waiting.
+const CONTAINER_LIST_TIME_LIMIT_MS = 15_000;
+
+const PANEL = 'the Connection Settings panel';
 
 function text(value: unknown, what: string, longest: number): string {
   if (typeof value !== 'string' || value.length > longest) throw new Error(`Insanity_Loom received an invalid ${what}.`);
@@ -26,13 +42,59 @@ export function sendToPages(event: AssistantEvent): void {
   for (const window of BrowserWindow.getAllWindows()) window.webContents.send(ASSISTANT_CHANNELS.event, event);
 }
 
-export function answerAssistantRequests(assistant: Assistant): void {
-  ipcMain.handle(ASSISTANT_CHANNELS.connect, () => assistant.connect());
+function listContainers(dockerProgram: string): Promise<readonly string[]> {
+  return new Promise((resolve, reject) => {
+    execFile(
+      dockerProgram,
+      ['ps', '--format', '{{.Names}}'],
+      { timeout: CONTAINER_LIST_TIME_LIMIT_MS, windowsHide: true },
+      (problem, stdout, stderr) => {
+        if (problem !== null) {
+          const detail = stderr.trim() !== '' ? stderr.trim() : problem.message;
+          reject(new Error(`Docker could not list its running containers: ${detail}`));
+          return;
+        }
+        resolve(stdout.split(/\r?\n/).map((name) => name.trim()).filter((name) => name !== ''));
+      },
+    );
+  });
+}
+
+/**
+ * Starts the assistant and journal services and answers the page's requests for them. The connection settings may
+ * not exist yet (a new copy of Insanity_Loom) or may not be readable; either way the page can still open the panel,
+ * see why, and save settings that work.
+ */
+export function startServices(dataFolder: string, logsFolder: string, journal: Journal): Assistant {
+  let saved = false;
+  let problem = '';
+  let connection: ConnectionSettings = DEFAULT_CONNECTION;
+  try {
+    const settings = loadSettings(dataFolder);
+    if (settings !== undefined) {
+      saved = true;
+      connection = settings.connection;
+    }
+  } catch (cause) {
+    problem = cause instanceof Error ? cause.message : String(cause);
+  }
+
+  const assistant = new Assistant(connection, journal, logsFolder, sendToPages);
+
+  ipcMain.handle(ASSISTANT_CHANNELS.connect, async () => {
+    if (!saved) {
+      sendToPages({
+        type: 'status',
+        state: 'failed',
+        detail: problem !== '' ? problem : 'Insanity_Loom does not know where the assistant runs yet. Open Assistant ▸ Connection Settings.',
+      });
+      return;
+    }
+    await assistant.connect();
+  });
   ipcMain.handle(ASSISTANT_CHANNELS.list, () => assistant.listConversations());
   ipcMain.handle(ASSISTANT_CHANNELS.start, () => assistant.startConversation());
-  ipcMain.handle(ASSISTANT_CHANNELS.resume, (_event, id: unknown) =>
-    assistant.resumeConversation(identifier(id, 'conversation id')),
-  );
+  ipcMain.handle(ASSISTANT_CHANNELS.resume, (_event, id: unknown) => assistant.resumeConversation(identifier(id, 'conversation id')));
   ipcMain.handle(ASSISTANT_CHANNELS.send, (_event, section: unknown) =>
     assistant.send(text(section, 'section of writing', MAXIMUM_SECTION_LENGTH)),
   );
@@ -43,25 +105,27 @@ export function answerAssistantRequests(assistant: Assistant): void {
       choiceId === null ? null : identifier(choiceId, 'permission choice'),
     ),
   );
-}
 
-export function answerJournalRequests(journal: Journal): void {
-  ipcMain.handle(JOURNAL_CHANNELS.loadDraft, () => journal.loadDraft());
-  ipcMain.handle(JOURNAL_CHANNELS.saveDraft, (_event, draft: unknown) =>
-    journal.saveDraft(text(draft, 'draft', MAXIMUM_SECTION_LENGTH)),
+  ipcMain.handle(CONNECTION_CHANNELS.load, (): ConnectionPanelState => ({ settings: connection, saved, problem }));
+  ipcMain.handle(CONNECTION_CHANNELS.save, (_event, candidate: unknown) => {
+    const checked = readConnection(candidate, PANEL);
+    saveSettings(dataFolder, settingsWith(checked));
+    connection = checked;
+    saved = true;
+    problem = '';
+    assistant.useSettings(checked);
+  });
+  ipcMain.handle(CONNECTION_CHANNELS.test, (_event, candidate: unknown) => assistant.test(readConnection(candidate, PANEL)));
+  ipcMain.handle(CONNECTION_CHANNELS.containers, (_event, dockerProgram: unknown) =>
+    listContainers(identifier(dockerProgram, 'Docker program')),
   );
-}
+  ipcMain.handle(CONNECTION_CHANNELS.openLog, async () => {
+    const failure = await shell.openPath(join(logsFolder, HOST_LOG_FILE_NAME));
+    if (failure !== '') throw new Error(`The log could not be opened: ${failure}`);
+  });
 
-/**
- * When the settings cannot be read there is no assistant to connect to: every request says why, and Reconnect
- * shows the settings problem in the status bar, so the author can fix the file and try again after a restart.
- */
-export function refuseAssistantRequests(problem: Error): void {
-  const refuse = (): never => {
-    throw problem;
-  };
-  ipcMain.handle(ASSISTANT_CHANNELS.connect, () => sendToPages({ type: 'status', state: 'failed', detail: problem.message }));
-  for (const channel of [ASSISTANT_CHANNELS.list, ASSISTANT_CHANNELS.start, ASSISTANT_CHANNELS.resume, ASSISTANT_CHANNELS.send, ASSISTANT_CHANNELS.stop, ASSISTANT_CHANNELS.answer]) {
-    ipcMain.handle(channel, refuse);
-  }
+  ipcMain.handle(JOURNAL_CHANNELS.loadDraft, () => journal.loadDraft());
+  ipcMain.handle(JOURNAL_CHANNELS.saveDraft, (_event, draft: unknown) => journal.saveDraft(text(draft, 'draft', MAXIMUM_SECTION_LENGTH)));
+
+  return assistant;
 }

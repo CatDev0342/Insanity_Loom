@@ -12,20 +12,18 @@ import { createWriteStream, type WriteStream } from 'node:fs';
 import { join } from 'node:path';
 import { Readable, Writable } from 'node:stream';
 import type { AssistantEvent, ConnectionState, ConversationSummary } from '../shared/assistant';
+import { describePlace, hostCommand, type ConnectionSettings } from '../shared/connection';
 import type { Journal } from './journal';
-import type { AssistantSettings } from './settings';
-
-// How long the host may take to answer the first handshake, in milliseconds. Starting a container's host and the
-// assistant behind it can take a while on a cold machine; a host that has not answered by then is not coming.
-const HANDSHAKE_TIME_LIMIT_MS = 90_000;
 
 // The most past conversations listed at once, and the most pages of them asked for to reach it.
 const MOST_CONVERSATIONS_LISTED = 50;
 const MOST_LIST_PAGES = 10;
 
 // The host's own error output is kept in Data/Logs; the last lines of it are also shown when the host stops.
-const HOST_LOG_FILE_NAME = 'assistant-host.log';
+export const HOST_LOG_FILE_NAME = 'assistant-host.log';
 const REMEMBERED_ERROR_LINES = 20;
+
+const MILLISECONDS_PER_SECOND = 1000;
 
 // The name Insanity_Loom gives itself to the assistant.
 const CLIENT_INFO = { name: 'insanity-loom', title: 'Insanity_Loom', version: '0.0.1' } as const;
@@ -37,48 +35,120 @@ interface PendingPermission {
   readonly answer: (choiceId: string | null) => void;
 }
 
-/** Where the assistant runs, as the end of a sentence ("Connected to Claude Agent …"). */
-function describePlace(settings: AssistantSettings): string {
-  return settings.kind === 'docker' ? `in the Docker container "${settings.container}"` : 'on this computer';
-}
-
-function commandLine(settings: AssistantSettings): { program: string; args: string[]; cwd: string | undefined } {
-  const [program, ...rest] = settings.hostCommand;
-  if (program === undefined) throw new Error('The assistant host command is empty.');
-  if (settings.kind === 'docker') {
-    // -i keeps the host's input open: the protocol travels on it.
-    return { program: 'docker', args: ['exec', '-i', '-w', settings.workingFolder, settings.container, program, ...rest], cwd: undefined };
-  }
-  return { program, args: rest, cwd: settings.workingFolder };
-}
-
-function explainStartFailure(settings: AssistantSettings, cause: Error & { code?: string }): string {
+function explainStartFailure(settings: ConnectionSettings, cause: Error & { code?: string }): string {
   if (cause.code === 'ENOENT') {
-    return settings.kind === 'docker'
-      ? 'Insanity_Loom could not run Docker. Is Docker Desktop installed, running, and on the PATH?'
-      : `Insanity_Loom could not find the assistant host program "${settings.hostCommand[0] ?? ''}".`;
+    return settings.place === 'docker'
+      ? `Insanity_Loom could not run Docker ("${settings.dockerProgram}"). Is Docker Desktop installed and running, and is the Docker program named correctly in Connection Settings?`
+      : `Insanity_Loom could not find the assistant host program "${settings.hostProgram}".`;
   }
   return `The assistant host could not be started: ${cause.message}`;
 }
 
+/** A started host, shaken hands with. */
+interface OpenHost {
+  readonly host: ChildProcess;
+  readonly connection: acp.ClientSideConnection;
+  readonly agentTitle: string;
+  /** Rejects, with the reason in words, when the host stops or fails; it never resolves. */
+  readonly lost: Promise<never>;
+}
+
+function stopHost(host: ChildProcess): Promise<void> {
+  if (host.exitCode !== null || host.signalCode !== null) return Promise.resolve();
+  const stopped = new Promise<void>((resolve) => host.once('exit', () => resolve()));
+  // Closing the host's input is what tells it to finish; the kill makes sure.
+  host.stdin?.end();
+  host.kill();
+  return stopped;
+}
+
+/**
+ * Starts the host the settings describe and shakes hands with it. Its error output goes to `log`, and the last lines
+ * of it are kept in `recentErrors` to explain a failure. Throws, in words for the author, when it cannot connect.
+ */
+async function openHost(
+  settings: ConnectionSettings,
+  client: () => acp.Client,
+  log: WriteStream,
+  recentErrors: string[],
+): Promise<OpenHost> {
+  const command = hostCommand(settings);
+  const host = spawn(command.program, [...command.args], { cwd: command.cwd, stdio: ['pipe', 'pipe', 'pipe'], windowsHide: true });
+
+  host.stderr.setEncoding('utf8');
+  host.stderr.on('data', (chunk: string) => {
+    log.write(chunk);
+    for (const line of chunk.split('\n')) {
+      if (line.trim() === '') continue;
+      recentErrors.push(line.trim());
+      if (recentErrors.length > REMEMBERED_ERROR_LINES) recentErrors.shift();
+    }
+  });
+
+  const lost = new Promise<never>((_resolve, reject) => {
+    host.once('error', (cause) => reject(new Error(explainStartFailure(settings, cause))));
+    host.once('exit', (code) => {
+      const last = recentErrors.at(-1);
+      reject(new Error(`The assistant host stopped (exit code ${code ?? 'none'}).${last === undefined ? '' : `\n${last}`}`));
+    });
+  });
+  // Whoever holds the connection handles a loss; this only keeps a loss nobody is watching yet from going unhandled.
+  lost.catch(() => undefined);
+
+  const connection = new acp.ClientSideConnection(
+    client,
+    acp.ndJsonStream(Writable.toWeb(host.stdin) as WritableStream<Uint8Array>, Readable.toWeb(host.stdout) as ReadableStream<Uint8Array>),
+  );
+
+  let timer: NodeJS.Timeout | undefined;
+  const tooSlow = new Promise<never>((_resolve, reject) => {
+    timer = setTimeout(
+      () => reject(new Error(`The assistant ${describePlace(settings)} did not answer within ${settings.handshakeSeconds} seconds.`)),
+      settings.handshakeSeconds * MILLISECONDS_PER_SECOND,
+    );
+  });
+  try {
+    const greeting = await Promise.race([
+      connection.initialize({
+        protocolVersion: acp.PROTOCOL_VERSION,
+        clientInfo: CLIENT_INFO,
+        clientCapabilities: { fs: { readTextFile: false, writeTextFile: false }, terminal: false },
+      }),
+      lost,
+      tooSlow,
+    ]);
+    return { host, connection, lost, agentTitle: greeting.agentInfo?.title ?? greeting.agentInfo?.name ?? 'the assistant' };
+  } catch (cause) {
+    await stopHost(host);
+    throw cause;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 export class Assistant {
-  private host: ChildProcess | undefined;
-  private connection: acp.ClientSideConnection | undefined;
+  private settings: ConnectionSettings;
+  private open: OpenHost | undefined;
   private conversationId: string | undefined;
   private replaying = false;
-  private agentTitle = 'the assistant';
   private readonly pending = new Map<string, PendingPermission>();
   private nextRequestNumber = 1;
   private readonly recentErrors: string[] = [];
   private readonly log: WriteStream;
 
   constructor(
-    private readonly settings: AssistantSettings,
+    settings: ConnectionSettings,
     private readonly journal: Journal,
     logsFolder: string,
     private readonly emit: Emit,
   ) {
+    this.settings = settings;
     this.log = createWriteStream(join(logsFolder, HOST_LOG_FILE_NAME), { flags: 'a' });
+  }
+
+  /** Uses new settings from the next connection on. */
+  useSettings(settings: ConnectionSettings): void {
+    this.settings = settings;
   }
 
   private status(state: ConnectionState, detail: string): void {
@@ -88,75 +158,42 @@ export class Assistant {
   /** Starts the host, shakes hands, and resumes the last conversation (or begins one). */
   async connect(): Promise<void> {
     await this.disconnect();
-    const place = describePlace(this.settings);
+    const settings = this.settings;
+    const place = describePlace(settings);
     this.status('connecting', `Connecting to the assistant ${place}…`);
-
-    const { program, args, cwd } = commandLine(this.settings);
-    const host = spawn(program, args, { cwd, stdio: ['pipe', 'pipe', 'pipe'], windowsHide: true });
-    this.host = host;
     this.recentErrors.length = 0;
 
-    host.stderr.setEncoding('utf8');
-    host.stderr.on('data', (chunk: string) => {
-      this.log.write(chunk);
-      for (const line of chunk.split('\n')) {
-        if (line.trim() === '') continue;
-        this.recentErrors.push(line.trim());
-        if (this.recentErrors.length > REMEMBERED_ERROR_LINES) this.recentErrors.shift();
-      }
-    });
-
-    // The host may fail to start, or stop at any time; either ends the connection.
-    const lost = new Promise<never>((_resolve, reject) => {
-      host.once('error', (cause) => reject(new Error(explainStartFailure(this.settings, cause))));
-      host.once('exit', (code) => {
-        const last = this.recentErrors.at(-1);
-        reject(new Error(`The assistant host stopped (exit code ${code ?? 'none'}).${last === undefined ? '' : `\n${last}`}`));
-      });
-    });
-    lost.catch((cause: unknown) => {
-      if (this.host !== host) return;
+    let opened: OpenHost;
+    try {
+      opened = await openHost(settings, () => this.client(), this.log, this.recentErrors);
+    } catch (cause) {
+      this.status('failed', cause instanceof Error ? cause.message : String(cause));
+      return;
+    }
+    this.open = opened;
+    opened.lost.catch((cause: unknown) => {
+      if (this.open !== opened) return;
       this.dropConnection();
       this.status('failed', cause instanceof Error ? cause.message : String(cause));
     });
 
-    const stream = acp.ndJsonStream(
-      Writable.toWeb(host.stdin) as WritableStream<Uint8Array>,
-      Readable.toWeb(host.stdout) as ReadableStream<Uint8Array>,
-    );
-    const connection = new acp.ClientSideConnection(() => this.client(), stream);
-    this.connection = connection;
-
-    let timer: NodeJS.Timeout | undefined;
-    const tooSlow = new Promise<never>((_resolve, reject) => {
-      timer = setTimeout(
-        () => reject(new Error(`The assistant ${place} did not answer within ${HANDSHAKE_TIME_LIMIT_MS / 1000} seconds.`)),
-        HANDSHAKE_TIME_LIMIT_MS,
-      );
-    });
-    try {
-      const greeting = await Promise.race([
-        connection.initialize({
-          protocolVersion: acp.PROTOCOL_VERSION,
-          clientInfo: CLIENT_INFO,
-          clientCapabilities: { fs: { readTextFile: false, writeTextFile: false }, terminal: false },
-        }),
-        lost,
-        tooSlow,
-      ]);
-      this.agentTitle = greeting.agentInfo?.title ?? greeting.agentInfo?.name ?? 'the assistant';
-    } catch (cause) {
-      await this.disconnect();
-      this.status('failed', cause instanceof Error ? cause.message : String(cause));
-      return;
-    } finally {
-      clearTimeout(timer);
-    }
-
-    this.status('connected', `Connected to ${this.agentTitle} ${place}.`);
+    this.status('connected', `Connected to ${opened.agentTitle} ${place}.`);
     const last = this.journal.loadConversationId();
     if (last === undefined) await this.startConversation();
     else await this.resumeConversation(last);
+  }
+
+  /**
+   * Tries settings without changing anything: starts that host, shakes hands, and stops it again. Resolves with a
+   * sentence saying what answered; throws, in words for the author, when nothing did.
+   */
+  async test(settings: ConnectionSettings): Promise<string> {
+    const refuse = (): never => {
+      throw new Error('Insanity_Loom is only testing the connection.');
+    };
+    const opened = await openHost(settings, () => ({ requestPermission: refuse, sessionUpdate: async () => undefined }), this.log, []);
+    await stopHost(opened.host);
+    return `${opened.agentTitle} answered ${describePlace(settings)}.`;
   }
 
   private client(): acp.Client {
@@ -213,30 +250,33 @@ export class Assistant {
     }
   }
 
-  private requireConnection(): { connection: acp.ClientSideConnection; conversationId: string } {
-    if (this.connection === undefined || this.conversationId === undefined) {
-      throw new Error('Insanity_Loom is not connected to the assistant. Use Assistant ▸ Reconnect.');
-    }
-    return { connection: this.connection, conversationId: this.conversationId };
+  private requireConnection(): acp.ClientSideConnection {
+    if (this.open === undefined) throw new Error('Insanity_Loom is not connected to the assistant. Use Assistant ▸ Reconnect.');
+    return this.open.connection;
+  }
+
+  private requireConversation(): { connection: acp.ClientSideConnection; conversationId: string } {
+    const connection = this.requireConnection();
+    if (this.conversationId === undefined) throw new Error('There is no conversation in progress.');
+    return { connection, conversationId: this.conversationId };
   }
 
   async startConversation(): Promise<void> {
-    if (this.connection === undefined) throw new Error('Insanity_Loom is not connected to the assistant.');
-    const created = await this.connection.newSession({ cwd: this.settings.workingFolder, mcpServers: [] });
+    const created = await this.requireConnection().newSession({ cwd: this.settings.workingFolder, mcpServers: [] });
     this.conversationId = created.sessionId;
     this.journal.saveConversationId(created.sessionId);
     this.emit({ type: 'conversation', id: created.sessionId, title: 'New conversation', replaying: false });
   }
 
   async resumeConversation(id: string): Promise<void> {
-    if (this.connection === undefined) throw new Error('Insanity_Loom is not connected to the assistant.');
+    const connection = this.requireConnection();
     this.cancelPendingPermissions();
     // The conversation's history arrives as updates while the resume is in progress; it is shown as it comes.
     this.conversationId = id;
     this.replaying = true;
     this.emit({ type: 'conversation', id, title: 'Resumed conversation', replaying: true });
     try {
-      await this.connection.loadSession({ sessionId: id, cwd: this.settings.workingFolder, mcpServers: [] });
+      await connection.loadSession({ sessionId: id, cwd: this.settings.workingFolder, mcpServers: [] });
     } catch (cause) {
       this.replaying = false;
       this.emit({
@@ -252,11 +292,11 @@ export class Assistant {
   }
 
   async listConversations(): Promise<readonly ConversationSummary[]> {
-    if (this.connection === undefined) throw new Error('Insanity_Loom is not connected to the assistant.');
+    const connection = this.requireConnection();
     const found: ConversationSummary[] = [];
     let cursor: string | null | undefined;
     for (let page = 0; page < MOST_LIST_PAGES && found.length < MOST_CONVERSATIONS_LISTED; page++) {
-      const listed = await this.connection.listSessions({ cwd: this.settings.workingFolder, cursor: cursor ?? null });
+      const listed = await connection.listSessions({ cwd: this.settings.workingFolder, cursor: cursor ?? null });
       for (const session of listed.sessions) {
         found.push({ id: session.sessionId, title: session.title ?? 'Untitled conversation', updatedAt: session.updatedAt ?? '' });
       }
@@ -267,7 +307,7 @@ export class Assistant {
   }
 
   async send(text: string): Promise<void> {
-    const { connection, conversationId } = this.requireConnection();
+    const { connection, conversationId } = this.requireConversation();
     try {
       const result = await connection.prompt({ sessionId: conversationId, prompt: [{ type: 'text', text }] });
       this.emit({ type: 'replyFinished', reason: result.stopReason });
@@ -278,7 +318,7 @@ export class Assistant {
   }
 
   async stop(): Promise<void> {
-    const { connection, conversationId } = this.requireConnection();
+    const { connection, conversationId } = this.requireConversation();
     // The protocol asks a client that cancels to answer any permission request still open as cancelled.
     this.cancelPendingPermissions();
     await connection.cancel({ sessionId: conversationId });
@@ -301,25 +341,19 @@ export class Assistant {
 
   private dropConnection(): void {
     this.cancelPendingPermissions();
-    this.connection = undefined;
+    this.open = undefined;
     this.conversationId = undefined;
     this.replaying = false;
-    this.host = undefined;
   }
 
   /**
    * Ends the connection and stops the host, resolving once it has actually stopped: until then it still holds its
-   * working folder, and on Windows a folder in use cannot be moved or deleted. Closing the host's input is what tells
-   * it to finish.
+   * working folder, and on Windows a folder in use cannot be moved or deleted.
    */
   disconnect(): Promise<void> {
-    const host = this.host;
+    const opened = this.open;
     this.dropConnection();
-    if (host === undefined || host.exitCode !== null || host.signalCode !== null) return Promise.resolve();
-    const stopped = new Promise<void>((resolve) => host.once('exit', () => resolve()));
-    host.stdin?.end();
-    host.kill();
-    return stopped;
+    return opened === undefined ? Promise.resolve() : stopHost(opened.host);
   }
 
   /** Disconnects and closes the host's log file. The Assistant is not used again after this. */

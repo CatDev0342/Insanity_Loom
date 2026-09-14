@@ -1,6 +1,6 @@
 // What the bridge (src/preload/index.ts) offers the page, declared once so both sides agree on it.
 
-import type { AssistantBridge, JournalBridge } from './assistant';
+import type { AssistantBridge, ConnectionBridge, JournalBridge } from './assistant';
 import type { CommandId } from './commands';
 
 export interface InsanityLoomBridge {
@@ -16,6 +16,9 @@ export interface InsanityLoomBridge {
 
   /** The assistant: connecting, conversations, sending, permission answers, and everything it says. */
   readonly assistant: AssistantBridge;
+
+  /** The connection settings: reading, saving, testing, and the help the Connection Settings panel needs. */
+  readonly connection: ConnectionBridge;
 
   /** Where the author's unsent writing is kept safe. */
   readonly journal: JournalBridge;

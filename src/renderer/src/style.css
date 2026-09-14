@@ -269,3 +269,183 @@ button:focus-visible,
 .menubar.shows-access-keys .access-key {
   text-decoration: underline;
 }
+
+/* Panels: classic desktop dialogs — square, grouped, labels to the left of their fields, buttons along the bottom. */
+.panel-dialog {
+  width: min(44rem, 94vw);
+  max-height: 92vh;
+  color: var(--ink);
+  background: var(--menu);
+  border: 1px solid var(--menu-edge);
+  border-radius: 0;
+  padding: 0;
+  font-size: 0.875rem;
+}
+
+.panel-dialog::backdrop {
+  background: rgb(0 0 0 / 45%);
+}
+
+.panel {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  padding: 1rem 1.1rem;
+}
+
+.panel h2 {
+  margin: 0;
+  font-size: 1rem;
+}
+
+.panel-intro,
+.panel-problem,
+.panel-result {
+  margin: 0;
+}
+
+.panel-problem,
+.panel-problems,
+.panel-result.is-failure {
+  color: var(--problem);
+  white-space: pre-wrap;
+}
+
+.panel-problems {
+  margin: 0;
+  padding-left: 1.2rem;
+}
+
+.panel-problems:empty {
+  display: none;
+}
+
+.panel-group {
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+  margin: 0;
+  padding: 0.5rem 0.75rem 0.65rem;
+  border: 1px solid var(--menu-edge);
+  border-radius: 0;
+}
+
+.panel-group:disabled {
+  color: var(--ink-quiet);
+}
+
+.panel-group legend {
+  padding-inline: 0.3rem;
+  color: var(--ink-quiet);
+}
+
+.panel-row {
+  display: grid;
+  grid-template-columns: 11rem 1fr;
+  align-items: start;
+  gap: 0.75rem;
+}
+
+.panel-row label {
+  padding-top: 0.3rem;
+}
+
+.panel-control,
+.panel-inline {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+  min-width: 0;
+}
+
+.panel-control input,
+.panel-control textarea {
+  flex: 1;
+  min-width: 0;
+  font: inherit;
+  color: var(--ink);
+  background: var(--ground);
+  border: 1px solid var(--menu-edge);
+  border-radius: 0;
+  padding: 0.3rem 0.45rem;
+}
+
+.panel-control input[type='number'] {
+  flex: 0 0 6rem;
+}
+
+.panel-control textarea {
+  resize: vertical;
+  font-family: ui-monospace, 'Cascadia Mono', Consolas, 'DejaVu Sans Mono', monospace;
+}
+
+.panel-control input:disabled {
+  color: var(--ink-quiet);
+}
+
+.panel-unit {
+  color: var(--ink-quiet);
+}
+
+.panel-choice {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+}
+
+.panel-choice input {
+  margin: 0;
+  accent-color: var(--focus);
+}
+
+.panel-preview-label {
+  color: var(--ink-quiet);
+}
+
+.panel-preview {
+  display: block;
+  padding: 0.4rem 0.55rem;
+  background: var(--ground);
+  border: 1px solid var(--menu-edge);
+  font-family: ui-monospace, 'Cascadia Mono', Consolas, 'DejaVu Sans Mono', monospace;
+  font-size: 0.8rem;
+  overflow-wrap: anywhere;
+}
+
+.panel-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 0.5rem;
+  margin-top: 0.25rem;
+}
+
+.panel-buttons-left,
+.panel-buttons-right {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.panel-buttons-right button {
+  min-width: 5.5rem;
+}
+
+.panel-default {
+  border-color: var(--focus);
+}
+
+button:disabled {
+  color: var(--ink-quiet);
+  background: var(--menu);
+}
+
+.panel.shows-access-keys .access-key {
+  text-decoration: underline;
+}
+
+.panel-control input:focus-visible,
+.panel-control textarea:focus-visible,
+.panel-choice input:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 0;
+}

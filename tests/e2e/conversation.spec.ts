@@ -1,41 +1,26 @@
 // The conversation, end to end: the author writes, finishes a section with "---", and the assistant's reply is
 // woven into the document. A stand-in assistant (tests/fixtures/fake-assistant.mjs) answers, so nothing depends on
 // a real one being reachable.
-import { _electron as electron, expect, test, type ElectronApplication, type Page } from '@playwright/test';
-import { mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { expect, test, type ElectronApplication, type Page } from '@playwright/test';
+import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
-
-const REPOSITORY = join(__dirname, '..', '..');
-const DATA = join(REPOSITORY, 'Data');
-const FAKE_ASSISTANT = join(REPOSITORY, 'tests', 'fixtures', 'fake-assistant.mjs');
+import { DATA, launch, prepareData } from './helpers';
 
 let application: ElectronApplication;
 let page: Page;
 
-function useFakeAssistant(): void {
-  rmSync(join(DATA, 'Journal'), { recursive: true, force: true });
-  mkdirSync(DATA, { recursive: true });
-  writeFileSync(
-    join(DATA, 'settings.json'),
-    JSON.stringify({ assistant: { kind: 'local', workingFolder: REPOSITORY, hostCommand: [process.execPath, FAKE_ASSISTANT] } }),
-  );
-}
-
-async function launch(): Promise<void> {
-  application = await electron.launch({ args: [REPOSITORY] });
-  page = await application.firstWindow();
+async function start(): Promise<void> {
+  ({ application, page } = await launch());
   await expect(page.locator('#status-text')).toHaveText(/Connected to Fake Assistant/);
 }
 
 test.beforeEach(async () => {
-  useFakeAssistant();
-  await launch();
+  prepareData('fake assistant');
+  await start();
 });
 
 test.afterEach(async () => {
   await application.close();
-  rmSync(join(DATA, 'settings.json'), { force: true });
-  rmSync(join(DATA, 'Journal'), { recursive: true, force: true });
 });
 
 test('a line of --- sends the section above it, and the reply is woven in below', async () => {
@@ -97,7 +82,7 @@ test('unsent writing survives closing the window, and the conversation is resume
     .toBe('not sent yet');
 
   await application.close();
-  await launch();
+  await start();
   await expect(page.locator('#compose')).toHaveValue('not sent yet');
   // The last conversation is resumed: its history is replayed into the document.
   await expect(page.locator('.by-author')).toHaveText('An earlier question');

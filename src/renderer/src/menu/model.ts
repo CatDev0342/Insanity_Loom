@@ -77,6 +77,7 @@ export const MENUS: readonly TopMenu[] = [
       command('&Stop Reply', 'assistant.stop', ['Esc'], true),
       SEPARATOR,
       command('&Reconnect', 'assistant.reconnect'),
+      command('C&onnection Settings…', 'assistant.connectionSettings'),
     ],
   },
   {

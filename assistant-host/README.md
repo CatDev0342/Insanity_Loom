@@ -20,32 +20,23 @@ cd /path/to/Insanity_Loom/assistant-host
 npm ci
 ```
 
-Then point Insanity_Loom at it in `Data/settings.json`, beside the Insanity_Loom program:
+Then tell Insanity_Loom where it is, in **Assistant ▸ Connection Settings** (the panel opens by itself the first
+time). For a host in a container, for example:
 
-```json
-{
-  "assistant": {
-    "kind": "docker",
-    "container": "my-assistant",
-    "workingFolder": "/home/me/project",
-    "hostCommand": [
-      "/usr/local/bin/node",
-      "/home/me/Insanity_Loom/assistant-host/node_modules/@agentclientprotocol/claude-agent-acp/dist/index.js"
-    ]
-  }
-}
-```
+| Option | Example | Means |
+|---|---|---|
+| Where the assistant runs | In a Docker container | |
+| Docker program | `docker` | The Docker program: `docker` to find it on the PATH, or its full path. |
+| Container | `my-assistant` | The running container's name. **Find Running** lists them. |
+| Run as user | *(blank)* | The user inside the container; blank for the container's own default. |
+| Working folder | `/home/me/project` | The folder, inside the container, the assistant works in. Conversations belong to it: Resume Conversation lists those begun there. |
+| Host program | `/usr/local/bin/node` | The program that starts the host, inside the container. Use full paths: `docker exec` does not read the container's shell profile. |
+| Arguments | `/home/me/Insanity_Loom/assistant-host/node_modules/@agentclientprotocol/claude-agent-acp/dist/index.js` | One per line. |
 
-- `container` — the running container's name.
-- `workingFolder` — the folder, inside the container, the assistant works in. Conversations belong to it: Resume
-  Conversation lists those begun in this folder.
-- `hostCommand` — the program that starts the host, inside the container, then its arguments. Full paths: `docker
-  exec` does not read the container's shell profile.
-
-Insanity_Loom runs `docker exec -i -w <workingFolder> <container> <hostCommand…>` itself; Docker Desktop must be
-running and `docker` on the PATH.
+The panel shows the exact command it will run — `docker exec -i -w <working folder> <container> <host program>
+<arguments…>` — and **Test Connection** tries it before anything is saved. Settings are kept only in the `Data` folder
+beside the Insanity_Loom program.
 
 ## Running it on the same computer
 
-Set `"kind": "local"`, drop `container`, and give `hostCommand` as it runs on that computer; `workingFolder` is then a
-folder on that computer.
+Choose **Directly on this computer**; the working folder, host program and arguments are then those of this computer.

@@ -2,12 +2,10 @@
 
 import { app, BrowserWindow, dialog, Menu } from 'electron';
 import { join } from 'node:path';
-import { Assistant } from './assistant';
-import { answerAssistantRequests, answerJournalRequests, refuseAssistantRequests, sendToPages } from './channels';
+import { startServices } from './channels';
 import { listenForCommands } from './commands';
 import { Journal } from './journal';
 import { dataFoldersIn, findProgramFolder, prepareDataFolders, type DataFolders } from './portable';
-import { loadSettings } from './settings';
 import { PAGE_PREFERENCES, restrictEveryPage } from './security';
 
 // The window's opening size, in screen points, and the smallest it may be made. The minimum keeps the page usable,
@@ -43,23 +41,6 @@ function keepEverythingBesideTheProgram(): DataFolders {
   app.setPath('crashDumps', folders.crashReports);
   app.setAppLogsPath(folders.logs);
   return folders;
-}
-
-/** The journal, and the assistant as the settings describe it — or, when they cannot be read, why not. */
-function startServices(folders: DataFolders): void {
-  const journal = new Journal(folders.data);
-  answerJournalRequests(journal);
-
-  let assistant: Assistant;
-  try {
-    const settings = loadSettings(folders.data);
-    assistant = new Assistant(settings.assistant, journal, folders.logs, sendToPages);
-  } catch (problem) {
-    refuseAssistantRequests(problem instanceof Error ? problem : new Error(String(problem)));
-    return;
-  }
-  answerAssistantRequests(assistant);
-  app.on('before-quit', () => void assistant.close());
 }
 
 function openMainWindow(): void {
@@ -118,7 +99,8 @@ function start(): void {
   void app.whenReady().then(() => {
     restrictEveryPage();
     listenForCommands();
-    startServices(folders);
+    const assistant = startServices(folders.data, folders.logs, new Journal(folders.data));
+    app.on('before-quit', () => void assistant.close());
     // No native menu: Insanity_Loom draws its own menu bar in the page (src/renderer/src/menu), so it looks and
     // behaves the same on Windows and Linux, square-cornered, and follows the classic Windows keyboard conventions.
     Menu.setApplicationMenu(null);

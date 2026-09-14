@@ -3,7 +3,7 @@
 // one request at a time — never Node.js itself.
 
 import { contextBridge, ipcRenderer, type IpcRendererEvent } from 'electron';
-import { ASSISTANT_CHANNELS, JOURNAL_CHANNELS, type AssistantEvent } from '../shared/assistant';
+import { ASSISTANT_CHANNELS, CONNECTION_CHANNELS, JOURNAL_CHANNELS, type AssistantEvent } from '../shared/assistant';
 import type { InsanityLoomBridge } from '../shared/bridge';
 import { RUN_COMMAND_CHANNEL } from '../shared/commands';
 
@@ -34,6 +34,14 @@ const bridge: InsanityLoomBridge = {
         ipcRenderer.removeListener(ASSISTANT_CHANNELS.event, relay);
       };
     },
+  },
+
+  connection: {
+    load: () => ipcRenderer.invoke(CONNECTION_CHANNELS.load),
+    save: (settings) => ipcRenderer.invoke(CONNECTION_CHANNELS.save, settings),
+    test: (settings) => ipcRenderer.invoke(CONNECTION_CHANNELS.test, settings),
+    listContainers: (dockerProgram) => ipcRenderer.invoke(CONNECTION_CHANNELS.containers, dockerProgram),
+    openLog: () => ipcRenderer.invoke(CONNECTION_CHANNELS.openLog),
   },
 
   journal: {

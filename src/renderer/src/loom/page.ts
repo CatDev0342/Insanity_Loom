@@ -1,7 +1,8 @@
 // The loom: the author writes, finishes a section, and the assistant's reply is woven into the conversation above.
 // Sections finished while a reply is still being written wait their turn and go in order.
 
-import type { AssistantBridge, AssistantEvent, ConnectionState } from '../../../shared/assistant';
+import type { AssistantBridge, AssistantEvent, ConnectionBridge, ConnectionState } from '../../../shared/assistant';
+import { ConnectionPanel } from '../panels/connection-panel';
 import type { PageCommandId } from '../commands';
 import { Compose } from './compose';
 import { Conversation } from './conversation';
@@ -13,6 +14,8 @@ export interface LoomElements {
   readonly statusText: HTMLElement;
   readonly reconnect: HTMLButtonElement;
   readonly resumeDialog: HTMLDialogElement;
+  readonly connectionDialog: HTMLDialogElement;
+  readonly connectionSettings: HTMLButtonElement;
 }
 
 const PAGE_TITLE = 'Insanity_Loom';
@@ -20,6 +23,7 @@ const PAGE_TITLE = 'Insanity_Loom';
 export class Loom {
   private readonly conversation: Conversation;
   private readonly compose: Compose;
+  private readonly connectionPanel: ConnectionPanel;
   private readonly waiting: string[] = [];
   private replying = false;
   private state: ConnectionState = 'disconnected';
@@ -27,26 +31,43 @@ export class Loom {
   constructor(
     private readonly elements: LoomElements,
     private readonly assistant: AssistantBridge,
+    private readonly connection: ConnectionBridge,
     journal: ConstructorParameters<typeof Compose>[1],
   ) {
     this.conversation = new Conversation(elements.conversation);
+    // Saving new connection settings reconnects with them at once.
+    this.connectionPanel = new ConnectionPanel(elements.connectionDialog, connection, () => void this.run('assistant.reconnect'));
+    elements.connectionSettings.addEventListener('click', () => void this.run('assistant.connectionSettings'));
     this.compose = new Compose(elements.compose, journal, (section) => this.finishSection(section));
     elements.reconnect.addEventListener('click', () => void this.run('assistant.reconnect'));
     assistant.onEvent((event) => this.onEvent(event));
 
     // Esc stops a reply being written, wherever the author is on the page — unless a dialog is open, which Esc closes.
     document.addEventListener('keydown', (event) => {
-      if (event.key === 'Escape' && !event.defaultPrevented && !elements.resumeDialog.open && this.replying) {
+      if (event.key === 'Escape' && !event.defaultPrevented && document.querySelector('dialog[open]') === null && this.replying) {
         event.preventDefault();
         void this.run('assistant.stop');
       }
     });
   }
 
+  /**
+   * Restores the author's unsent writing, then connects. Until connection settings have been saved — a new copy of
+   * Insanity_Loom — the Connection Settings panel opens first, by itself.
+   */
   async start(): Promise<void> {
     await this.compose.restore();
+    const state = await this.connection.load();
+    if (!state.saved || state.problem !== '') {
+      const outcome = await this.connectionPanel.show();
+      this.compose.focus();
+      // Saving in the panel has already reconnected; closing it without saving leaves the status bar saying why not.
+      if (outcome === 'unchanged') await this.assistant.connect();
+      return;
+    }
     this.compose.focus();
-    await this.assistant.connect();
+    if (state.settings.connectOnStart) await this.assistant.connect();
+    else this.onEvent({ type: 'status', state: 'disconnected', detail: 'Not connected. Assistant ▸ Reconnect connects.' });
   }
 
   async run(command: PageCommandId): Promise<void> {
@@ -69,6 +90,10 @@ export class Loom {
         }
         case 'assistant.stop':
           if (this.replying) await this.assistant.stop();
+          return;
+        case 'assistant.connectionSettings':
+          await this.connectionPanel.show();
+          this.compose.focus();
           return;
       }
     } catch (problem) {

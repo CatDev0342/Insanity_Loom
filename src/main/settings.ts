@@ -1,96 +1,117 @@
-// Insanity_Loom's settings, kept in Data/settings.json. Created with defaults the first time; after that the file is
-// the author's, and a file that cannot be read is reported by name, never silently replaced.
+// Insanity_Loom's settings, kept in Data/settings.json and changed in the application's own panels (Assistant ▸
+// Connection Settings). Every option is written out in the file, so it can also be read in any text editor. There is
+// no file until the author first saves the panel; a file that cannot be read is reported by name, never silently
+// replaced.
 
 import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { connectionProblems, DEFAULT_CONNECTION, type AssistantPlace, type ConnectionSettings } from '../shared/connection';
 import { writeFileSafely } from './files';
 
 export const SETTINGS_FILE_NAME = 'settings.json';
 
-/**
- * Where the assistant runs, and how Insanity_Loom reaches it.
- * - docker: in a Docker container on this computer; Insanity_Loom runs the host inside it with `docker exec`.
- * - local: on this computer directly; Insanity_Loom runs the host itself.
- * Either way the host speaks the Agent Client Protocol over its standard input and output.
- */
-export type AssistantSettings =
-  | {
-      readonly kind: 'docker';
-      readonly container: string;
-      /** The folder, inside the container, the assistant works in. */
-      readonly workingFolder: string;
-      /** The command, inside the container, that starts the host: program first, then its arguments. */
-      readonly hostCommand: readonly string[];
-    }
-  | {
-      readonly kind: 'local';
-      readonly workingFolder: string;
-      readonly hostCommand: readonly string[];
-    };
+// The settings file's layout. Version 1 (Milestone 1's first cut) held the assistant as one command list; version 2
+// names every connection option separately. A version 1 file is upgraded, and written back complete, when read.
+const SETTINGS_VERSION = 2;
+const FIRST_VERSION = 1;
 
 export interface Settings {
-  readonly assistant: AssistantSettings;
+  readonly version: typeof SETTINGS_VERSION;
+  readonly connection: ConnectionSettings;
 }
-
-// The first-run defaults describe the setup Insanity_Loom was first built against: Claude Code in a Docker container
-// named my-assistant, with Node.js and the assistant host kept in the container's ~/work folder (see
-// assistant-host/README.md). Anyone else changes them in Data/settings.json.
-const DEFAULT_SETTINGS: Settings = {
-  assistant: {
-    kind: 'docker',
-    container: 'my-assistant',
-    workingFolder: '/home/me/project',
-    hostCommand: [
-      '/usr/local/bin/node',
-      '/home/me/Insanity_Loom/assistant-host/node_modules/@agentclientprotocol/claude-agent-acp/dist/index.js',
-    ],
-  },
-};
 
 // Settings files are written indented, so the author can read and change them in any text editor.
 const JSON_INDENT = 2;
 
-function problem(file: string, what: string): Error {
-  return new Error(`Insanity_Loom's settings file cannot be used:\n\n${file}\n\n${what}`);
+function problem(where: string, what: string): Error {
+  return new Error(`The settings in ${where} cannot be used:\n\n${what}`);
 }
 
-function nonEmptyString(value: unknown): value is string {
-  return typeof value === 'string' && value.trim() !== '';
+function isObject(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
-/** Checks settings read from disk, naming the first thing wrong. */
-export function validateSettings(value: unknown, file: string): Settings {
-  if (typeof value !== 'object' || value === null) throw problem(file, 'It does not hold a settings object.');
-  const assistant = (value as { assistant?: unknown }).assistant;
-  if (typeof assistant !== 'object' || assistant === null) throw problem(file, 'It has no "assistant" section.');
-  const { kind, container, workingFolder, hostCommand } = assistant as Record<string, unknown>;
+/** Reads connection settings from an untrusted object — the file, or the panel — naming everything wrong. */
+export function readConnection(value: unknown, where: string): ConnectionSettings {
+  if (!isObject(value)) throw problem(where, 'There are no connection settings.');
+  const field = <T>(name: keyof ConnectionSettings, check: (candidate: unknown) => candidate is T, expected: string): T => {
+    const candidate = value[name];
+    if (!check(candidate)) throw problem(where, `"${name}" must be ${expected}.`);
+    return candidate;
+  };
+  const isString = (candidate: unknown): candidate is string => typeof candidate === 'string';
+  const isPlace = (candidate: unknown): candidate is AssistantPlace => candidate === 'docker' || candidate === 'local';
+  const isStrings = (candidate: unknown): candidate is string[] => Array.isArray(candidate) && candidate.every(isString);
+  const isNumber = (candidate: unknown): candidate is number => typeof candidate === 'number';
+  const isBoolean = (candidate: unknown): candidate is boolean => typeof candidate === 'boolean';
 
-  if (!nonEmptyString(workingFolder)) throw problem(file, '"assistant.workingFolder" must name a folder.');
-  if (!Array.isArray(hostCommand) || hostCommand.length === 0 || !hostCommand.every(nonEmptyString)) {
+  const connection: ConnectionSettings = {
+    place: field('place', isPlace, '"docker" or "local"'),
+    dockerProgram: field('dockerProgram', isString, 'text'),
+    container: field('container', isString, 'text'),
+    containerUser: field('containerUser', isString, 'text'),
+    workingFolder: field('workingFolder', isString, 'text'),
+    hostProgram: field('hostProgram', isString, 'text'),
+    hostArguments: field('hostArguments', isStrings, 'a list of text'),
+    handshakeSeconds: field('handshakeSeconds', isNumber, 'a number'),
+    connectOnStart: field('connectOnStart', isBoolean, 'true or false'),
+  };
+  const problems = connectionProblems(connection);
+  if (problems.length > 0) throw problem(where, problems.join('\n'));
+  return connection;
+}
+
+/** Upgrades a version 1 file: its assistant section held the place, container, folder, and one command list. */
+function upgradeFromFirstVersion(value: Record<string, unknown>, file: string): Settings {
+  const assistant = value['assistant'];
+  if (!isObject(assistant)) throw problem(file, 'It has no "assistant" section.');
+  const command = assistant['hostCommand'];
+  if (!Array.isArray(command) || command.length === 0 || !command.every((word) => typeof word === 'string')) {
     throw problem(file, '"assistant.hostCommand" must be a list of words: the program, then its arguments.');
   }
-  const command = hostCommand as string[];
-
-  if (kind === 'docker') {
-    if (!nonEmptyString(container)) throw problem(file, '"assistant.container" must name the Docker container.');
-    return { assistant: { kind, container, workingFolder, hostCommand: command } };
-  }
-  if (kind === 'local') return { assistant: { kind, workingFolder, hostCommand: command } };
-  throw problem(file, '"assistant.kind" must be "docker" or "local".');
+  const [hostProgram, ...hostArguments] = command as string[];
+  return {
+    version: SETTINGS_VERSION,
+    connection: readConnection(
+      {
+        ...DEFAULT_CONNECTION,
+        place: assistant['kind'],
+        container: assistant['container'] ?? DEFAULT_CONNECTION.container,
+        workingFolder: assistant['workingFolder'],
+        hostProgram,
+        hostArguments,
+      },
+      file,
+    ),
+  };
 }
 
-/** Reads the settings, creating the file with defaults the first time. */
-export function loadSettings(dataFolder: string): Settings {
+export function saveSettings(dataFolder: string, settings: Settings): void {
+  writeFileSafely(join(dataFolder, SETTINGS_FILE_NAME), `${JSON.stringify(settings, null, JSON_INDENT)}\n`);
+}
+
+export function settingsWith(connection: ConnectionSettings): Settings {
+  return { version: SETTINGS_VERSION, connection };
+}
+
+/** Reads the settings; undefined when the author has not saved any yet. An older file is upgraded in place. */
+export function loadSettings(dataFolder: string): Settings | undefined {
   const file = join(dataFolder, SETTINGS_FILE_NAME);
-  if (!existsSync(file)) {
-    writeFileSafely(file, `${JSON.stringify(DEFAULT_SETTINGS, null, JSON_INDENT)}\n`);
-    return DEFAULT_SETTINGS;
-  }
+  if (!existsSync(file)) return undefined;
   let parsed: unknown;
   try {
     parsed = JSON.parse(readFileSync(file, 'utf8'));
   } catch (cause) {
     throw problem(file, `It is not valid JSON: ${cause instanceof Error ? cause.message : String(cause)}`);
   }
-  return validateSettings(parsed, file);
+  if (!isObject(parsed)) throw problem(file, 'It does not hold a settings object.');
+
+  const version = parsed['version'] ?? FIRST_VERSION;
+  if (version === FIRST_VERSION) {
+    const upgraded = upgradeFromFirstVersion(parsed, file);
+    saveSettings(dataFolder, upgraded);
+    return upgraded;
+  }
+  if (version !== SETTINGS_VERSION) throw problem(file, `It is version ${String(version)}, which this Insanity_Loom does not know.`);
+  return settingsWith(readConnection(parsed['connection'], file));
 }

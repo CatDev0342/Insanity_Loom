@@ -1,16 +1,14 @@
 // The menu bar, used the way a desktop user's hands use one.
-import { _electron as electron, expect, test, type ElectronApplication, type Page } from '@playwright/test';
-import { join } from 'node:path';
-
-const REPOSITORY = join(__dirname, '..', '..');
+import { expect, test, type ElectronApplication, type Page } from '@playwright/test';
+import { launch, prepareData } from './helpers';
 
 let application: ElectronApplication;
 let page: Page;
 
 test.beforeEach(async () => {
-  application = await electron.launch({ args: [REPOSITORY] });
-  page = await application.firstWindow();
-  await expect(page.locator('#menubar')).toBeVisible();
+  prepareData('fake assistant');
+  ({ application, page } = await launch());
+  await expect(page.locator('#status-text')).toHaveText(/Connected to Fake Assistant/);
 });
 
 test.afterEach(async () => {

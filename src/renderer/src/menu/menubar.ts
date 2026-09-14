@@ -230,7 +230,13 @@ export class MenuBar {
     void this.runCommand(entry.command.command);
   }
 
+  /** True while a dialog is open: the menus stand aside for it, as they do under any modal dialog. */
+  private get dialogIsOpen(): boolean {
+    return document.querySelector('dialog[open]') !== null;
+  }
+
   private onKeyDown(event: KeyboardEvent): void {
+    if (this.dialogIsOpen) return;
     if (event.key === ALT) {
       if (!event.repeat) this.altAlone = true;
       this.bar.classList.add(CLASS_SHOW_ACCESS_KEYS);
@@ -270,7 +276,7 @@ export class MenuBar {
   }
 
   private onKeyUp(event: KeyboardEvent): void {
-    if (event.key !== ALT) return;
+    if (event.key !== ALT || this.dialogIsOpen) return;
     if (!this.isInUse) this.bar.classList.remove(CLASS_SHOW_ACCESS_KEYS);
     if (!this.altAlone) return;
     this.altAlone = false;
