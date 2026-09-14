@@ -2,7 +2,7 @@
 // for choosing another. The page never touches a path it was not given here.
 
 import { BrowserWindow, dialog, shell } from 'electron';
-import { existsSync } from 'node:fs';
+import { existsSync, mkdirSync } from 'node:fs';
 import { basename, dirname, join } from 'node:path';
 import type { OpenWhisper, WhisperFound, WhisperInAlcove, WhisperPointingHere } from '../shared/whispers';
 import { Alcove, DEFAULT_ALCOVE_NAME } from './alcove';
@@ -178,6 +178,13 @@ export class Whispers {
     if (answer.canceled || answer.filePath === undefined || answer.filePath === '') return '';
     writeFileSafely(answer.filePath, markdown);
     return answer.filePath;
+  }
+
+  /** Opens the folder of copies kept before anything replaced a whisper, making it if nothing has been kept yet. */
+  async showKept(): Promise<void> {
+    mkdirSync(this.keptFolder, { recursive: true });
+    const failure = await shell.openPath(this.keptFolder);
+    if (failure !== '') throw new Error(`The kept copies could not be opened: ${failure}`);
   }
 
   async showAlcove(): Promise<void> {

@@ -108,6 +108,8 @@ export interface WhispersBridge {
   exportMarkdown(suggestedName: string, markdown: string): Promise<string>;
   /** Opens the alcove in the system's file manager. */
   showAlcove(): Promise<void>;
+  /** Opens the folder of copies kept before anything replaced a whisper. */
+  showKept(): Promise<void>;
 }
 
 export const WHISPER_CHANNELS = {
@@ -128,4 +130,5 @@ export const WHISPER_CHANNELS = {
   rename: 'insanity-loom:whisper-rename',
   exportMarkdown: 'insanity-loom:whisper-export-markdown',
   showAlcove: 'insanity-loom:alcove-show',
+  showKept: 'insanity-loom:kept-show',
 } as const;

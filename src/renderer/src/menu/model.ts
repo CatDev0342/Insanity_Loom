@@ -62,6 +62,7 @@ export const MENUS: readonly TopMenu[] = [
       SEPARATOR,
       command('Open &GreatHall…', 'hall.open'),
       command('&Show Alcove Folder', 'whisper.showAlcove'),
+      command('Show &Kept Copies', 'whisper.showKept'),
       SEPARATOR,
       command('E&xit', 'app.quit', ['Alt+F4'], true),
     ],

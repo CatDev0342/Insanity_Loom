@@ -1,8 +1,8 @@
 // Whispers as files in an alcove: one file per conversation, named after it, saved as it is written.
 import { expect, test, type ElectronApplication, type Page } from '@playwright/test';
-import { readdirSync, readFileSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
-import { ALCOVE, launch, prepareData } from './helpers';
+import { ALCOVE, DATA, launch, prepareData } from './helpers';
 
 let application: ElectronApplication | undefined;
 let page: Page;
@@ -65,4 +65,27 @@ test('File ▸ New Whisper begins another whisper, leaving the first where it is
   await expect
     .poll(() => whispers().map((name) => readFileSync(join(ALCOVE, name), 'utf8').includes('The second whisper.')).filter(Boolean).length)
     .toBe(1);
+});
+
+test('a copy is kept before anything replaces what is in a whisper', async () => {
+  const kept = join(DATA, 'Kept');
+  rmSync(kept, { recursive: true, force: true });
+
+  await page.locator('.whisper-host').click();
+  await page.keyboard.type('Writing that exists nowhere else.');
+  await expect.poll(() => whispers().length).toBe(1);
+
+  // A new whisper puts something else where this writing was: a copy is kept first.
+  await page.keyboard.press('Alt+F');
+  await page.keyboard.press('n');
+  await expect.poll(() => whispers().length).toBe(2);
+  await expect
+    .poll(() => (existsSync(kept) ? readdirSync(kept).filter((name) => name.endsWith('.xhtml')) : []))
+    .not.toHaveLength(0);
+
+  const copies = readdirSync(kept).filter((name) => name.endsWith('.xhtml'));
+  const inside = readFileSync(join(kept, copies[0] ?? ''), 'utf8');
+  expect(inside).toContain('Writing that exists nowhere else.');
+  // And the copy says when it was kept and why.
+  expect(copies[0]).toMatch(/— \d{4}-\d{2}-\d{2} \d{6} — before a new whisper\.xhtml$/);
 });

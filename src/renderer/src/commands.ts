@@ -7,6 +7,7 @@ export const PAGE_COMMANDS = [
   'whisper.new',
   'whisper.open',
   'whisper.showAlcove',
+  'whisper.showKept',
   'whisper.exportMarkdown',
   'whisper.pointsHere',
   'whisper.search',

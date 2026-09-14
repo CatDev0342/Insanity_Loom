@@ -219,6 +219,7 @@ export function startServices(dataFolder: string, logsFolder: string, journal: J
     whispers.rename(whisperPath(path), text(title, 'whisper title', MAXIMUM_IDENTIFIER_LENGTH)),
   );
   ipcMain.handle(WHISPER_CHANNELS.showAlcove, () => whispers.showAlcove());
+  ipcMain.handle(WHISPER_CHANNELS.showKept, () => whispers.showKept());
   ipcMain.handle(WHISPER_CHANNELS.exportMarkdown, (event, suggestedName: unknown, markdown: unknown) =>
     whispers.exportMarkdown(windowOf(event), text(suggestedName, 'file name', MAXIMUM_PATH_LENGTH), whisper(markdown)),
   );

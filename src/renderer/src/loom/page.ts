@@ -345,6 +345,23 @@ export class Loom {
   }
 
   /**
+   * Keeps a copy of the whisper open before its document is replaced wholesale — emptied for a new one, or swapped
+   * for another whisper. These are the only two moments when the program puts something else where the author's
+   * writing was, and on 2026-Sep-14 one of them destroyed a day of it. A copy costs one write; not having one cost
+   * the author work that existed nowhere else.
+   */
+  private async keepACopyFirst(why: string): Promise<void> {
+    const path = this.saving.file;
+    if (path === '' || this.editor === undefined || this.editor.isBlank) return;
+    try {
+      await this.whispers.keepCopy(path, why);
+    } catch (problem) {
+      // A copy that cannot be kept is worth saying out loud, because what follows replaces what is there.
+      this.showProblem(`A copy of this whisper could not be kept: ${problem instanceof Error ? problem.message : String(problem)}`);
+    }
+  }
+
+  /**
    * Weighs what the file said against what the whisper now holds. Anything the editor could not read would be written
    * back over the file at the next save, so the file is kept aside first and the author is told where it is.
    */
@@ -411,6 +428,7 @@ export class Loom {
         case 'assistant.newConversation':
           this.abandonWriting('stopped');
           this.waiting.length = 0;
+          await this.keepACopyFirst('before a new conversation');
           this.requireEditor().clear();
           this.conversationId = '';
           this.title = UNTITLED;
@@ -442,6 +460,9 @@ export class Loom {
           return;
         case 'whisper.showAlcove':
           await this.whispers.showAlcove();
+          return;
+        case 'whisper.showKept':
+          await this.whispers.showKept();
           return;
         case 'whisper.exportMarkdown':
           await this.exportMarkdown();
@@ -938,6 +959,7 @@ export class Loom {
     const editor = this.requireEditor();
     this.abandonWriting('stopped');
     this.waiting.length = 0;
+    await this.keepACopyFirst('before another whisper was opened');
     // As with a new whisper: nothing is saved while the document is being swapped, so the whisper being left keeps
     // what it holds.
     await this.saving.stop();

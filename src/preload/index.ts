@@ -91,6 +91,7 @@ const bridge: InsanityLoomBridge = {
     rename: (path, title) => ipcRenderer.invoke(WHISPER_CHANNELS.rename, path, title),
     exportMarkdown: (suggestedName, markdown) => ipcRenderer.invoke(WHISPER_CHANNELS.exportMarkdown, suggestedName, markdown),
     showAlcove: () => ipcRenderer.invoke(WHISPER_CHANNELS.showAlcove),
+    showKept: () => ipcRenderer.invoke(WHISPER_CHANNELS.showKept),
   },
 
   links: {
