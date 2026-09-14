@@ -316,8 +316,8 @@ export function startServices(dataFolder: string, logsFolder: string, journal: J
    * it waits for this process to be gone, moves the files over, and starts the program. That is why there is no
    * `app.relaunch()` here — the helper does the starting, once the files are its own to move.
    */
-  ipcMain.handle(UPDATE_CHANNELS.restart, () => {
-    const standing = handOverToTheHelper(updateSurroundings(), openPackage, setTheHelperGoing, app.getPath('exe'));
+  ipcMain.handle(UPDATE_CHANNELS.restart, async () => {
+    const standing = await handOverToTheHelper(updateSurroundings(), openPackage, setTheHelperGoing, app.getPath('exe'));
     if (standing.kind !== 'waiting for a restart') return standing;
     app.quit();
     return standing;

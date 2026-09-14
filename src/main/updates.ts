@@ -127,40 +127,83 @@ export interface HelperOrders {
   readonly log: string;
 }
 
-/** A path as PowerShell reads it literally: single quotes, with any of its own doubled. */
-function asLiteral(path: string): string {
-  return `'${path.replace(/'/g, "''")}'`;
-}
-
 /**
- * The helper, in PowerShell.
+ * The helper.
  *
  * It waits for the program to be gone before it touches anything — a file still open is a file that cannot be
  * replaced, and that was the whole of the first attempt's failure. Then the files go over, and the program starts
- * again. Everything it does is written down: if it cannot do it, the program must be able to say so afterwards
- * rather than start up looking unchanged and saying nothing.
+ * again. Everything it does is written down as it happens: if it cannot do it, the program must be able to say so
+ * afterwards rather than start up looking unchanged and saying nothing.
+ *
+ * It is written in **JavaScript, and run by the program's own executable** as a plain Node program
+ * (`ELECTRON_RUN_AS_NODE`), rather than as a PowerShell script. A script file is the one thing a locked-down Windows
+ * will refuse to run without a word — execution policy, or a signature it does not have — and refusing without a
+ * word is exactly what happened (the designer, 2026-Sep-14). The executable it runs is the one already trusted
+ * enough to be running, and the part being put in place holds no executable, so nothing it needs is replaced
+ * underneath it.
  */
 export function helperScript(orders: HelperOrders): string {
-  return [
-    '$ErrorActionPreference = "Stop"',
-    `$log = ${asLiteral(orders.log)}`,
-    '"Waiting for Insanity_Loom to close." | Out-File -FilePath $log -Encoding utf8',
-    'try {',
-    `  Wait-Process -Id ${String(orders.pid)} -Timeout ${String(SECONDS_TO_WAIT_FOR_THE_PROGRAM)} -ErrorAction SilentlyContinue`,
-    '} catch {',
-    '  "The program did not close in time: $_" | Out-File -FilePath $log -Append -Encoding utf8',
-    '}',
-    // Even once the process is gone, Windows can hold its files for a moment longer.
-    `Start-Sleep -Milliseconds ${String(SETTLING_MILLISECONDS)}`,
-    'try {',
-    `  Copy-Item -Path (Join-Path ${asLiteral(orders.opened)} '*') -Destination ${asLiteral(orders.programFolder)} -Recurse -Force`,
-    '  "Put in place." | Out-File -FilePath $log -Append -Encoding utf8',
-    '} catch {',
-    '  "The update could not be put in place: $_" | Out-File -FilePath $log -Append -Encoding utf8',
-    '}',
-    `Start-Process -FilePath ${asLiteral(orders.exe)}`,
-  ].join('\n');
+  const said = (value: string): string => JSON.stringify(value);
+  return `// Put an Insanity_Loom update in place, once the program holding those files has gone.
+const { cpSync, appendFileSync, writeFileSync } = require('node:fs');
+const { spawn } = require('node:child_process');
+
+const log = ${said(orders.log)};
+const say = (what) => {
+  try {
+    appendFileSync(log, what + '\\n', 'utf8');
+  } catch {
+    // A helper that cannot write its log still has an update to put in place.
+  }
+};
+writeFileSync(log, 'Started.\\n', 'utf8');
+
+const gone = (pid) => {
+  try {
+    process.kill(pid, 0);
+    return false;
+  } catch {
+    return true;
+  }
+};
+
+const waitFor = async (pid) => {
+  const until = Date.now() + ${String(SECONDS_TO_WAIT_FOR_THE_PROGRAM)} * 1000;
+  while (Date.now() < until) {
+    if (gone(pid)) return true;
+    await new Promise((settle) => setTimeout(settle, 200));
+  }
+  return false;
+};
+
+void (async () => {
+  if (await waitFor(${String(orders.pid)})) say('The program has closed.');
+  else say('The program did not close in time; the update is not being put in place.');
+  // Even once the process is gone, Windows can hold its files for a moment longer.
+  await new Promise((settle) => setTimeout(settle, ${String(SETTLING_MILLISECONDS)}));
+  try {
+    cpSync(${said(orders.opened)}, ${said(orders.programFolder)}, { recursive: true, force: true });
+    say('Put in place.');
+  } catch (cause) {
+    say('The update could not be put in place: ' + (cause && cause.message ? cause.message : String(cause)));
+  }
+  spawn(${said(orders.exe)}, [], { detached: true, stdio: 'ignore' }).unref();
+})();
+`;
 }
+
+/** Waits for the helper to say it has started. */
+async function waitForTheHelper(log: string): Promise<boolean> {
+  for (let tried = 0; tried < TRIES_FOR_THE_HELPER_TO_START; tried++) {
+    if (existsSync(log)) return true;
+    await new Promise((settle) => setTimeout(settle, BETWEEN_TRIES_MS));
+  }
+  return existsSync(log);
+}
+
+/** How long the helper is given to say it has started: a second in all, which is a long time for starting. */
+const TRIES_FOR_THE_HELPER_TO_START = 20;
+const BETWEEN_TRIES_MS = 50;
 
 /** How long the helper waits for the program to be gone, and how long it lets Windows settle afterwards. */
 const SECONDS_TO_WAIT_FOR_THE_PROGRAM = 60;
@@ -170,12 +213,12 @@ const SETTLING_MILLISECONDS = 500;
  * Opens the waiting update, sets the helper going, and says whether it did. The caller quits straight afterwards:
  * the helper is waiting for exactly that, and will start the program again once the files are its own.
  */
-export function handOverToTheHelper(
+export async function handOverToTheHelper(
   here: UpdateSurroundings,
   unzip: (packagePath: string, into: string) => void,
   setGoing: (scriptPath: string) => void,
   exe: string,
-): UpdateStanding {
+): Promise<UpdateStanding> {
   const waiting = updateWaiting(here.dataFolder);
   if (waiting === undefined) return { kind: 'went wrong', why: 'There is no update waiting to be put in place.' };
   const folder = join(here.dataFolder, WAITING);
@@ -190,7 +233,15 @@ export function handOverToTheHelper(
       helperScript({ pid: process.pid, opened, programFolder: here.programFolder, exe, log: join(folder, HELPER_LOG) }),
       'utf8',
     );
+    const log = join(folder, HELPER_LOG);
+    rmSync(log, { force: true });
     setGoing(scriptPath);
+    // The helper says it has started before this program agrees to quit for it. Quitting for a helper that never
+    // ran leaves the author with a closed program, an update that did not happen, and nothing said about either —
+    // which is what happened (the designer, 2026-Sep-14).
+    if (!(await waitForTheHelper(log))) {
+      return { kind: 'went wrong', why: 'The part of Insanity_Loom that puts an update in place would not start. Nothing has been changed.' };
+    }
     return { kind: 'waiting for a restart', version: waiting.version };
   } catch (cause) {
     rmSync(folder, { recursive: true, force: true });
@@ -249,15 +300,17 @@ export function updateSurroundings(): UpdateSurroundings {
 }
 
 /**
- * Sets the helper going, detached and outliving this program — which is the point of it. Nothing of it is waited
- * for: the program is about to quit, and the helper is waiting for exactly that.
+ * Sets the helper going, detached and outliving this program — which is the point of it. It is run by the program's
+ * own executable as a plain Node program, so nothing stands between it and running: no shell, no script host, no
+ * execution policy, no signature.
  */
 export function setTheHelperGoing(scriptPath: string): void {
-  const helper = spawn(
-    'powershell',
-    ['-NoProfile', '-NonInteractive', '-WindowStyle', 'Hidden', '-ExecutionPolicy', 'Bypass', '-File', scriptPath],
-    { detached: true, stdio: 'ignore', windowsHide: true },
-  );
+  const helper = spawn(process.execPath, [scriptPath], {
+    env: { ...process.env, ELECTRON_RUN_AS_NODE: '1' },
+    detached: true,
+    stdio: 'ignore',
+    windowsHide: true,
+  });
   helper.unref();
 }
 
