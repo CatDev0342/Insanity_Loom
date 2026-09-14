@@ -149,6 +149,6 @@ export const MENUS: readonly TopMenu[] = [
   },
   {
     label: '&Help',
-    entries: [command('&About Insanity_Loom', 'help.about')],
+    entries: [command('Check for &Updates…', 'app.checkForUpdates'), SEPARATOR, command('&About Insanity_Loom', 'help.about')],
   },
 ];

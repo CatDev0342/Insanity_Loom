@@ -147,6 +147,24 @@ async function goToWhatWasFound(chosen: { path: string; looked: string; address:
   loom.findFor(chosen.looked);
 }
 
+/**
+ * Help ▸ Check for Updates: asks what the newest build is, and offers to become it.
+ *
+ * What is fetched is the program's own part, a few megabytes; it is put in place when the program next starts, which
+ * is the one moment nothing is holding those files. When the runtime beneath has moved on, the author is told to take
+ * the whole program rather than given something that would not run.
+ */
+async function checkForUpdates(): Promise<void> {
+  loom.sayAboutUpdates({ kind: 'looking' });
+  const standing = await bridge.updates.look();
+  if (standing.kind !== 'ready to fetch') {
+    loom.sayAboutUpdates(standing);
+    return;
+  }
+  loom.sayAboutUpdates({ kind: 'fetching', version: standing.version }, undefined);
+  loom.sayAboutUpdates(await bridge.updates.fetch(), () => void bridge.updates.restart());
+}
+
 async function run(command: AnyCommandId): Promise<void> {
   // Undo and Redo in the whisper are the whisper's own: its history holds only the author's changes.
   if ((command === 'edit.undo' || command === 'edit.redo') && loom.runEditCommand(command)) return;
@@ -162,6 +180,7 @@ async function run(command: AnyCommandId): Promise<void> {
   if (command === 'find.previous') return loom.stepFind('previous');
   if (!isPageCommand(command)) return bridge.runCommand(command);
   if (command === 'app.preferences') return preferences.show();
+  if (command === 'app.checkForUpdates') return checkForUpdates();
   if (command === 'assistant.signIn') return signIn.show();
   return loom.run(command);
 }

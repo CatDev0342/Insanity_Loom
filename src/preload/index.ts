@@ -10,6 +10,7 @@ import { EDITING_CHANNELS, type ContextDetails } from '../shared/editing';
 import { GREATHALL_CHANNELS } from '../shared/greathall';
 import { HALL_CHANNELS, type HallChosen } from '../shared/hall';
 import { LAYOUT_CHANNELS } from '../shared/layout';
+import { UPDATE_CHANNELS } from '../shared/updates';
 import { LINK_CHANNELS } from '../shared/links';
 import { WHISPER_CHANNELS } from '../shared/whispers';
 
@@ -118,6 +119,14 @@ const bridge: InsanityLoomBridge = {
       return () => {
         ipcRenderer.removeListener(HALL_CHANNELS.wentTo, relay);
       };
+    },
+  },
+
+  updates: {
+    look: () => ipcRenderer.invoke(UPDATE_CHANNELS.look),
+    fetch: () => ipcRenderer.invoke(UPDATE_CHANNELS.fetch),
+    restart: async () => {
+      await ipcRenderer.invoke(UPDATE_CHANNELS.restart);
     },
   },
 

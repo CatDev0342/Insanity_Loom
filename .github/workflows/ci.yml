@@ -103,11 +103,28 @@ jobs:
         shell: pwsh
         run: Compress-Archive -Path dist/win-unpacked/* -DestinationPath dist/Insanity_Loom-Windows.zip -Force
 
+      # The program's own part, on its own: app.asar, the dictionary and the notices — a few megabytes against the
+      # whole program's hundred and fifty, and all that changes between one build and the next. A running copy fetches
+      # this one to update itself (src/main/updates.ts).
+      - name: Gather the program's own part (Windows)
+        if: runner.os == 'Windows' && github.ref == 'refs/heads/main'
+        shell: pwsh
+        run: |
+          $ours = 'dist/win-unpacked/resources/app.asar', 'dist/win-unpacked/resources/dictionaries',
+                  'dist/win-unpacked/LICENSE', 'dist/win-unpacked/NOTICE', 'dist/win-unpacked/THIRD_PARTY_NOTICES.txt'
+          Compress-Archive -Path $ours -DestinationPath dist/Insanity_Loom-Windows-app.zip -Force
+
       # Both packages are named for what they are rather than for which build they came from, so the newest replaces
       # the last rather than joining a pile of them. Which build it is, is in Help ▸ About and in the release's notes.
       - name: Gather the Linux package for release
         if: runner.os == 'Linux' && github.ref == 'refs/heads/main'
         run: mv dist/*.AppImage dist/Insanity_Loom-Linux.AppImage
+
+      - name: Say what this build published
+        if: github.ref == 'refs/heads/main'
+        run: >
+          node scripts/gather-packages.mjs dist/win-unpacked dist 0.0.${{ github.run_number }}
+          $(node -p "require('./package.json').devDependencies.electron")
 
       - name: Publish the newest build
         if: github.ref == 'refs/heads/main'
@@ -122,4 +139,6 @@ jobs:
           prerelease: true
           files: |
             dist/Insanity_Loom-Windows.zip
+            dist/Insanity_Loom-Windows-app.zip
             dist/Insanity_Loom-Linux.AppImage
+            dist/newest.json

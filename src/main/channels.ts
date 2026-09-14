@@ -1,7 +1,7 @@
 // The layer underneath's answers to the page's assistant, connection and journal requests. Everything arriving from
 // the page is checked here before it is used: the page is never trusted to send only what it should.
 
-import { BrowserWindow, dialog, ipcMain, shell, type IpcMainInvokeEvent } from 'electron';
+import { app, BrowserWindow, dialog, ipcMain, shell, type IpcMainInvokeEvent } from 'electron';
 import { execFile } from 'node:child_process';
 import { join } from 'node:path';
 import {
@@ -26,6 +26,8 @@ import { findWindow, openFindWindow } from './find-window';
 import { WINDOW_BACKGROUND_COLOR } from './index';
 import { PAGE_PREFERENCES } from './security';
 import { LAYOUT_CHANNELS } from '../shared/layout';
+import { UPDATE_CHANNELS } from '../shared/updates';
+import { fetchTheNewest, howToUpdate, updateSurroundings, whatIsNewest } from './updates';
 import { searchHall } from './hall';
 import { LINK_CHANNELS } from '../shared/links';
 import { openAddress } from './links';
@@ -282,6 +284,26 @@ export function startServices(dataFolder: string, logsFolder: string, journal: J
       text(stamp, 'stamp', MAXIMUM_IDENTIFIER_LENGTH),
     ),
   );
+  ipcMain.handle(UPDATE_CHANNELS.look, async () => {
+    try {
+      const newest = await whatIsNewest();
+      const name = process.platform === 'win32' ? 'Insanity_Loom-Windows-app.zip' : 'Insanity_Loom-Linux-app.zip';
+      return howToUpdate(newest, updateSurroundings(), newest.packages[name] !== undefined);
+    } catch (problem) {
+      return { kind: 'went wrong', why: problem instanceof Error ? problem.message : String(problem) };
+    }
+  });
+  ipcMain.handle(UPDATE_CHANNELS.fetch, async () => {
+    try {
+      return await fetchTheNewest(updateSurroundings());
+    } catch (problem) {
+      return { kind: 'went wrong', why: problem instanceof Error ? problem.message : String(problem) };
+    }
+  });
+  ipcMain.handle(UPDATE_CHANNELS.restart, () => {
+    app.relaunch();
+    app.quit();
+  });
   ipcMain.handle(LAYOUT_CHANNELS.panelWidths, () => preferences.panelWidths);
   ipcMain.handle(LAYOUT_CHANNELS.savePanelWidths, (_event, widths: unknown) => {
     preferences.setPanelWidths(readPanelWidths(widths));

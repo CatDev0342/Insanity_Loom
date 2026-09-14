@@ -26,6 +26,7 @@ export const PAGE_COMMANDS = [
   'assistant.signIn',
   'assistant.signOut',
   'app.preferences',
+  'app.checkForUpdates',
 ] as const;
 
 export type PageCommandId = (typeof PAGE_COMMANDS)[number];
@@ -34,6 +35,7 @@ export type PageCommandId = (typeof PAGE_COMMANDS)[number];
 export type AssistantCommandId = Exclude<
   PageCommandId,
   | 'app.preferences'
+  | 'app.checkForUpdates'
   | 'assistant.signIn'
   | 'whisper.pointsHere'
   | 'whisper.search'

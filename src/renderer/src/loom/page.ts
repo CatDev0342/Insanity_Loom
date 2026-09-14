@@ -30,6 +30,7 @@ import { Library, type LibraryElements } from './library';
 import { Navigation, type NavigationElements } from './navigation';
 import { ReferenceBar, type ReferenceBarElements } from './reference-bar';
 import { Thoughts, type ThoughtsElements } from './thoughts';
+import type { UpdateStanding } from '../../../shared/updates';
 import { NOTHING_YET, withPiece, type ReplyBeingWritten } from './one-reply';
 import { Saving } from './saving';
 import { theAuthorsOwn } from './the-authors-own';
@@ -518,6 +519,39 @@ export class Loom {
   /** Whether section isolation is on, for the menu's tick. */
   get isolatingSections(): boolean {
     return this.editor?.isolatingSections ?? false;
+  }
+
+  /** What is happening about updates, said above the whisper, with the one thing to do about it when there is one. */
+  sayAboutUpdates(standing: UpdateStanding, restart?: () => void): void {
+    switch (standing.kind) {
+      case 'looking':
+        this.showNotice('Asking what the newest Insanity_Loom is…');
+        return;
+      case 'the newest':
+        this.showNotice(`This is the newest Insanity_Loom (${standing.version}).`);
+        return;
+      case 'ready to fetch':
+        this.showNotice(`Insanity_Loom ${standing.version} is out.`);
+        return;
+      case 'fetching':
+        this.showNotice(`Fetching Insanity_Loom ${standing.version}…`);
+        return;
+      case 'waiting for a restart':
+        this.showNotice(
+          `Insanity_Loom ${standing.version} is here, and goes in when the program starts again. Your whispers are saved.`,
+          restart === undefined ? undefined : { name: 'Restart now', take: restart },
+        );
+        return;
+      case 'whole program needed':
+        this.showNotice(
+          `Insanity_Loom ${standing.version} is out, but it runs on something newer than this copy does, so it cannot be ` +
+            'fetched in part. Take the whole program instead.',
+        );
+        return;
+      case 'went wrong':
+        this.showProblem(`The newest Insanity_Loom could not be fetched: ${standing.why}`);
+        return;
+    }
   }
 
   /** Quotes what the author right-clicked at the end of the whisper, to write an answer under it. */
