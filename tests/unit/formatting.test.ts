@@ -169,6 +169,24 @@ describe('a heading\'s identity', () => {
   });
 });
 
+describe('the heading a link leads to', () => {
+  it('is marked, and stays marked while the whisper is redrawn around it', () => {
+    const w = whisper('<h2 id="first">First</h2><p>words</p><h2 id="second">Second</h2><p>more</p>');
+    expect(w.goToHeading('second')).toBe(true);
+    const marked = (): string[] => [...w.editor.view.dom.querySelectorAll('.is-found')].map((found) => found.textContent ?? '');
+    expect(marked()).toEqual(['Second']);
+
+    // A reply arriving, or a conversation catching up, redraws the whisper; the mark is the editor's own and stays.
+    w.appendReply('an answer that arrived meanwhile', null);
+    expect(marked()).toEqual(['Second']);
+  });
+
+  it('says nothing is there when the whisper holds no such heading', () => {
+    const w = whisper('<h2 id="first">First</h2>');
+    expect(w.goToHeading('no-such-section')).toBe(false);
+  });
+});
+
 describe('following a link', () => {
   /** Clicks in the whisper the way the editor sees it, with or without Ctrl held. */
   function clicks(target: WhisperEditor, position: number, withCtrl: boolean): boolean {

@@ -44,9 +44,6 @@ export interface LoomElements {
 const PAGE_TITLE = 'Insanity_Loom';
 const UNTITLED = 'Untitled whisper';
 
-/** How long a heading a link has just led to is marked, so the author's eye finds it. */
-const HEADING_FOUND_MS = 2000;
-
 
 /** A finished section, with its reply already in place, waiting to be sent. */
 interface Waiting {
@@ -572,16 +569,9 @@ export class Loom {
     }
   }
 
-  /** Takes the author to the heading a link points at, and marks it for a moment so their eye finds it. */
+  /** Takes the author to the heading a link points at; the whisper marks it for a moment so their eye finds it. */
   private goToHeading(identity: string): void {
-    const heading = this.elements.whisper.querySelector(`[id="${CSS.escape(identity)}"]`);
-    if (heading === null) {
-      this.showNotice(`This whisper has no section called "${identity}".`);
-      return;
-    }
-    heading.scrollIntoView({ block: 'center' });
-    heading.classList.add('is-found');
-    window.setTimeout(() => heading.classList.remove('is-found'), HEADING_FOUND_MS);
+    if (!this.requireEditor().goToHeading(identity)) this.showNotice(`This whisper has no section called "${identity}".`);
   }
 
   /** Puts a whisper from the alcove in the window, and takes up the conversation it records. */

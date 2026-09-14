@@ -10,7 +10,9 @@ import StarterKit from '@tiptap/starter-kit';
 import {
   ASSISTANT_META,
   FollowLinks,
+  FOUND_HEADING_META,
   HeadingIdentities,
+  MarkFoundHeading,
   newIdentity,
   ProtectBusyReplies,
   Reply,
@@ -26,6 +28,9 @@ import { afterRule, findReply, isBlank, sectionContent } from './sections';
 // How many of the author's changes Ctrl+Z can take back.
 const UNDO_DEPTH = 500;
 
+/** How long the heading a link has just led to stays marked, in milliseconds. */
+const HEADING_FOUND_MS = 2000;
+
 export interface WhisperEditorOptions {
   readonly element: HTMLElement;
   /** The whisper's content to begin with, as HTML. */
@@ -40,6 +45,9 @@ export interface WhisperEditorOptions {
 
 export class WhisperEditor {
   readonly editor: Editor;
+
+  /** When the heading a link led to stops being marked. */
+  private unmarkAt = 0;
 
   constructor(options: WhisperEditorOptions) {
     this.editor = new Editor({
@@ -58,6 +66,7 @@ export class WhisperEditor {
         SectionKeys.configure({ onSectionFinished: (sectionId) => this.sectionFinished(sectionId, options.onSectionFinished) }),
         WhisperPaste,
         HeadingIdentities,
+        MarkFoundHeading,
         FollowLinks.configure({ onFollow: (address) => options.onFollowLink(address) }),
         Markdown,
       ],
@@ -220,6 +229,37 @@ export class WhisperEditor {
   /** Whether a Format command can act where the caret is, and whether what it does is already so. */
   formatStanding(command: FormatCommandId): FormatStanding {
     return formatStanding(this.editor, command);
+  }
+
+  /**
+   * Takes the author to the heading of this identity and marks it for a moment. False when the whisper holds no such
+   * heading, so that the loom can say so.
+   */
+  goToHeading(identity: string): boolean {
+    const found = this.headingElement(identity);
+    if (found === undefined) return false;
+    found.scrollIntoView({ block: 'center' });
+    this.markHeading(identity);
+    window.clearTimeout(this.unmarkAt);
+    this.unmarkAt = window.setTimeout(() => this.markHeading(''), HEADING_FOUND_MS);
+    return true;
+  }
+
+  private headingElement(identity: string): HTMLElement | undefined {
+    let position = -1;
+    this.doc.descendants((node, at) => {
+      if (position !== -1 || node.type.name !== 'heading') return node.isBlock && !node.isTextblock;
+      if (node.attrs['id'] === identity) position = at;
+      return false;
+    });
+    if (position === -1) return undefined;
+    const drawn = this.editor.view.nodeDOM(position);
+    return drawn instanceof HTMLElement ? drawn : undefined;
+  }
+
+  private markHeading(identity: string): void {
+    // Marking nothing changes the document, so it neither saves nor enters the author's undo.
+    this.editor.view.dispatch(this.editor.state.tr.setMeta(FOUND_HEADING_META, identity).setMeta('addToHistory', false));
   }
 
   /** The address of the link the caret is in, or '' when it is in none. */

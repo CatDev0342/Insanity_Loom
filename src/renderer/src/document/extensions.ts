@@ -15,6 +15,7 @@ import { Extension, Node, mergeAttributes } from '@tiptap/core';
 import HorizontalRule from '@tiptap/extension-horizontal-rule';
 import { closeHistory } from '@tiptap/pm/history';
 import { Plugin, PluginKey, TextSelection } from '@tiptap/pm/state';
+import { Decoration, DecorationSet } from '@tiptap/pm/view';
 import type { Node as ProseMirrorNode } from '@tiptap/pm/model';
 
 /** How a reply stands. Only a finished (or stopped, or failed) reply may be edited by the author. */
@@ -236,6 +237,51 @@ export const HeadingIdentities = Extension.create({
           // Naming a heading is the program's own housekeeping: it is not a change the author made, and Ctrl+Z has
           // nothing to take back.
           return transaction.setMeta('addToHistory', false);
+        },
+      }),
+    ];
+  },
+});
+
+/** Where the heading a link has just led to is remembered, so that it can be marked wherever it is drawn. */
+const FOUND_HEADING = new PluginKey<string>('foundHeading');
+
+/** Asks for a heading to be marked, by its identity; '' for none. */
+export const FOUND_HEADING_META = 'insanity-loom:found-heading';
+
+/**
+ * Marks, for a moment, the heading a link has just led to, so the author's eye finds it.
+ *
+ * The mark is the editor's own — a decoration, not a class put on the page by hand. The whisper is redrawn whenever
+ * anything changes it, and a reply arriving or a conversation catching up would wipe a mark written straight onto the
+ * page within moments of the author getting there.
+ */
+export const MarkFoundHeading = Extension.create({
+  name: 'markFoundHeading',
+
+  addProseMirrorPlugins() {
+    return [
+      new Plugin<string>({
+        key: FOUND_HEADING,
+        state: {
+          init: () => '',
+          apply: (transaction, identity) => {
+            const asked: unknown = transaction.getMeta(FOUND_HEADING_META);
+            return typeof asked === 'string' ? asked : identity;
+          },
+        },
+        props: {
+          decorations: (state) => {
+            const identity = FOUND_HEADING.getState(state) ?? '';
+            if (identity === '') return null;
+            const marks: Decoration[] = [];
+            state.doc.descendants((node, position) => {
+              if (node.type.name !== 'heading') return node.isBlock && !node.isTextblock;
+              if (node.attrs['id'] === identity) marks.push(Decoration.node(position, position + node.nodeSize, { class: 'is-found' }));
+              return false;
+            });
+            return DecorationSet.create(state.doc, marks);
+          },
         },
       }),
     ];
