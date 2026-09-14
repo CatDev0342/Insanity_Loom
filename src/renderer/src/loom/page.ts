@@ -739,7 +739,10 @@ export class Loom {
           this.replay.replyMessageId = gathered.messageId;
           return;
         }
-        if (this.writing === undefined) return;
+        // The assistant may be prompted by something other than the author — whatever runs it, finishing a task it
+        // was set. What it says then is part of this conversation, so it is written into the whisper as a reply of
+        // its own, rather than falling on the floor and being "caught up with" the next time the whisper is opened.
+        this.writing ??= { replyId: this.requireEditor().placeReplyAtEnd(), ...NOTHING_YET };
         // Several messages make one reply; they are parted as paragraphs rather than run together.
         this.writing = { replyId: this.writing.replyId, ...withPiece(this.writing, event.text, event.messageId) };
         this.elements.activity.textContent = '';

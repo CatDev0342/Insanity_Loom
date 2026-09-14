@@ -1,5 +1,5 @@
-// The whisper, end to end: the author writes in one rich-text document, finishes a section with "---", and the
-// assistant's reply is woven in right after it. A stand-in assistant (tests/fixtures/fake-assistant.mjs) answers, so
+// The whisper, end to end: the author writes in one rich-text document, closes a turn with Ctrl+Enter, and the
+// assistant's reply follows the line that closed it. A stand-in assistant (tests/fixtures/fake-assistant.mjs) answers, so
 // nothing depends on a real one being reachable.
 import { expect, test, type ElectronApplication, type Page } from '@playwright/test';
 import { readdirSync, readFileSync } from 'node:fs';
@@ -15,6 +15,8 @@ async function start(): Promise<void> {
 }
 
 const whisper = (): ReturnType<Page['locator']> => page.locator('.whisper-editor');
+/** The whispers in the alcove, as files. */
+const whispers = (): string[] => readdirSync(ALCOVE).filter((name) => name.endsWith('.xhtml')).sort();
 const replies = (): ReturnType<Page['locator']> => page.locator('.whisper-editor section.reply');
 
 async function finishSection(text: string): Promise<void> {
@@ -188,4 +190,15 @@ test('a turn closed while the assistant is away is kept, and goes when it return
   await expect(page.locator('#asks')).toContainText('closed here without an answer');
   await page.locator('#asks').getByRole('button', { name: /Send it/ }).click();
   await expect(replies().last()).toContainText('You wrote: The thing I said while you were away.');
+});
+
+test('what the assistant says unasked is written into the whisper, not lost', async () => {
+  // Something other than the author prompts the assistant — a task it was set, finishing — and it speaks.
+  await finishSection('Please speak later.');
+  await expect(replies()).toHaveCount(1);
+
+  // What it says then is a reply of its own in the whisper, and is saved there.
+  await expect(replies()).toHaveCount(2);
+  await expect(replies().last()).toContainText('A word nobody asked for.');
+  await expect.poll(() => readFileSync(join(ALCOVE, whispers()[0] ?? ''), 'utf8')).toContain('A word nobody asked for.');
 });

@@ -151,6 +151,21 @@ export class WhisperEditor {
     return this.editor.schema.nodeFromJSON({ type: 'reply', attrs: attributes, content });
   }
 
+  /**
+   * Places an empty reply at the end of the whisper, answering no turn of the author's.
+   *
+   * The assistant is not only spoken to by the author: whatever runs it may prompt it as well — a task it was set
+   * finishing, a timer, another program. What it says then belongs to the conversation, so it belongs in the whisper,
+   * which is that conversation's record. A reply with nothing to answer is still a reply.
+   */
+  placeReplyAtEnd(): string {
+    const replyId = newIdentity();
+    this.asAssistant((transaction) => {
+      transaction.insert(endOfWhisper(transaction.doc), this.replyNode({ replyId, answers: null, state: 'writing' }, [{ type: 'paragraph' }]));
+    });
+    return replyId;
+  }
+
   /** Places an empty reply, waiting its turn, right after the rule of the section it answers. Returns its identity. */
   placeReply(sectionId: string): string {
     const replyId = newIdentity();

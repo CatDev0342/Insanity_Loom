@@ -177,6 +177,13 @@ function startAgent() {
 
           await think(sessionId, `Thinking about what to say to: ${text}`);
 
+          if (text.includes('speak later')) {
+            // Something other than the author prompts it: a task it was set, finishing after the turn is over.
+            setTimeout(() => {
+              void say(sessionId, 'A word nobody asked for.');
+            }, PIECE_INTERVAL_MS * 4);
+          }
+
           if (text.includes('permission') && currentMode === 'auto') {
             // Deciding by itself: nothing is asked of the author.
             await say(sessionId, 'Permission answer: decided by the assistant');
