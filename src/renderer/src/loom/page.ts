@@ -77,6 +77,16 @@ const ANCHOR_SLACK_PX = 200;
 const PAGE_TITLE = 'Insanity_Loom';
 
 const MILLISECONDS_PER_SECOND = 1000;
+
+/**
+ * How long the assistant may be silent before a reply it began unasked is taken to be over.
+ *
+ * A reply to a turn ends when the turn ends, and the assistant says so. A reply it began of its own accord — a task
+ * it was set, finishing — answers no turn and so is never said to be over: nothing is coming that will end it. It
+ * used to be left open forever, and because only one reply is ever in flight at a time, **every turn the author
+ * wrote afterwards queued silently behind it** and was never sent (the designer, 2026-Sep-14). Silence ends it.
+ */
+const QUIET_BEFORE_AN_UNASKED_REPLY_IS_OVER_SECONDS = 5;
 const UNTITLED = 'Untitled whisper';
 
 
@@ -121,11 +131,13 @@ export class Loom {
   private whisperName = '';
 
   /** The reply being written: its own identity, what has arrived, and which message the last piece belonged to. */
-  private writing: ({ replyId: string; sent: string; tries: number } & ReplyBeingWritten) | undefined;
+  private writing: ({ replyId: string; sent: string; tries: number; unasked: boolean } & ReplyBeingWritten) | undefined;
   private renderScheduled = false;
   /** When the reply being written was asked for, and the timer that keeps saying how long it has been. */
   private writingSince = 0;
   private writingTimer: ReturnType<typeof setInterval> | undefined;
+  /** Ends a reply the assistant began unasked once it has been silent long enough to be over. */
+  private unaskedTimer: ReturnType<typeof setTimeout> | undefined;
 
   /**
    * While a resumed conversation's history is replayed. `fill` writes it straight into a whisper that does not record
@@ -657,6 +669,13 @@ export class Loom {
   // ——— Sections and replies ———
 
   private sectionFinished(sectionId: string, markdown: string): void {
+    if (markdown.trim() === '') {
+      // An empty turn has nothing to answer. Saying so beats a rule that looks like a turn and never was one.
+      this.showNotice('That turn was empty, so there was nothing to send.');
+      this.navigation.changed();
+      this.saveNow();
+      return;
+    }
     // The caret has just been taken to the fresh paragraph after the rule, so the author is already looking at where
     // the reply will appear; nothing needs scrolling here.
     const editor = this.requireEditor();
@@ -682,7 +701,7 @@ export class Loom {
     const next = this.waiting.shift();
     if (next === undefined) return;
     this.writingSince = next.since;
-    this.writing = { replyId: next.replyId, sent: next.markdown, tries: next.tries + 1, ...NOTHING_YET };
+    this.writing = { replyId: next.replyId, sent: next.markdown, tries: next.tries + 1, unasked: false, ...NOTHING_YET };
     this.requireEditor().setReplyState(next.replyId, 'writing');
     this.startSayingHowLong();
     // The reply arrives as events; the promise settles when it has finished, which replyFinished also reports.
@@ -763,9 +782,25 @@ export class Loom {
     this.writingTimer = undefined;
   }
 
+  /**
+   * Sets the silence going that ends a reply the assistant began unasked, starting it over with every piece that
+   * arrives. Until this existed, such a reply stayed open and held up every turn the author wrote after it.
+   */
+  private endAnUnaskedReplyAfterSilence(): void {
+    if (this.unaskedTimer !== undefined) clearTimeout(this.unaskedTimer);
+    this.unaskedTimer = setTimeout(() => {
+      this.unaskedTimer = undefined;
+      if (this.writing?.unasked === true) this.endWriting('finished');
+    }, QUIET_BEFORE_AN_UNASKED_REPLY_IS_OVER_SECONDS * MILLISECONDS_PER_SECOND);
+  }
+
   private finishWriting(state: ReplyState): void {
     const writing = this.writing;
     if (writing === undefined) return;
+    if (this.unaskedTimer !== undefined) {
+      clearTimeout(this.unaskedTimer);
+      this.unaskedTimer = undefined;
+    }
     this.writing = undefined;
     this.sayHowLong();
     const editor = this.requireEditor();
@@ -854,14 +889,20 @@ export class Loom {
         // The assistant may be prompted by something other than the author — whatever runs it, finishing a task it
         // was set. What it says then is part of this conversation, so it is written into the whisper as a reply of
         // its own, rather than falling on the floor and being "caught up with" the next time the whisper is opened.
-        this.writing ??= { replyId: this.requireEditor().placeReplyAtEnd(), sent: '', tries: 1, ...NOTHING_YET };
+        if (this.writing === undefined) {
+          this.writingSince = Date.now();
+          this.writing = { replyId: this.requireEditor().placeReplyAtEnd(), sent: '', tries: 1, unasked: true, ...NOTHING_YET };
+        }
         // Several messages make one reply; they are parted as paragraphs rather than run together.
         this.writing = {
           replyId: this.writing.replyId,
           sent: this.writing.sent,
           tries: this.writing.tries,
+          unasked: this.writing.unasked,
           ...withPiece(this.writing, event.text, event.messageId),
         };
+        // Nothing will come to say an unasked reply is over, so its own silence says it.
+        if (this.writing.unasked) this.endAnUnaskedReplyAfterSilence();
         this.elements.activity.textContent = '';
         this.scheduleRender();
         return;

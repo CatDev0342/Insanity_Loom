@@ -201,4 +201,13 @@ test('what the assistant says unasked is written into the whisper, not lost', as
   await expect(replies()).toHaveCount(2);
   await expect(replies().last()).toContainText('A word nobody asked for.');
   await expect.poll(() => readFileSync(join(ALCOVE, whispers()[0] ?? ''), 'utf8')).toContain('A word nobody asked for.');
+
+  // And the author can still be heard afterwards. A reply begun unasked answers no turn, so nothing is coming that
+  // will say it is over; it used to stay open forever, and every turn written afterwards queued silently behind it
+  // and was never sent (the designer, 2026-Sep-14). Its own silence ends it, and the next turn goes.
+  await finishSection('Did you hear me?');
+  await expect(replies().last()).toContainText('You wrote: Did you hear me?', { timeout: STILL_HEARD_MS });
 });
+
+/** Long enough for an unasked reply's silence to end it, and for the turn behind it to be answered. */
+const STILL_HEARD_MS = 30_000;

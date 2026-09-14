@@ -120,10 +120,16 @@ export class WhisperEditor {
     return this.editor.state.doc;
   }
 
+  /**
+   * A turn the author has closed. Its writing is everything they wrote since the last rule or reply.
+   *
+   * A turn with nothing in it is reported all the same, with empty writing. It used to be dropped here in silence:
+   * the rule appeared, the turn was numbered and timed, and nothing was ever sent or said. Nothing the author does
+   * should leave a mark that means one thing and does another.
+   */
   private sectionFinished(sectionId: string, report: WhisperEditorOptions['onSectionFinished']): void {
     const content = sectionContent(this.doc, sectionId);
-    if (content === undefined) return;
-    report(sectionId, this.toMarkdown(content));
+    report(sectionId, content === undefined ? '' : this.toMarkdown(content));
   }
 
   private toMarkdown(content: JSONContent): string {
