@@ -282,6 +282,14 @@ export class WhisperEditor {
     return true;
   }
 
+  /** Where a reply is drawn on the page, for keeping it in view as it is written. */
+  replyElement(replyId: string): HTMLElement | undefined {
+    const found = findReply(this.doc, replyId);
+    if (found === undefined) return undefined;
+    const drawn = this.editor.view.nodeDOM(found.position);
+    return drawn instanceof HTMLElement ? drawn : undefined;
+  }
+
   private headingElement(identity: string): HTMLElement | undefined {
     let position = -1;
     this.doc.descendants((node, at) => {

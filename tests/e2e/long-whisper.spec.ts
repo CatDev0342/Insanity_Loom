@@ -93,8 +93,15 @@ test('a long whisper is written in, saved and searched without the author waitin
 
 test('a reply written at the end of a long whisper carries the author along, unless they are reading elsewhere', async () => {
   const scroll = page.locator('.whisper-scroll');
-  const atTheEnd = (): Promise<boolean> =>
-    scroll.evaluate((element) => element.scrollHeight - element.scrollTop - element.clientHeight <= 80);
+  /** Whether the end of the last reply is in view, which is what "watching it being written" means. */
+  const replyInView = (): Promise<boolean> =>
+    page.evaluate(() => {
+      const replies = document.querySelectorAll('.whisper-editor section.reply');
+      const last = replies[replies.length - 1];
+      const scroller = document.querySelector('.whisper-scroll');
+      if (last === undefined || scroller === null) return false;
+      return last.getBoundingClientRect().bottom <= scroller.getBoundingClientRect().bottom + 80;
+    });
 
   // Writing at the end, where the author is.
   await page.locator('.whisper-editor p').last().click();
@@ -102,7 +109,8 @@ test('a reply written at the end of a long whisper carries the author along, unl
   await page.keyboard.type('A question at the end of a long day.');
   await page.keyboard.press('Control+Enter');
   await expect(page.locator('.reply').last()).toContainText('You wrote: A question at the end of a long day.');
-  expect(await atTheEnd()).toBe(true);
+  // The reply wrote itself under the author's eyes.
+  await expect.poll(replyInView).toBe(true);
 
   // Reading something further up while the next reply is written: the author is left where they are.
   await page.keyboard.type('Another question.');

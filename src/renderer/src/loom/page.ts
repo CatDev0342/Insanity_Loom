@@ -49,12 +49,15 @@ const PAGE_TITLE = 'Insanity_Loom';
 const UNTITLED = 'Untitled whisper';
 
 /**
- * How close to the end of the whisper the author must be for a reply being written to carry them along with it, in
- * pixels. Near the end, the reply writes itself under their eyes; further up — reading something, or writing in the
- * middle — they are left where they are, because being yanked away from what you are reading is worse than having to
- * scroll down.
+ * How far past the bottom of the window the end of a reply may be and still count as being watched, in pixels. While
+ * the author can see where the reply is being written, it keeps itself under their eyes as it grows; once they have
+ * scrolled away from it — reading something further up, or writing in the middle — they are left where they are,
+ * because being pulled away from what you are reading is worse than having to scroll down.
+ *
+ * It is the reply itself that is measured, not the scroll: the whisper keeps four tenths of the window as empty room
+ * below the writing, so the end of the writing is never the end of the scroll.
  */
-const FOLLOWING_WITHIN_PX = 80;
+const WATCHING_WITHIN_PX = 80;
 
 
 /** A finished section, with its reply already in place, waiting to be sent. */
@@ -373,9 +376,9 @@ export class Loom {
   // ——— Sections and replies ———
 
   private sectionFinished(sectionId: string, markdown: string): void {
-    const following = this.isNearTheEnd();
+    // The caret has just been taken to the fresh paragraph after the rule, so the author is already looking at where
+    // the reply will appear; nothing needs scrolling here.
     const replyId = this.requireEditor().placeReply(sectionId);
-    if (following) this.goToTheEnd();
     this.waiting.push({ replyId, markdown });
     this.saveNow();
     this.sendNext();
@@ -402,33 +405,35 @@ export class Loom {
       this.renderScheduled = false;
       const writing = this.writing;
       if (writing === undefined) return;
-      const following = this.isNearTheEnd();
+      const following = this.isWatching(writing.replyId);
       this.requireEditor().setReply(writing.replyId, writing.markdown, 'writing');
-      if (following) this.goToTheEnd();
+      if (following) this.keepInView(writing.replyId);
     });
   }
 
-  /** Whether the author is close enough to the end of the whisper to be carried along by what is written there. */
-  private isNearTheEnd(): boolean {
-    const scroll = this.elements.scroll;
-    return scroll.scrollHeight - scroll.scrollTop - scroll.clientHeight <= FOLLOWING_WITHIN_PX;
+  /** Whether the author can see where this reply is being written. */
+  private isWatching(replyId: string): boolean {
+    const reply = this.editor?.replyElement(replyId);
+    if (reply === undefined) return false;
+    return reply.getBoundingClientRect().bottom <= this.elements.scroll.getBoundingClientRect().bottom + WATCHING_WITHIN_PX;
   }
 
-  private goToTheEnd(): void {
-    this.elements.scroll.scrollTop = this.elements.scroll.scrollHeight;
+  /** Keeps the end of a reply in view as it grows. */
+  private keepInView(replyId: string): void {
+    this.editor?.replyElement(replyId)?.scrollIntoView({ block: 'end' });
   }
 
   private finishWriting(state: ReplyState): void {
     const writing = this.writing;
     if (writing === undefined) return;
     this.writing = undefined;
-    const following = this.isNearTheEnd();
+    const following = this.isWatching(writing.replyId);
     const editor = this.requireEditor();
     if (writing.markdown === '') editor.setReplyState(writing.replyId, state);
     else editor.setReply(writing.replyId, writing.markdown, state);
     this.elements.activity.textContent = '';
     this.hideAsks();
-    if (following) this.goToTheEnd();
+    if (following) this.keepInView(writing.replyId);
     this.saveNow();
     this.sendNext();
   }
