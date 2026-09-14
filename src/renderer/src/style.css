@@ -587,20 +587,29 @@ body {
   border-bottom: 1px solid var(--menu-edge);
 }
 
+/* The bar must fit whatever room the writing has left it: in a narrow window it wraps rather than pushing its own
+   buttons out of reach. */
 .find-row {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  gap: 0.5rem;
+  gap: 0.35rem 0.5rem;
 }
 
 /* The two lines' labels line up, so the fields beneath one another do too. */
 .find-row label {
-  min-width: 7rem;
+  flex: none;
+  min-width: 5.5rem;
 }
 
 .find-bar input {
-  flex: 1;
+  flex: 1 1 8rem;
+  min-width: 0;
   max-width: 24rem;
+}
+
+.find-bar button {
+  flex: none;
 }
 
 /* Where the keyboard is, shown the same way as in the panels. */
