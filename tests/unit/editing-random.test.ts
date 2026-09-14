@@ -19,6 +19,9 @@ const SEQUENCES = 400;
 const CHANGES_PER_SEQUENCE = 20;
 // The starting number of the counter that stands in for randomness; any number would do, this one is written down.
 const FIRST_SEED = 20260914;
+// How long each of these may take. Thousands of editing steps take seconds rather than milliseconds, and the machines
+// that run the tests on Windows and Linux are slower than the one they are written on.
+const LONG_ENOUGH = 120_000;
 
 /** The one source of randomness these tests use: the same numbers in the same order, every run. */
 function nextRandom(state: { value: number }): number {
@@ -178,7 +181,7 @@ describe('editing at random', () => {
       w.editor.destroy();
       open.pop();
     }
-  });
+  }, LONG_ENOUGH);
 
   it("never lets the author's editing reach a reply the assistant is still writing", () => {
     const state = { value: FIRST_SEED + 1 };
@@ -201,5 +204,5 @@ describe('editing at random', () => {
       w.editor.destroy();
       open.pop();
     }
-  });
+  }, LONG_ENOUGH);
 });
