@@ -230,8 +230,23 @@ export class HallPanel {
   /** Shows the panel in a window of its own, where it simply stands rather than being opened and closed. */
   standIn(search: (asked: HallSearch) => Promise<HallFound>): void {
     this.search = search;
+    // The same beginning either way: what was last asked for, and the same defaults beneath it. A window that opened
+    // with everything unticked would quietly search less than the author expected.
+    this.showAsked(LAST.asked);
     this.show([], 'Write what to look for.');
     this.looked.focus();
+  }
+
+  /** Puts a search into the fields: what to find, where to look, and how to match it. */
+  private showAsked(asked: HallSearch): void {
+    this.looked.value = asked.looked;
+    this.everywhere.checked = asked.everywhere;
+    this.hereOnly.checked = !asked.everywhere;
+    this.matchCase.checked = asked.matchCase;
+    this.wholeWord.checked = asked.wholeWord;
+    this.regularExpression.checked = asked.regularExpression;
+    this.includeThoughts.checked = asked.includeThoughts;
+    this.includeLibrary.checked = asked.includeLibrary;
   }
 
   /**
@@ -243,15 +258,7 @@ export class HallPanel {
   ): Promise<{ path: string; looked: string; address: string; line: number } | undefined> {
     this.search = search;
     this.chosen = undefined;
-    const asked = LAST.asked;
-    this.looked.value = asked.looked;
-    this.everywhere.checked = asked.everywhere;
-    this.hereOnly.checked = !asked.everywhere;
-    this.matchCase.checked = asked.matchCase;
-    this.wholeWord.checked = asked.wholeWord;
-    this.regularExpression.checked = asked.regularExpression;
-    this.includeThoughts.checked = asked.includeThoughts;
-    this.includeLibrary.checked = asked.includeLibrary;
+    this.showAsked(LAST.asked);
     this.show([], 'Write what to look for.');
     this.dialog.showModal();
     this.looked.focus();
