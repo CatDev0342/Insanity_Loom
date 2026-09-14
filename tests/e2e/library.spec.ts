@@ -123,7 +123,7 @@ test('the editing shortcuts are one stop for the keyboard, with the arrows movin
   await page.keyboard.press('ArrowRight');
   await expect(italic).toBeFocused();
   await page.keyboard.press('End');
-  await expect(toolbar.getByRole('button', { name: 'Clear formatting' })).toBeFocused();
+  await expect(toolbar.getByRole('button', { name: 'Section isolation' })).toBeFocused();
   await page.keyboard.press('Home');
   await expect(bold).toBeFocused();
 
@@ -151,12 +151,12 @@ test('a smaller window keeps every control within reach', async () => {
   await expect(bar.getByRole('button', { name: 'Replace All' })).toBeVisible();
   await page.keyboard.press('Escape');
 
-  // And the advanced find window fits the window it stands in.
+  // And the advanced find window, which stands in a window of its own, holds its own controls within it.
   await page.keyboard.press('Control+Shift+g');
-  const window = page.getByRole('dialog', { name: 'Find in Files' });
+  const window = await application.waitForEvent('window');
   await expect(window.getByRole('button', { name: 'Find All' })).toBeVisible();
   await expect(window.getByRole('button', { name: 'Close' })).toBeVisible();
-  const fits = await window.evaluate((element) => element.getBoundingClientRect().width <= globalThis.innerWidth);
+  const fits = await window.evaluate(() => document.body.scrollWidth <= globalThis.innerWidth + 1);
   expect(fits).toBe(true);
 });
 

@@ -410,16 +410,22 @@ export class Assistant {
         // already shows what the author sent.
         if (this.replaying && update.content.type === 'text') this.emit({ type: 'authorText', text: update.content.text });
         return;
-      case 'agent_message_chunk':
+      case 'agent_message_chunk': {
         if (update.content.type !== 'text') return;
+        const messageId = update.messageId ?? '';
         // While room is being made, what the assistant says is about the conversation rather than part of it.
-        this.emit(this.compacting ? { type: 'thought', text: update.content.text } : { type: 'replyText', text: update.content.text });
+        this.emit(
+          this.compacting
+            ? { type: 'thought', text: update.content.text, messageId }
+            : { type: 'replyText', text: update.content.text, messageId },
+        );
         return;
+      }
       case 'agent_thought_chunk':
         this.emit({ type: 'thinking' });
         // The thinking itself, as it is written: it is shown beside the whisper and kept in a document of its own,
         // never in the whisper, which is the author's prose (40.8).
-        if (update.content.type === 'text') this.emit({ type: 'thought', text: update.content.text });
+        if (update.content.type === 'text') this.emit({ type: 'thought', text: update.content.text, messageId: update.messageId ?? '' });
         return;
       case 'tool_call':
         this.emit({ type: 'tool', id: update.toolCallId, title: update.title, status: update.status ?? 'pending' });
@@ -451,7 +457,7 @@ export class Assistant {
         return;
       case 'compaction_summary_chunk':
         // The summary is the assistant's account of what it kept: thinking about the conversation, not part of it.
-        if (update.content.type === 'text') this.emit({ type: 'thought', text: update.content.text });
+        if (update.content.type === 'text') this.emit({ type: 'thought', text: update.content.text, messageId: update.compactionId });
         return;
       case 'current_mode_update':
         // The assistant can change its own way of working — leaving Plan mode, say; the status bar follows it.

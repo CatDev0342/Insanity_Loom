@@ -32,6 +32,8 @@ export class Thoughts {
   private turn = { number: 0, shown: '' };
   /** The whisper the thinking belongs to; '' while there is none. */
   private whisperPath = '';
+  /** Which thought the last piece belonged to: another means another paragraph, not a longer one. */
+  private thinkingAbout = '';
   /** The commands being followed, by the name the assistant gave them, so each is shown once. */
   private readonly commands = new Map<string, HTMLElement>();
 
@@ -99,10 +101,12 @@ export class Thoughts {
   }
 
   /** A piece of thinking, as it is written. */
-  add(text: string): void {
+  add(text: string, messageId = ''): void {
     if (text === '') return;
+    const sameThought = messageId === this.thinkingAbout;
+    this.thinkingAbout = messageId;
     const last = this.elements.thoughtsStream.lastElementChild;
-    if (last instanceof HTMLElement && last.classList.contains('thought')) last.textContent += text;
+    if (sameThought && last instanceof HTMLElement && last.classList.contains('thought')) last.textContent += text;
     else {
       const piece = document.createElement('p');
       piece.className = 'thought';
@@ -110,7 +114,7 @@ export class Thoughts {
       this.elements.thoughtsStream.append(piece);
     }
     this.goToTheEnd();
-    this.unwritten += text;
+    this.unwritten += sameThought ? text : `\n\n${text}`;
     this.writeSoon();
   }
 

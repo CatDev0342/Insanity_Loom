@@ -51,10 +51,14 @@ export type AssistantEvent =
   | { readonly type: 'replayFinished' }
   /** Text the author sent, as the assistant recorded it (seen while a resumed conversation's history is replayed). */
   | { readonly type: 'authorText'; readonly text: string }
-  | { readonly type: 'replyText'; readonly text: string }
+  /**
+   * A piece of the assistant's reply. `messageId` names the message it belongs to: an assistant that speaks, runs a
+   * command, and speaks again sends several messages in one reply, and they are not one another's sentences.
+   */
+  | { readonly type: 'replyText'; readonly text: string; readonly messageId: string }
   | { readonly type: 'thinking' }
   /** A piece of the assistant's thinking, as it is written. Shown beside the whisper and kept in its own document. */
-  | { readonly type: 'thought'; readonly text: string }
+  | { readonly type: 'thought'; readonly text: string; readonly messageId: string }
   /** How much of the assistant's context window is in use, and how big it is, in tokens. */
   | { readonly type: 'context'; readonly used: number; readonly size: number }
   /** What the assistant offers to be asked to do, by name ("compact"). */

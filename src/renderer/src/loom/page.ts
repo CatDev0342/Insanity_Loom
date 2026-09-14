@@ -30,6 +30,7 @@ import { Library, type LibraryElements } from './library';
 import { Navigation, type NavigationElements } from './navigation';
 import { ReferenceBar, type ReferenceBarElements } from './reference-bar';
 import { Thoughts, type ThoughtsElements } from './thoughts';
+import { NOTHING_YET, withPiece, type ReplyBeingWritten } from './one-reply';
 import { Saving } from './saving';
 import { theAuthorsOwn } from './the-authors-own';
 import { whatWasLost } from './nothing-lost';
@@ -110,8 +111,8 @@ export class Loom {
   /** What the whisper's file is called. */
   private whisperName = '';
 
-  /** The reply being written, and its Markdown so far. */
-  private writing: { replyId: string; markdown: string } | undefined;
+  /** The reply being written: its own identity, what has arrived, and which message the last piece belonged to. */
+  private writing: ({ replyId: string } & ReplyBeingWritten) | undefined;
   private renderScheduled = false;
 
   /**
@@ -121,14 +122,14 @@ export class Loom {
    */
   private replay:
     /** The whisper is blank: the history is written straight into it. */
-    | { way: 'fill'; author: string; reply: string; lastSection: string | null }
+    | { way: 'fill'; author: string; reply: string; replyMessageId: string; lastSection: string | null }
     /** The whisper records this conversation: only what it is missing is brought in (catch-up.ts). */
-    | { way: 'catchUp'; author: string; reply: string; history: HistoryPiece[] }
+    | { way: 'catchUp'; author: string; reply: string; replyMessageId: string; history: HistoryPiece[] }
     /**
      * The whisper holds writing of its own, and this is another conversation. Nothing of the whisper is touched: the
      * history is gathered and written into a whisper of its own when it has all arrived.
      */
-    | { way: 'intoANewWhisper'; author: string; reply: string; history: HistoryPiece[]; id: string }
+    | { way: 'intoANewWhisper'; author: string; reply: string; replyMessageId: string; history: HistoryPiece[]; id: string }
     | undefined;
 
   /**
@@ -630,7 +631,7 @@ export class Loom {
     if (this.writing !== undefined || this.state !== 'connected' || this.replay !== undefined) return;
     const next = this.waiting.shift();
     if (next === undefined) return;
-    this.writing = { replyId: next.replyId, markdown: '' };
+    this.writing = { replyId: next.replyId, ...NOTHING_YET };
     this.requireEditor().setReplyState(next.replyId, 'writing');
     // The reply arrives as events; the promise settles when it has finished, which replyFinished also reports.
     this.assistant.send(next.markdown).catch((problem: unknown) => {
@@ -733,11 +734,14 @@ export class Loom {
       case 'replyText':
         if (this.replay !== undefined) {
           if (this.replay.author !== '') this.flushReplay();
-          this.replay.reply += event.text;
+          const gathered = withPiece({ markdown: this.replay.reply, messageId: this.replay.replyMessageId }, event.text, event.messageId);
+          this.replay.reply = gathered.markdown;
+          this.replay.replyMessageId = gathered.messageId;
           return;
         }
         if (this.writing === undefined) return;
-        this.writing.markdown += event.text;
+        // Several messages make one reply; they are parted as paragraphs rather than run together.
+        this.writing = { replyId: this.writing.replyId, ...withPiece(this.writing, event.text, event.messageId) };
         this.elements.activity.textContent = '';
         this.scheduleRender();
         return;
@@ -745,7 +749,7 @@ export class Loom {
         if (this.writing !== undefined) this.elements.activity.textContent = 'Thinking…';
         return;
       case 'thought':
-        this.thoughts.add(event.text);
+        this.thoughts.add(event.text, event.messageId);
         return;
       case 'context':
         this.contextRoom.show(event.used, event.size);
@@ -801,17 +805,17 @@ export class Loom {
     if (replaying) {
       if (id === this.conversationId && !editor.isBlank) {
         // The whisper records this conversation: gather the history and bring in only what the whisper is missing.
-        this.replay = { way: 'catchUp', author: '', reply: '', history: [] };
+        this.replay = { way: 'catchUp', author: '', reply: '', replyMessageId: '', history: [] };
       } else if (editor.isBlank) {
         // Nothing to lose: the history is written straight into the whisper.
-        this.replay = { way: 'fill', author: '', reply: '', lastSection: null };
+        this.replay = { way: 'fill', author: '', reply: '', replyMessageId: '', lastSection: null };
         this.abandonWriting('stopped');
         this.waiting.length = 0;
         this.title = 'Resumed conversation';
       } else {
         // The whisper holds writing of its own and this is another conversation. **It is not ours to empty.** The
         // history is gathered and given a whisper of its own; what the author wrote stays exactly where it is.
-        this.replay = { way: 'intoANewWhisper', author: '', reply: '', history: [], id };
+        this.replay = { way: 'intoANewWhisper', author: '', reply: '', replyMessageId: '', history: [], id };
         return;
       }
     }
