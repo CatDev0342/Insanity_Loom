@@ -350,6 +350,39 @@ export class WhisperEditor {
     return found;
   }
 
+  /**
+   * The turns of this whisper that were closed but never answered: the author said something and the assistant never
+   * replied, because it was not there to hear it.
+   *
+   * The whisper is the record of its conversation, so the record is what is asked. A turn counts as unanswered when
+   * the line closing it is followed by nothing, by a reply still waiting to be written, or by one that ended in a
+   * problem. A reply the author **stopped** is not unanswered: they stopped it themselves, and being asked whether
+   * they meant it is not help.
+   */
+  unansweredTurns(): readonly { readonly sectionId: string; readonly replyId: string; readonly markdown: string }[] {
+    const found: { sectionId: string; replyId: string; markdown: string }[] = [];
+    const children: ProseMirrorNode[] = [];
+    this.doc.forEach((node) => children.push(node));
+    children.forEach((node, index) => {
+      if (node.type.name !== 'horizontalRule') return;
+      const sectionId = node.attrs['sectionId'];
+      if (typeof sectionId !== 'string') return;
+      const after = children[index + 1];
+      const reply = after?.type.name === 'reply' ? after : undefined;
+      const state = reply?.attrs['state'];
+      if (state === 'finished' || state === 'stopped') return;
+      const waiting = reply;
+      const written = sectionContent(this.doc, sectionId);
+      if (written === undefined) return;
+      found.push({
+        sectionId,
+        replyId: typeof waiting?.attrs['replyId'] === 'string' ? waiting.attrs['replyId'] : '',
+        markdown: this.toMarkdown(written),
+      });
+    });
+    return found;
+  }
+
   /** Which turn a reply answers: the turn of the rule it was placed after. */
   turnAnswering(replyId: string): number {
     const found = findReply(this.doc, replyId);

@@ -32,7 +32,7 @@ export const FAKE_CONNECTION = {
  * settings that reach the stand-in assistant.
  */
 export function prepareData(
-  start: 'first start' | 'fake assistant' | 'fake assistant, signed out',
+  start: 'first start' | 'fake assistant' | 'fake assistant, signed out' | 'no assistant at all',
   options: { readonly history?: number; readonly keepJournal?: boolean; readonly greatHall?: boolean } = {},
 ): void {
   mkdirSync(DATA, { recursive: true });
@@ -60,6 +60,11 @@ export function prepareData(
   if (start === 'fake assistant') {
     const history = options.history ?? 1;
     const connection = { ...FAKE_CONNECTION, hostArguments: [FAKE_ASSISTANT, '--history', String(history)] };
+    writeFileSync(join(DATA, 'settings.json'), JSON.stringify({ version: 2, connection }));
+  }
+  // An assistant that cannot be started at all: for what the program does with what the author says while it is away.
+  if (start === 'no assistant at all') {
+    const connection = { ...FAKE_CONNECTION, hostProgram: join(REPOSITORY, 'no such assistant') };
     writeFileSync(join(DATA, 'settings.json'), JSON.stringify({ version: 2, connection }));
   }
   if (start === 'fake assistant, signed out') {

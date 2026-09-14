@@ -278,6 +278,34 @@ export class Loom {
   }
 
   /**
+   * A turn the author closed that was never answered — because the assistant was away, or the program was closed
+   * before it could be sent — is found in the whisper itself when it is opened, and offered again. What the author
+   * said is never lost for want of a connection, and never quietly forgotten either.
+   */
+  private offerUnansweredTurns(): void {
+    const editor = this.editor;
+    if (editor === undefined) return;
+    const unanswered = editor.unansweredTurns();
+    if (unanswered.length === 0) return;
+    const many = unanswered.length === 1 ? 'One turn was' : `${String(unanswered.length)} turns were`;
+    this.showNotice(`${many} closed here without an answer. The assistant was not there to hear it.`, {
+      name: unanswered.length === 1 ? 'Send it' : 'Send them',
+      take: () => this.sendAgain(unanswered),
+    });
+  }
+
+  /** Puts unanswered turns back in the queue, in the order they were written. */
+  private sendAgain(turns: readonly { readonly sectionId: string; readonly replyId: string; readonly markdown: string }[]): void {
+    const editor = this.requireEditor();
+    for (const turn of turns) {
+      const replyId = turn.replyId === '' ? editor.placeReply(turn.sectionId) : turn.replyId;
+      this.waiting.push({ replyId, markdown: turn.markdown });
+    }
+    this.saveNow();
+    this.sendNext();
+  }
+
+  /**
    * Fills the Library with what this whisper's own replies cite. The whisper is the record of its conversation, so
    * its citations are read back out of it: opening another whisper shows what that conversation referred to.
    */
@@ -325,6 +353,7 @@ export class Loom {
   private showTitle(): void {
     this.showWhatPointsHere();
     this.showWhatIsCited();
+    this.offerUnansweredTurns();
     this.navigation.draw();
     document.title = this.whisperName === '' ? `${this.title} — ${PAGE_TITLE}` : `${this.whisperName} — ${PAGE_TITLE}`;
     this.elements.whisperName.textContent = this.whisperName;
@@ -530,6 +559,9 @@ export class Loom {
     const replyId = editor.placeReply(sectionId);
     this.waiting.push({ replyId, markdown });
     this.saveNow();
+    if (this.state !== 'connected') {
+      this.showNotice('The assistant is not there at the moment. This turn is kept, and goes as soon as it returns.');
+    }
     this.sendNext();
   }
 
@@ -609,6 +641,9 @@ export class Loom {
         // Signing in is offered, never started: the author presses Sign In when they choose to.
         this.elements.signIn.hidden = event.state !== 'signedOut';
         if (event.state !== 'connected') this.abandonWriting('failed');
+        // Whatever the author closed while the assistant was away goes now. Nothing they have said is ever dropped
+        // for want of a connection.
+        else this.sendNext();
         return;
       case 'conversation':
         this.onConversation(event.id, event.replaying);
@@ -953,15 +988,15 @@ export class Loom {
   }
 
   /** A quiet word to the author about something Insanity_Loom did, dismissable, above the whisper. */
-  private showNotice(message: string): void {
-    this.showCard(message, 'ask ask-notice', 'status');
+  private showNotice(message: string, offer?: { readonly name: string; readonly take: () => void }): void {
+    this.showCard(message, 'ask ask-notice', 'status', offer);
   }
 
   private showProblem(message: string): void {
     this.showCard(message, 'ask ask-problem', 'alert');
   }
 
-  private showCard(message: string, className: string, role: string): void {
+  private showCard(message: string, className: string, role: string, offer?: { readonly name: string; readonly take: () => void }): void {
     const note = document.createElement('div');
     note.className = className;
     note.setAttribute('role', role);
@@ -974,7 +1009,20 @@ export class Loom {
       note.remove();
       this.elements.asks.hidden = this.elements.asks.childElementCount === 0;
     });
-    note.append(text, dismiss);
+    note.append(text);
+    // A notice about something the author may want done offers to do it, rather than leaving them to work out how.
+    if (offer !== undefined) {
+      const take = document.createElement('button');
+      take.type = 'button';
+      take.textContent = offer.name;
+      take.addEventListener('click', () => {
+        note.remove();
+        this.elements.asks.hidden = this.elements.asks.childElementCount === 0;
+        offer.take();
+      });
+      note.append(take);
+    }
+    note.append(dismiss);
     this.elements.asks.append(note);
     this.elements.asks.hidden = false;
   }

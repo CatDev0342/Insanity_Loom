@@ -165,3 +165,27 @@ test('the status bar says how full the assistant is, and offers to make room', a
   await expect(replies()).toHaveCount(2);
   await expect(page.getByLabel("The assistant's thinking", { exact: true })).toContainText('Kept what mattered.');
 });
+
+test('a turn closed while the assistant is away is kept, and goes when it returns', async () => {
+  // The assistant cannot be started at all: what the author says must not be lost for want of it.
+  await application.close();
+  prepareData('no assistant at all');
+  ({ application, page } = await launch());
+  await expect(page.locator('#status-text')).toHaveText(/could not|not connected|failed/i);
+
+  await whisper().click();
+  await page.keyboard.press('Control+End');
+  await page.keyboard.type('The thing I said while you were away.');
+  await page.keyboard.press('Control+Enter');
+  // The author is told plainly, rather than watching nothing happen.
+  await expect(page.locator('#asks')).toContainText('goes as soon as it returns');
+
+  // And the whisper itself remembers it: an unanswered turn is offered again when the whisper is opened.
+  await application.close();
+  prepareData('fake assistant', { keepJournal: true });
+  ({ application, page } = await launch());
+  await expect(page.locator('#status-text')).toHaveText(/Connected to Fake Assistant/);
+  await expect(page.locator('#asks')).toContainText('closed here without an answer');
+  await page.locator('#asks').getByRole('button', { name: /Send it/ }).click();
+  await expect(replies().last()).toContainText('You wrote: The thing I said while you were away.');
+});

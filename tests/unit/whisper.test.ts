@@ -178,3 +178,45 @@ describe('the whisper file', () => {
     expect(() => fromXhtml('<?xml version="1.0"?><html xmlns="http://www.w3.org/1999/xhtml"><body></body></html>')).toThrow(/no whisper/);
   });
 });
+
+describe('turns that were never answered', () => {
+  it('finds a turn closed with nothing after it, and says what was said', () => {
+    const { whisper: w } = whisper('<p>The thing I asked.</p>');
+    finishSection(w);
+    const unanswered = w.unansweredTurns();
+    expect(unanswered).toHaveLength(1);
+    expect(unanswered[0]?.markdown.trim()).toBe('The thing I asked.');
+    expect(unanswered[0]?.replyId).toBe('');
+  });
+
+  it('finds a turn whose reply never arrived, and names the reply waiting for it', () => {
+    const { whisper: w, sections } = whisper('<p>The thing I asked.</p>');
+    finishSection(w);
+    const replyId = w.placeReply(sections[0]?.sectionId ?? '');
+    expect(w.unansweredTurns()).toEqual([
+      { sectionId: sections[0]?.sectionId, replyId, markdown: expect.stringContaining('The thing I asked.') },
+    ]);
+  });
+
+  it('counts a turn answered once its reply is finished', () => {
+    const { whisper: w, sections } = whisper('<p>The thing I asked.</p>');
+    finishSection(w);
+    const replyId = w.placeReply(sections[0]?.sectionId ?? '');
+    w.setReply(replyId, 'The answer.', 'finished');
+    expect(w.unansweredTurns()).toHaveLength(0);
+  });
+
+  it('leaves alone a reply the author stopped, and offers again one that ended in a problem', () => {
+    const { whisper: w, sections } = whisper('<p>The thing I asked.</p>');
+    finishSection(w);
+    const replyId = w.placeReply(sections[0]?.sectionId ?? '');
+
+    // Stopped on purpose: the author knows what happened, and being asked whether they meant it is not help.
+    w.setReply(replyId, 'As far as it got.', 'stopped');
+    expect(w.unansweredTurns()).toHaveLength(0);
+
+    // Ended in a problem: the author said something and never got an answer.
+    w.setReply(replyId, 'As far as it got.', 'failed');
+    expect(w.unansweredTurns()).toHaveLength(1);
+  });
+});
