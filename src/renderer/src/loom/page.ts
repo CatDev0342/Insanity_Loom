@@ -292,7 +292,9 @@ export class Loom {
   private offerUnansweredTurns(): void {
     const editor = this.editor;
     if (editor === undefined) return;
-    const unanswered = editor.unansweredTurns();
+    // A turn being answered right now is not unanswered: the reply is on its way, or waiting its turn to be sent.
+    const inFlight = new Set([this.writing?.replyId ?? '', ...this.waiting.map((one) => one.replyId)]);
+    const unanswered = editor.unansweredTurns().filter((turn) => !inFlight.has(turn.replyId));
     if (unanswered.length === 0) return;
     const many = unanswered.length === 1 ? 'One turn was' : `${String(unanswered.length)} turns were`;
     this.showNotice(`${many} closed here without an answer. The assistant was not there to hear it.`, {
