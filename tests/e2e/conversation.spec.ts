@@ -138,7 +138,7 @@ test('Assistant ▸ Resume Conversation fills a fresh whisper from the conversat
   const dialog = page.getByRole('dialog', { name: 'Resume a conversation' });
   // A list of choices, said plainly, and one stop for the keyboard however many conversations there are.
   await expect(dialog.getByRole('group', { name: 'Earlier conversations' })).toBeVisible();
-  await dialog.getByRole('option', { name: /An earlier conversation/ }).click();
+  await dialog.getByRole('button', { name: /An earlier conversation/ }).click();
   await expect(dialog).toBeHidden();
   await expect(whisper().locator('p').first()).toHaveText('An earlier question');
   await expect(replies().first()).toHaveText('An earlier answer');
