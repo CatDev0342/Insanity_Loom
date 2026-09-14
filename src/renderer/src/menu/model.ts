@@ -54,6 +54,8 @@ export const MENUS: readonly TopMenu[] = [
       command('&New Whisper', 'whisper.new', ['Ctrl+N']),
       command('&Open Whisper…', 'whisper.open', ['Ctrl+O']),
       SEPARATOR,
+      command('What Points &Here…', 'whisper.pointsHere', ['Ctrl+Shift+H']),
+      SEPARATOR,
       command('&Show Alcove Folder', 'whisper.showAlcove'),
       SEPARATOR,
       command('E&xit', 'app.quit', ['Alt+F4'], true),

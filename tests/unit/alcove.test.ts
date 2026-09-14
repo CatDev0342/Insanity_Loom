@@ -132,3 +132,24 @@ describe('renaming a whisper', () => {
     expect(after).toContain('Another whisper.xhtml');
   });
 });
+
+describe('what points here', () => {
+  it('names the whispers that link to one, and the sections they point into', () => {
+    const held = alcove();
+    const pointedAt = held.create('The one pointed at', '<p>here</p>', WHEN);
+    const name = basename(pointedAt);
+    held.create('Points at it twice', `<p><a href="${encodeURIComponent(name)}#first">a</a><a href="${encodeURIComponent(name)}#second">b</a></p>`, WHEN);
+    held.create('Points at the whole of it', `<p><a href="${encodeURIComponent(name)}">c</a></p>`, WHEN);
+    held.create('Points somewhere else', '<p><a href="https://example.com/">d</a></p>', WHEN);
+
+    const pointing = held.pointingAt(name);
+    expect(pointing).toHaveLength(2);
+    const twice = pointing.find((whisper) => whisper.name.includes('twice'));
+    expect([...(twice?.headings ?? [])].sort()).toEqual(['first', 'second']);
+    const whole = pointing.find((whisper) => whisper.name.includes('whole'));
+    // Nothing after the name means the whisper itself, rather than a section of it.
+    expect(whole?.headings).toEqual(['']);
+    // A whisper does not count as pointing at itself.
+    expect(held.pointingAt(name).some((whisper) => whisper.name === name)).toBe(false);
+  });
+});

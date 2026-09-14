@@ -139,3 +139,35 @@ test('a link can point at a section, and following it goes there', async () => {
   // The heading a link leads to is marked for a moment, so the author's eye finds it.
   await expect(whisper.locator('h2')).toHaveClass(/is-found/);
 });
+
+test('File ▸ What Points Here lists the whispers that link to this one, and opens one', async () => {
+  const whisper = page.locator('.whisper-editor');
+  await whisper.click();
+  await page.keyboard.type('the whisper pointed at');
+  const pointedAt = await page.locator('#whisper-name').textContent();
+
+  // A second whisper, with a link back to the first.
+  await page.keyboard.press('Control+n');
+  await whisper.click();
+  await page.keyboard.type('pointing back');
+  await page.keyboard.press('Control+a');
+  await page.keyboard.press('Control+k');
+  const link = page.getByRole('dialog', { name: 'Link' });
+  await link.getByLabel('Or a whisper:').selectOption({ label: (pointedAt ?? '').replace(/\.xhtml$/, '') });
+  await link.getByRole('button', { name: 'OK' }).click();
+  await expect(link).toBeHidden();
+  const pointing = await page.locator('#whisper-name').textContent();
+
+  // Back in the first whisper, the second is named as pointing here.
+  await whisper.locator('a').click({ modifiers: ['Control'] });
+  await expect(page.locator('#whisper-name')).toHaveText(pointedAt ?? '');
+  await page.keyboard.press('Control+Shift+h');
+  const panel = page.getByRole('dialog', { name: 'What Points Here' });
+  await expect(panel).toBeVisible();
+  await expect(panel.getByRole('listbox')).toContainText((pointing ?? '').replace(/\.xhtml$/, ''));
+
+  // Choosing it opens it.
+  await panel.getByRole('button', { name: 'Open' }).click();
+  await expect(panel).toBeHidden();
+  await expect(page.locator('#whisper-name')).toHaveText(pointing ?? '');
+});

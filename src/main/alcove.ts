@@ -162,6 +162,24 @@ export class Alcove {
     return changed;
   }
 
+  /**
+   * The whispers that link to this one, and which of its sections they point into. Read from the alcove each time it
+   * is asked for, so it is never out of date with the files themselves.
+   */
+  pointingAt(name: string): readonly { readonly name: string; readonly headings: readonly string[] }[] {
+    const found: { name: string; headings: string[] }[] = [];
+    for (const whisper of this.list()) {
+      if (whisper.name === name) continue;
+      const headings = new Set<string>();
+      for (const [, address] of readFileSync(whisper.path, 'utf8').matchAll(LINK_ADDRESS)) {
+        if (address === undefined || readLinkName(address) !== name) continue;
+        headings.add(decodeURIComponent(addressAfterName(address).replace(/^#/, '')));
+      }
+      if (headings.size > 0) found.push({ name: whisper.name, headings: [...headings] });
+    }
+    return found;
+  }
+
   static isWhisper(path: string): boolean {
     return path.toLowerCase().endsWith(WHISPER_SUFFIX);
   }

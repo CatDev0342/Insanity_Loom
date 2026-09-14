@@ -4,7 +4,7 @@
 import { BrowserWindow, dialog, shell } from 'electron';
 import { existsSync } from 'node:fs';
 import { basename, dirname, join } from 'node:path';
-import type { OpenWhisper, WhisperInAlcove } from '../shared/whispers';
+import type { OpenWhisper, WhisperInAlcove, WhisperPointingHere } from '../shared/whispers';
 import { Alcove, DEFAULT_ALCOVE_NAME } from './alcove';
 import type { Journal } from './journal';
 import type { PreferenceStore } from './preference-store';
@@ -46,6 +46,15 @@ export class Whispers {
   /** Opens the whisper a link points at, by its file name in the alcove. */
   openNamed(name: string): OpenWhisper {
     return this.open(this.pathOf(name));
+  }
+
+  /** The whispers that link to this one, and which of its sections they point into. */
+  pointingHere(name: string): readonly WhisperPointingHere[] {
+    return this.alcove.pointingAt(name).map((whisper) => ({
+      name: whisper.name,
+      title: Whispers.titleFromName(whisper.name),
+      headings: whisper.headings,
+    }));
   }
 
   /** Reads a whisper without opening it, so that what is inside it can be listed. */

@@ -19,6 +19,14 @@ export interface WhisperInAlcove {
   readonly title: string;
 }
 
+/** A whisper that links to the one the author is in, and which of its sections it points into. */
+export interface WhisperPointingHere {
+  readonly name: string;
+  readonly title: string;
+  /** The identities of the headings pointed into; '' among them means the whisper as a whole. */
+  readonly headings: readonly string[];
+}
+
 /** A link from one whisper into another, or into a place in this one. */
 export interface WhisperLink {
   /** The whisper's file name, or '' for a link within the whisper the author is in. */
@@ -69,6 +77,8 @@ export interface WhispersBridge {
   openNamed(name: string): Promise<OpenWhisper>;
   /** Reads a whisper in the alcove without opening it — to list what a link may point at inside it. */
   contents(name: string): Promise<string>;
+  /** The whispers that link to this one. */
+  pointingHere(name: string): Promise<readonly WhisperPointingHere[]>;
   /** Asks the author for a whisper to open. Undefined when they choose none. */
   choose(): Promise<OpenWhisper | undefined>;
   /** Names the whisper's file after the conversation's title, keeping the date it began; returns where it now is. */
@@ -87,6 +97,7 @@ export const WHISPER_CHANNELS = {
   list: 'insanity-loom:whisper-list',
   openNamed: 'insanity-loom:whisper-open-named',
   contents: 'insanity-loom:whisper-contents',
+  pointingHere: 'insanity-loom:whisper-pointing-here',
   rename: 'insanity-loom:whisper-rename',
   showAlcove: 'insanity-loom:alcove-show',
 } as const;

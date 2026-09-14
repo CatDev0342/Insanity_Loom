@@ -314,6 +314,20 @@ export class Loom {
     return this.editor.formatStanding(command);
   }
 
+  /** The file name of the whisper open, for what points at it. */
+  get whisperFileName(): string {
+    return this.whisperName;
+  }
+
+  /** Opens a whisper of the alcove by its file name — what points here, and links. */
+  async openNamedWhisper(name: string): Promise<void> {
+    try {
+      await this.showWhisper(await this.whispers.openNamed(name));
+    } catch (problem) {
+      this.showProblem(problem instanceof Error ? problem.message : String(problem));
+    }
+  }
+
   /** The address of the link the caret is in, or '' when it is in none. */
   get linkAddress(): string {
     return this.editor === undefined ? '' : this.editor.linkAddress;
