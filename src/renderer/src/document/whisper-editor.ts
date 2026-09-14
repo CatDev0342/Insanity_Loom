@@ -290,7 +290,15 @@ export class WhisperEditor {
     this.editor.commands.focus('end');
   }
 
-  /** Turns section isolation on or off. The boxes around the sections follow it, so the author sees what it means. */
+  /**
+   * Puts the keyboard back in the whisper without moving the caret: for a command carried out from a button or a
+   * menu, which took the focus to get itself pressed. `focus()` would take the caret to the end of the whisper.
+   */
+  keepTheCaret(): void {
+    this.editor.view.focus();
+  }
+
+  /** Turns section isolation on or off. What is drawn around the sections follows it, so the author sees what it means. */
   isolateSections(isolating: boolean): void {
     this.isolating = isolating;
     this.editor.view.dom.classList.toggle('is-isolating', isolating);

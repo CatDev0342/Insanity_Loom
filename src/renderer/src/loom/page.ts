@@ -509,7 +509,10 @@ export class Loom {
     this.elements.isolation.hidden = !isolating;
     // Nothing is said above the whisper: the button shows itself pressed and the status bar says it is on. A notice
     // for something the author can already see is a notice they must then dismiss.
-    editor.focus();
+    //
+    // And nothing is focused: `focus()` would take the caret to the end of the whisper, which is a strange thing to
+    // do to someone who has just pressed a button about how Select All behaves. The caret stays where it was.
+    editor.keepTheCaret();
   }
 
   /** Whether section isolation is on, for the menu's tick. */

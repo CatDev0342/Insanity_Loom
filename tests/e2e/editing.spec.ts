@@ -212,34 +212,38 @@ test('Section Isolation keeps Select All inside the turn the author is in', asyn
   expect(await selected()).toContain('The first question.');
 });
 
-test('each section is drawn in a box of its own, and Quote answers what was said', async () => {
+test('section isolation lifts the section the author is in, and Quote answers what was said', async () => {
   const whisper = page.locator('.whisper-editor');
   await whisper.click();
   await page.keyboard.type('The thing I asked.');
   await page.keyboard.press('Control+Enter');
   await expect(page.locator('.reply')).toHaveCount(1);
+  await page.keyboard.type('And what I am writing now.');
 
-  // No boxes while section isolation is off: a reach takes the whole whisper, and there is nothing for them to say.
-  await expect(page.locator('.whisper-editor .section-opens')).toHaveCount(0);
+  // Nothing is lifted while isolation is off: a reach takes the whole whisper.
+  await expect(whisper.locator('.lifted')).toHaveCount(0);
 
-  // With it on, each section is drawn in a box, in the gold the status bar uses. Nothing inside it is changed.
+  // With it on, the section the author is in is lifted, and it is the one they are in — not the whole whisper.
   await page.keyboard.press('Control+Shift+i');
-  const gold = await page.locator('.whisper-editor .section-opens').first().evaluate((element) => getComputedStyle(element).borderTopColor);
-  expect(gold).toBe('rgb(176, 138, 62)');
-  await expect(page.locator('.whisper-editor .section-closes')).not.toHaveCount(0);
+  await expect(whisper.locator('.lifted')).not.toHaveCount(0);
+  await expect(whisper.locator('.lifted')).toContainText('And what I am writing now.');
+  await expect(whisper.locator('.lifted')).not.toContainText('The thing I asked.');
 
-  // And off again, they go.
-  await page.keyboard.press('Control+Shift+i');
-  await expect(page.locator('.whisper-editor .section-opens')).toHaveCount(0);
-  await page.keyboard.press('Control+Shift+i');
+  // Toggling it leaves the caret where it was: the author goes on writing where they were.
+  await page.keyboard.type(' Still here.');
+  await expect(whisper.locator('.lifted')).toContainText('And what I am writing now. Still here.');
 
   // The turn's own line says which turn it was, on the left.
-  const label = await page.locator('.whisper-editor hr').first().evaluate((element) => ({
+  const label = await whisper.locator('hr').first().evaluate((element) => ({
     content: getComputedStyle(element, '::after').content,
     left: getComputedStyle(element, '::after').left,
   }));
   expect(label.content).toContain('Turn 1');
   expect(label.left).toBe('0px');
+
+  // And off again, nothing is lifted.
+  await page.keyboard.press('Control+Shift+i');
+  await expect(whisper.locator('.lifted')).toHaveCount(0);
 
   // Quoting from the right-click menu puts what was said at the end, to write an answer under.
   await page.locator('.reply').first().click({ button: 'right' });

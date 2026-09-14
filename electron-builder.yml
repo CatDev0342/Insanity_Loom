@@ -20,6 +20,12 @@ extraFiles:
 
 asar: true
 
+# The spelling dictionaries the program ships with, so it can check spelling without asking anyone for anything
+# (src/main/spelling.ts). Fetched at build time by scripts/fetch-dictionaries.mjs.
+extraResources:
+  - from: resources/dictionaries
+    to: dictionaries
+
 # Electron's fuses switch off, inside the built program itself, ways it could be turned into something else: run as a
 # plain Node.js interpreter, steered by environment variables or debugging switches, or made to load code from outside
 # its own sealed archive.

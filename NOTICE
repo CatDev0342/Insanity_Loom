@@ -2,3 +2,11 @@ Insanity_Loom
 Copyright 2026 CatDev0342
 
 This product is licensed under the Apache License, Version 2.0 (see LICENSE).
+
+Spelling dictionaries
+---------------------
+Insanity_Loom ships with the compiled spelling dictionary Chromium itself uses for English
+(en-US), fetched at build time from Chromium's own dictionary service. That dictionary is
+derived from SCOWL and is distributed by the Chromium project under its own terms; it is
+included here unchanged. Dictionaries for other languages are not shipped, and are fetched
+only if the author turns that on (Edit > Preferences).

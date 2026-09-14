@@ -26,6 +26,7 @@ export class PreferencesPanel {
   private readonly form: HTMLFormElement;
   private readonly problem: HTMLParagraphElement;
   private readonly enabled: HTMLInputElement;
+  private readonly fetchDictionaries: HTMLInputElement;
   private readonly languages: HTMLElement;
   private readonly newWord: HTMLInputElement;
   private readonly words: HTMLSelectElement;
@@ -49,6 +50,13 @@ export class PreferencesPanel {
     this.languages.setAttribute('role', 'group');
     const languagesNote = element('p', 'panel-note');
     languagesNote.textContent = "With none ticked, the languages Insanity_Loom's system chose are checked.";
+
+    const fetchDictionaries = choice('checkbox', 'spelling-fetch', 'Fetch &dictionaries for other languages when needed');
+    this.fetchDictionaries = fetchDictionaries.input;
+    const fetchNote = element('p', 'panel-note');
+    fetchNote.textContent =
+      'Insanity_Loom ships with English. Other languages are fetched from Google, which is the only thing this ' +
+      'program asks of anyone but your assistant — so it is off unless you turn it on.';
 
     this.newWord = element('input');
     this.newWord.spellcheck = false;
@@ -87,7 +95,14 @@ export class PreferencesPanel {
       heading,
       this.problem,
       group('Whispers', row('alcove-folder', '&Alcove folder:', this.alcove, browseHolder), alcoveNote),
-      group('Spelling', enabled.row, row('spelling-languages', '&Languages:', this.languages), languagesNote),
+      group(
+        'Spelling',
+        enabled.row,
+        row('spelling-languages', '&Languages:', this.languages),
+        languagesNote,
+        fetchDictionaries.row,
+        fetchNote,
+      ),
       group(
         'Personal dictionary',
         dictionaryNote,
@@ -128,6 +143,7 @@ export class PreferencesPanel {
     this.problem.textContent = state.problem;
     this.problem.hidden = state.problem === '';
     this.enabled.checked = state.preferences.enabled;
+    this.fetchDictionaries.checked = state.preferences.fetchDictionaries;
     const chosen = new Set(state.preferences.languages);
     this.languages.replaceChildren(
       ...state.availableLanguages.map((code) => {
@@ -175,7 +191,7 @@ export class PreferencesPanel {
     const languages = [...this.languages.querySelectorAll<HTMLInputElement>('input[type="checkbox"]')]
       .filter((box) => box.checked)
       .map((box) => box.value);
-    return { enabled: this.enabled.checked, languages };
+    return { enabled: this.enabled.checked, languages, fetchDictionaries: this.fetchDictionaries.checked };
   }
 
   private say(message: string, failed: boolean): void {

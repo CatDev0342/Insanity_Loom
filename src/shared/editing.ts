@@ -23,9 +23,14 @@ export interface SpellingPreferences {
   readonly enabled: boolean;
   /** The languages checked, as language codes ("en-US"); empty for the system's own choice. */
   readonly languages: readonly string[];
+  /**
+   * Whether Chromium may fetch a dictionary it does not have. Off by default: the program ships one, and fetching
+   * the rest means asking Google for them, which is the author's choice to make and not ours (60.7.5).
+   */
+  readonly fetchDictionaries: boolean;
 }
 
-export const DEFAULT_SPELLING: SpellingPreferences = { enabled: true, languages: [] };
+export const DEFAULT_SPELLING: SpellingPreferences = { enabled: true, languages: [], fetchDictionaries: false };
 
 /** What the Preferences panel opens with. */
 export interface SpellingState {

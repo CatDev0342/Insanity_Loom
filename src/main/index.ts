@@ -73,6 +73,14 @@ function openMainWindow(): void {
   }
 }
 
+/**
+ * Where the dictionaries shipped with the program are: beside it in a built copy, and in the repository when running
+ * from the source.
+ */
+function shippedDictionariesFolder(): string {
+  return app.isPackaged ? join(process.resourcesPath, 'dictionaries') : join(app.getAppPath(), 'resources', 'dictionaries');
+}
+
 function start(): void {
   // Before anything else: Chromium is told to keep itself to itself. Its switches are read only as it starts.
   keepChromiumToItself(app);
@@ -108,7 +116,7 @@ function start(): void {
     // Insanity_Loom is dark, so the system draws its window frame and title bar dark too.
     nativeTheme.themeSource = 'dark';
     const preferences = new PreferenceStore(folders.data);
-    startEditingServices(preferences);
+    startEditingServices(preferences, shippedDictionariesFolder());
     const assistant = startServices(folders.data, folders.logs, new Journal(folders.data), preferences);
     app.on('before-quit', () => void assistant.close());
     // No native menu: Insanity_Loom draws its own menu bar in the page (src/renderer/src/menu), so it looks and

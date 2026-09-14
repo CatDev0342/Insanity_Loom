@@ -90,8 +90,8 @@ describe('preferences', () => {
   it('are the defaults until saved, then read back as saved', () => {
     const data = folder();
     expect(loadPreferences(data)).toEqual(DEFAULT_PREFERENCES);
-    savePreferences(data, preferencesWith(DEFAULT_PREFERENCES, { spelling: { enabled: false, languages: ['en-GB', 'fr'] }, assistantMode: 'auto' }));
-    expect(loadPreferences(data).spelling).toEqual({ enabled: false, languages: ['en-GB', 'fr'] });
+    savePreferences(data, preferencesWith(DEFAULT_PREFERENCES, { spelling: { enabled: false, languages: ['en-GB', 'fr'], fetchDictionaries: false }, assistantMode: 'auto' }));
+    expect(loadPreferences(data).spelling).toEqual({ enabled: false, languages: ['en-GB', 'fr'], fetchDictionaries: false });
     expect(loadPreferences(data).assistantMode).toBe('auto');
   });
 
@@ -103,7 +103,7 @@ describe('preferences', () => {
     );
     expect(loadPreferences(data)).toEqual({
       version: 3,
-      spelling: { enabled: false, languages: [] },
+      spelling: { enabled: false, languages: [], fetchDictionaries: false },
       assistantMode: '',
       alcoveFolder: '',
       greatHallPath: '',

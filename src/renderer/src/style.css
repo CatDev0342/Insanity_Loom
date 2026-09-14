@@ -671,29 +671,42 @@ body {
   background: var(--highlight);
 }
 
-/* Each section of the conversation in a box of its own, in the gold the status bar uses for what is worth noticing.
-   Only the box is added: nothing about the writing inside it — its size, spacing or colour — is touched. */
-.whisper-editor .section-inside {
-  border-inline: 1px solid var(--attention);
-  padding-inline: 0.9rem;
+/* While section isolation is on, the section the author is in is lifted off the page: a lighter ground, and a soft
+   edge above and below it. Everything else lies flat. Nothing about the writing inside is changed — not its size, its
+   spacing, or its colour — and nothing is bordered, so there is no box to break where the blocks do. */
+.whisper-editor .lifted {
+  background: var(--bar);
+  box-shadow:
+    -0.9rem 0 0 var(--bar),
+    0.9rem 0 0 var(--bar);
 }
 
-.whisper-editor .section-opens {
-  border-top: 1px solid var(--attention);
-  padding-top: 0.7rem;
+.whisper-editor .lifted-opens {
+  box-shadow:
+    -0.9rem 0 0 var(--bar),
+    0.9rem 0 0 var(--bar),
+    0 -1px 0 var(--attention);
 }
 
-.whisper-editor .section-closes {
-  border-bottom: 1px solid var(--attention);
-  padding-bottom: 0.7rem;
+.whisper-editor .lifted-closes {
+  box-shadow:
+    -0.9rem 0 0 var(--bar),
+    0.9rem 0 0 var(--bar),
+    0 1px 0 var(--attention);
 }
 
-/* The assistant's reply is a section of its own, and wears the same box while isolation is on; the line down its left
-   side stays whatever happens, so it is always plain at a glance whose writing it is. */
-.whisper-editor.is-isolating section.reply {
-  border: 1px solid var(--attention);
-  border-left: 3px solid var(--reply-mark);
-  padding: 0.7rem 0.9rem;
+/* Both at once — a section of a single block — needs both edges. */
+.whisper-editor .lifted-opens.lifted-closes {
+  box-shadow:
+    -0.9rem 0 0 var(--bar),
+    0.9rem 0 0 var(--bar),
+    0 -1px 0 var(--attention),
+    0 1px 0 var(--attention);
+}
+
+/* The assistant's reply keeps the line down its left side whatever happens, so it is always plain whose writing it is. */
+.whisper-editor.is-isolating section.reply.lifted {
+  background: var(--bar);
 }
 
 /* The line that closes a turn, with which turn it was and when it was taken written along it. */

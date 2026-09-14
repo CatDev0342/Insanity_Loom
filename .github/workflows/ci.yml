@@ -77,6 +77,10 @@ jobs:
           path: test-results/
           if-no-files-found: ignore
 
+      # The dictionaries shipped with the program, fetched once here rather than by the author's copy later.
+      - name: Fetch the spelling dictionaries
+        run: node scripts/fetch-dictionaries.mjs
+
       - name: Package (portable)
         run: npx electron-builder --publish never
 

@@ -69,7 +69,8 @@ export function readSpelling(value: unknown, where: string): SpellingPreferences
   if (!Array.isArray(languages) || !languages.every((code) => typeof code === 'string' && LANGUAGE_CODE.test(code))) {
     throw problem(where, '"spelling.languages" must be a list of language codes, such as "en-US".');
   }
-  return { enabled, languages: languages as string[] };
+  // A file written before this was asked about says nothing, and silence means "do not fetch anything".
+  return { enabled, languages: languages as string[], fetchDictionaries: value['fetchDictionaries'] === true };
 }
 
 export function loadPreferences(dataFolder: string): Preferences {

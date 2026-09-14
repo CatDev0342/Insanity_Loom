@@ -1,54 +1,43 @@
-// Drawing each section of the conversation as a box of its own.
+// Showing the author what section isolation means, while it is on.
 //
 // A section is what stands between one dividing line and the next — a turn of the author's writing, or the reply to
-// it. The document does not wrap them in anything: they are simply the blocks between two lines, which is what lets
-// the author write and edit across them freely. So the boxes are drawn rather than built: each block is told whether
-// it opens a section, closes it, or stands in the middle, and the sides are drawn to suit.
+// it. The document does not wrap them in anything, which is what lets the author write and edit across them freely,
+// so what is shown must be drawn rather than built.
 //
-// Nothing about the writing inside changes — not its size, its spacing or its colour. The box is around it.
+// What is drawn is the section the author is **in**: it is lifted off the page — a lighter ground, a soft edge above
+// and below — while everything else lies flat. That says exactly what a reach would take, and it moves with the
+// author as they move. Bordering every section instead drew a box out of the edges of separate blocks, which broke
+// wherever the blocks did (the designer, 2026-Sep-14).
 //
-// The boxes are drawn **while section isolation is on** (40.11), and not otherwise: they show the author what a reach
-// would take. With isolation off, a reach takes the whole whisper, and there is nothing for a box to say.
+// Nothing about the writing inside changes: not its size, its spacing, or its colour.
 
 import { Extension } from '@tiptap/core';
 import { Plugin, PluginKey } from '@tiptap/pm/state';
 import { Decoration, DecorationSet } from '@tiptap/pm/view';
 import type { EditorState } from '@tiptap/pm/state';
 
-/** What divides one section from the next. A reply is a section of its own and draws its own box. */
-const DIVIDES = new Set(['horizontalRule', 'reply']);
+import { sectionAround } from './isolation';
 
-/** Which blocks of the whisper open, continue and close each section, as classes for the page to draw. */
-export function boxesFor(state: EditorState): DecorationSet {
-  const boxes: Decoration[] = [];
-  let opening = true;
-  let previous: { readonly from: number; readonly to: number } | undefined;
-
-  const close = (): void => {
-    if (previous === undefined) return;
-    boxes.push(Decoration.node(previous.from, previous.to, { class: 'section-closes' }));
-    previous = undefined;
-  };
-
+/** The blocks of the section the caret is in, drawn as one lifted panel. */
+export function liftedSection(state: EditorState): DecorationSet {
+  const here = sectionAround(state.doc, state.selection.from);
+  const lifted: Decoration[] = [];
+  const inside: { from: number; to: number }[] = [];
   state.doc.forEach((node, offset) => {
     const from = offset;
     const to = offset + node.nodeSize;
-    if (DIVIDES.has(node.type.name)) {
-      close();
-      opening = true;
-      return;
-    }
-    // An empty line at the end of the whisper is where the author writes; it is not part of the section above it.
-    boxes.push(Decoration.node(from, to, { class: opening ? 'section-opens section-inside' : 'section-inside' }));
-    opening = false;
-    previous = { from, to };
+    if (from < here.from || to > here.to) return;
+    inside.push({ from, to });
   });
-  close();
-  return DecorationSet.create(state.doc, boxes);
+  inside.forEach((block, index) => {
+    const edges = [index === 0 ? 'lifted-opens' : '', index === inside.length - 1 ? 'lifted-closes' : ''].filter((one) => one !== '');
+    lifted.push(Decoration.node(block.from, block.to, { class: ['lifted', ...edges].join(' ') }));
+  });
+  return DecorationSet.create(state.doc, lifted);
 }
 
 export interface SectionsDrawnOptions {
-  /** Whether section isolation is on. Asked each time the whisper is drawn, so turning it on shows the boxes at once. */
+  /** Whether section isolation is on. Asked each time the whisper is drawn, so turning it on shows at once. */
   isolating: () => boolean;
 }
 
@@ -64,7 +53,7 @@ export const SectionsDrawn = Extension.create<SectionsDrawnOptions>({
     return [
       new Plugin({
         key: new PluginKey('sectionsDrawn'),
-        props: { decorations: (state) => (isolating() ? boxesFor(state) : null) },
+        props: { decorations: (state) => (isolating() ? liftedSection(state) : null) },
       }),
     ];
   },

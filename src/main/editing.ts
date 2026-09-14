@@ -11,6 +11,7 @@ import {
   type SpellingState,
 } from '../shared/editing';
 import type { PreferenceStore } from './preference-store';
+import { letChromiumFetchDictionaries, useShippedDictionaries } from './spelling';
 import { readSpelling } from './preferences';
 
 // A spelling suggestion can be a pair of words ("a lot" for "alot"), so it may be longer than one dictionary word.
@@ -30,6 +31,8 @@ function word(value: unknown): string {
 function applySpelling(preferences: SpellingPreferences, systemLanguages: readonly string[]): void {
   const spelling = session.defaultSession;
   spelling.setSpellCheckerEnabled(preferences.enabled);
+  // Whether Chromium may go looking for a dictionary it does not have; off, it is sent nowhere (spelling.ts).
+  letChromiumFetchDictionaries(spelling, preferences.fetchDictionaries);
   // macOS uses its own spell checker, which chooses languages itself.
   if (process.platform === 'darwin') return;
   const available = new Set(spelling.availableSpellCheckerLanguages);
@@ -40,7 +43,10 @@ function applySpelling(preferences: SpellingPreferences, systemLanguages: readon
 }
 
 /** Relays right-clicks to the page and answers its spelling requests. Call once, when Electron is ready. */
-export function startEditingServices(preferences: PreferenceStore): void {
+export function startEditingServices(preferences: PreferenceStore, shippedDictionariesFolder: string): void {
+  // The dictionaries shipped with the program go where Chromium looks, before it has any reason to look elsewhere.
+  // Both places it may keep them: the program's own data, and its session data, which Insanity_Loom keeps apart.
+  useShippedDictionaries(shippedDictionariesFolder, [app.getPath('userData'), app.getPath('sessionData')]);
   const systemLanguages = session.defaultSession.getSpellCheckerLanguages();
   applySpelling(preferences.spelling, systemLanguages);
 
