@@ -83,8 +83,8 @@ export class Loom {
     | { fill: false; author: string; reply: string; history: HistoryPiece[] }
     | undefined;
 
-  /** True while a save is being written; changes made meanwhile set `unsaved`, and are written as soon as it is done. */
-  private saving = false;
+  /** The save being written, while one is; changes made meanwhile set `unsaved` and are written as soon as it is done. */
+  private saving: Promise<void> | undefined;
   private unsaved = false;
 
   /**
@@ -223,9 +223,8 @@ export class Loom {
    */
   private saveNow(): void {
     this.unsaved = true;
-    if (this.saving) return;
-    this.saving = true;
-    void (async () => {
+    if (this.saving !== undefined) return;
+    this.saving = (async () => {
       try {
         while (this.unsaved) {
           this.unsaved = false;
@@ -235,9 +234,21 @@ export class Loom {
       } catch (problem) {
         this.showProblem(`The whisper could not be saved: ${problem instanceof Error ? problem.message : String(problem)}`);
       } finally {
-        this.saving = false;
+        this.saving = undefined;
       }
     })();
+  }
+
+  /**
+   * Lets a save that is already being written finish, having first taken the whisper's file away so that no further
+   * save begins. Anything that moves the file or swaps the document waits for this: a save that lands after the file
+   * has moved would write the whisper back at the name it moved away from, leaving two of it.
+   */
+  private async stopSaving(): Promise<string> {
+    const path = this.whisperPath;
+    this.whisperPath = '';
+    await this.saving;
+    return path;
   }
 
   // ——— Commands ———
@@ -531,7 +542,7 @@ export class Loom {
     this.waiting.length = 0;
     // Nothing is saved until the new whisper has a file of its own: emptying the document while the whisper being
     // left is still the one open would write the emptiness over it.
-    this.whisperPath = '';
+    await this.stopSaving();
     editor.clear();
     this.title = UNTITLED;
     this.conversationId = '';
@@ -582,7 +593,7 @@ export class Loom {
     this.waiting.length = 0;
     // As with a new whisper: nothing is saved while the document is being swapped, so the whisper being left keeps
     // what it holds.
-    this.whisperPath = '';
+    await this.stopSaving();
     editor.replaceAll(whisper.bodyHtml);
     this.whisperPath = opened.path;
     this.whisperName = opened.name;
@@ -598,17 +609,21 @@ export class Loom {
     this.title = title;
     this.saveNow();
     if (this.whisperPath !== '') {
+      const left = this.whisperName;
+      const path = await this.stopSaving();
       try {
-        const left = this.whisperName;
-        const moved = await this.whispers.rename(this.whisperPath, title);
+        const moved = await this.whispers.rename(path, title);
         this.whisperPath = moved.path;
         this.whisperName = moved.name;
         // Whispers that pointed here have been put right on disk; this one's own links are put right in the window,
         // where the whisper is held, or the next save would write the old name back over them.
         this.editor?.renameLinks(left, moved.name);
       } catch (problem) {
+        // The whisper stays where it was, under the name it had, and goes on being saved there.
+        this.whisperPath = path;
         this.showProblem(`The whisper's file could not be named after the conversation: ${problem instanceof Error ? problem.message : String(problem)}`);
       }
+      this.saveNow();
     }
     this.showTitle();
   }
