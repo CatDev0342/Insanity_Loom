@@ -1,6 +1,6 @@
-// The conversation, end to end: the author writes, finishes a section with "---", and the assistant's reply is
-// woven into the document. A stand-in assistant (tests/fixtures/fake-assistant.mjs) answers, so nothing depends on
-// a real one being reachable.
+// The whisper, end to end: the author writes in one rich-text document, finishes a section with "---", and the
+// assistant's reply is woven in right after it. A stand-in assistant (tests/fixtures/fake-assistant.mjs) answers, so
+// nothing depends on a real one being reachable.
 import { expect, test, type ElectronApplication, type Page } from '@playwright/test';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
@@ -14,6 +14,18 @@ async function start(): Promise<void> {
   await expect(page.locator('#status-text')).toHaveText(/Connected to Fake Assistant/);
 }
 
+const whisper = (): ReturnType<Page['locator']> => page.locator('.whisper-editor');
+const replies = (): ReturnType<Page['locator']> => page.locator('.whisper-editor section.reply');
+
+async function finishSection(text: string): Promise<void> {
+  await whisper().click();
+  await page.keyboard.press('Control+End');
+  await page.keyboard.type(text);
+  await page.keyboard.press('Enter');
+  await page.keyboard.type('---');
+  await page.keyboard.press('Enter');
+}
+
 test.beforeEach(async () => {
   prepareData('fake assistant');
   await start();
@@ -23,77 +35,94 @@ test.afterEach(async () => {
   await application.close();
 });
 
-test('a line of --- sends the section above it, and the reply is woven in below', async () => {
-  const compose = page.locator('#compose');
-  await compose.click();
-  await page.keyboard.type('Hello, loom.');
-  await page.keyboard.press('Enter');
-  await page.keyboard.type('---');
-  await page.keyboard.press('Enter');
-
-  await expect(compose).toHaveValue('');
-  await expect(page.locator('.by-author')).toHaveText('Hello, loom.');
-  await expect(page.locator('.by-assistant .reply-text')).toHaveText('You wrote: Hello, loom.');
-  await expect(page.locator('.loom-divider')).toHaveCount(2);
+test('a line of --- sends the section above it, and the reply is woven in right after it', async () => {
+  await finishSection('Hello, loom.');
+  await expect(replies()).toHaveCount(1);
+  await expect(replies().first()).toHaveText('You wrote: Hello, loom.');
+  await expect(replies().first()).toHaveAttribute('data-state', 'finished');
+  await expect(whisper().locator('hr')).toHaveCount(1);
+  // The reply sits right after the rule of its section.
+  const order = await whisper().evaluate((element) => [...element.children].map((child) => child.tagName.toLowerCase()));
+  expect(order.slice(0, 3)).toEqual(['p', 'hr', 'section']);
 });
 
 test('--- in the middle of a line is ordinary writing', async () => {
-  const compose = page.locator('#compose');
-  await compose.click();
+  await whisper().click();
   await page.keyboard.type('before --- after');
   await page.keyboard.press('Enter');
-  await expect(compose).toHaveValue('before --- after\n');
-  await expect(page.locator('.by-author')).toHaveCount(0);
+  await expect(whisper().locator('hr')).toHaveCount(0);
+  await expect(replies()).toHaveCount(0);
 });
 
-test('a permission request waits for the author, and their choice goes back', async () => {
-  await page.locator('#compose').click();
+test('a permission request waits for the author above the whisper, and their choice goes back', async () => {
+  await whisper().click();
   await page.keyboard.type('please ask permission');
   await page.keyboard.press('Control+Enter');
 
-  const card = page.getByRole('group', { name: 'Permission request' });
-  await expect(card).toContainText('Write a file called notes.txt');
-  await card.getByRole('button', { name: 'Allow once' }).click();
-  await expect(card).toContainText('You chose: Allow once');
-  await expect(page.locator('.by-assistant .reply-text')).toHaveText('Permission answer: yes');
+  const ask = page.getByRole('group', { name: 'Permission request' });
+  await expect(ask).toContainText('Write a file called notes.txt');
+  await ask.getByRole('button', { name: 'Allow once' }).click();
+  await expect(ask).toBeHidden();
+  await expect(replies().first()).toHaveText('Permission answer: yes');
 });
 
-test('Esc stops a reply being written', async () => {
-  await page.locator('#compose').click();
+test('Esc stops a reply being written, and it is marked as stopped', async () => {
+  await whisper().click();
   await page.keyboard.type('write something slow');
   await page.keyboard.press('Control+Enter');
-  await expect(page.locator('.by-assistant .reply-text')).toContainText('still writing');
-
+  await expect(replies().first()).toContainText('still writing');
   await page.keyboard.press('Escape');
-  await expect(page.locator('.reply-ending')).toHaveText('Stopped.');
+  await expect(replies().first()).toHaveAttribute('data-state', 'stopped');
 });
 
-test('unsent writing survives closing the window, and the conversation is resumed', async () => {
-  await page.locator('#compose').click();
+test("the author's Ctrl+Z never takes back the assistant's reply", async () => {
+  await finishSection('A question.');
+  await expect(replies().first()).toHaveAttribute('data-state', 'finished');
+  await page.keyboard.type('My follow-up');
+  await expect(whisper()).toContainText('My follow-up');
+  await page.keyboard.press('Control+Z');
+  await expect(whisper()).not.toContainText('My follow-up');
+  await expect(replies().first()).toHaveText('You wrote: A question.');
+});
+
+test("a finished reply is the author's to edit", async () => {
+  await finishSection('Edit me.');
+  await expect(replies().first()).toHaveAttribute('data-state', 'finished');
+  await replies().first().getByText('You wrote: Edit me.').click();
+  await page.keyboard.press('End');
+  await page.keyboard.type(' (edited)');
+  await expect(replies().first()).toHaveText('You wrote: Edit me. (edited)');
+});
+
+test('the whisper survives closing the window, without its history being written in twice', async () => {
+  await finishSection('Remember this.');
+  await expect(replies().first()).toHaveAttribute('data-state', 'finished');
   await page.keyboard.type('not sent yet');
   await expect
     .poll(() => {
       try {
-        return readFileSync(join(DATA, 'Journal', 'draft.txt'), 'utf8');
+        return readFileSync(join(DATA, 'Journal', 'whisper.xhtml'), 'utf8');
       } catch {
         return '';
       }
     })
-    .toBe('not sent yet');
+    .toContain('not sent yet');
 
   await application.close();
   await start();
-  await expect(page.locator('#compose')).toHaveValue('not sent yet');
-  // The last conversation is resumed: its history is replayed into the document.
-  await expect(page.locator('.by-author')).toHaveText('An earlier question');
-  await expect(page.locator('.by-assistant .reply-text')).toHaveText('An earlier answer');
+  await expect(whisper()).toContainText('Remember this.');
+  await expect(whisper()).toContainText('not sent yet');
+  await expect(replies()).toHaveCount(1);
+  // The conversation resumed is the one the whisper already records: its history is not written in again.
+  await expect(whisper()).not.toContainText('An earlier question');
 });
 
-test('Assistant ▸ Resume Conversation lists earlier conversations and replays the one chosen', async () => {
+test('Assistant ▸ Resume Conversation fills a fresh whisper from the conversation chosen', async () => {
   await page.keyboard.press('Alt+A');
   await page.keyboard.press('c');
   const dialog = page.getByRole('dialog', { name: 'Resume a conversation' });
   await dialog.getByRole('option', { name: /An earlier conversation/ }).click();
   await expect(dialog).toBeHidden();
-  await expect(page.locator('.by-assistant .reply-text')).toHaveText('An earlier answer');
+  await expect(whisper().locator('p').first()).toHaveText('An earlier question');
+  await expect(replies().first()).toHaveText('An earlier answer');
 });

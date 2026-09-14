@@ -80,10 +80,12 @@ export interface AssistantBridge {
 }
 
 export interface JournalBridge {
-  /** The author's unsent writing, as last saved: '' when there is none. */
+  /** The author's unsent writing from before whispers, as last saved: '' when there is none. Read once, to carry it over. */
   loadDraft(): Promise<string>;
-  /** Saves the author's unsent writing to disk at once. */
-  saveDraft(text: string): Promise<void>;
+  /** The whisper in progress, as its XHTML file: '' when there is none yet. */
+  loadWhisper(): Promise<string>;
+  /** Saves the whisper in progress to disk at once, crash-safely. */
+  saveWhisper(xhtml: string): Promise<void>;
 }
 
 /** What the Connection Settings panel opens with. */
@@ -152,8 +154,12 @@ export const CONNECTION_CHANNELS = {
 
 export const JOURNAL_CHANNELS = {
   loadDraft: 'insanity-loom:journal-load-draft',
-  saveDraft: 'insanity-loom:journal-save-draft',
+  loadWhisper: 'insanity-loom:journal-load-whisper',
+  saveWhisper: 'insanity-loom:journal-save-whisper',
 } as const;
+
+/** The largest whisper file accepted from the page, in characters: far beyond any real whisper, but bounded. */
+export const MAXIMUM_WHISPER_LENGTH = 50_000_000;
 
 /** The longest section the page may send in one piece, in characters: far beyond any real writing, but bounded. */
 export const MAXIMUM_SECTION_LENGTH = 1_000_000;

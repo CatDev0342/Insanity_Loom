@@ -18,15 +18,16 @@ const bridge = window.insanityLoom;
 
 const loom = new Loom(
   {
-    conversation: required<HTMLElement>('#conversation'),
-    compose: required<HTMLTextAreaElement>('#compose'),
+    whisper: required<HTMLElement>('#whisper'),
+    asks: required<HTMLElement>('#asks'),
     statusText: required<HTMLElement>('#status-text'),
+    activity: required<HTMLElement>('#activity'),
+    account: required<HTMLElement>('#account'),
     reconnect: required<HTMLButtonElement>('#reconnect'),
+    signIn: required<HTMLButtonElement>('#sign-in'),
+    connectionSettings: required<HTMLButtonElement>('#connection-settings'),
     resumeDialog: required<HTMLDialogElement>('#resume-dialog'),
     connectionDialog: required<HTMLDialogElement>('#connection-dialog'),
-    connectionSettings: required<HTMLButtonElement>('#connection-settings'),
-    account: required<HTMLElement>('#account'),
-    signIn: required<HTMLButtonElement>('#sign-in'),
   },
   bridge.assistant,
   bridge.connection,
@@ -38,6 +39,8 @@ const signIn = new SignInPanel(required<HTMLDialogElement>('#sign-in-dialog'), b
 required<HTMLButtonElement>('#sign-in').addEventListener('click', () => void signIn.show());
 
 async function run(command: AnyCommandId): Promise<void> {
+  // Undo and Redo in the whisper are the whisper's own: its history holds only the author's changes.
+  if ((command === 'edit.undo' || command === 'edit.redo') && loom.runEditCommand(command)) return;
   if (!isPageCommand(command)) return bridge.runCommand(command);
   if (command === 'app.preferences') return preferences.show();
   if (command === 'assistant.signIn') return signIn.show();

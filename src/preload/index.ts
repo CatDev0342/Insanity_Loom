@@ -68,7 +68,8 @@ const bridge: InsanityLoomBridge = {
 
   journal: {
     loadDraft: () => ipcRenderer.invoke(JOURNAL_CHANNELS.loadDraft),
-    saveDraft: (text) => ipcRenderer.invoke(JOURNAL_CHANNELS.saveDraft, text),
+    loadWhisper: () => ipcRenderer.invoke(JOURNAL_CHANNELS.loadWhisper),
+    saveWhisper: (xhtml) => ipcRenderer.invoke(JOURNAL_CHANNELS.saveWhisper, xhtml),
   },
 };
 

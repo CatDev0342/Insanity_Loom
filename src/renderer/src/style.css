@@ -12,6 +12,7 @@
   --attention: #b08a3e;
   --problem: #e0826f;
   --focus: #6f93d6;
+  --reply-mark: #4d6a9a;
   color-scheme: dark;
 }
 
@@ -29,7 +30,7 @@ body {
   flex-direction: column;
 }
 
-/* The loom: the conversation above, filling the window, and the author's writing area below it. */
+/* The loom: questions from the assistant above, the whisper filling the window below them. */
 .loom {
   flex: 1;
   display: flex;
@@ -37,57 +38,162 @@ body {
   min-height: 0;
 }
 
-.conversation {
-  flex: 1;
-  overflow-y: auto;
-  padding-block: 1.5rem;
-  padding-inline: max(1.5rem, calc((100% - 46rem) / 2));
-  line-height: 1.55;
+.asks {
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  padding: 0.6rem max(1.5rem, calc((100% - 46rem) / 2));
+  background: var(--bar);
+  border-bottom: 1px solid var(--menu-edge);
 }
 
-.whisper {
-  white-space: pre-wrap;
-  overflow-wrap: anywhere;
-}
-
-.by-assistant {
-  color: var(--ink-reply);
-}
-
-.loom-divider {
-  border: 0;
-  border-top: 1px solid var(--menu-edge);
-  margin-block: 1.25rem;
-}
-
-.reply-tools:empty {
-  display: none;
-}
-
-.reply-tool,
-.reply-thinking,
-.reply-ending {
-  margin: 0 0 0.35rem;
-  color: var(--ink-quiet);
-  font-size: 0.85rem;
-  white-space: normal;
-}
-
-.permission {
-  margin-block: 0.75rem;
-  padding: 0.6rem 0.8rem;
+.ask {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem 1rem;
+  padding: 0.5rem 0.75rem;
   border: 1px solid var(--attention);
-  white-space: normal;
 }
 
-.permission p {
-  margin: 0 0 0.5rem;
+.ask p {
+  margin: 0;
 }
 
-.permission-choices {
+.ask-problem {
+  border-color: var(--problem);
+  color: var(--problem);
+  white-space: pre-wrap;
+}
+
+.ask-choices {
   display: flex;
   flex-wrap: wrap;
   gap: 0.5rem;
+}
+
+.whisper-scroll {
+  flex: 1;
+  overflow-y: auto;
+}
+
+/* The whisper itself: a page of rich text, centered, with room around it. */
+.whisper-editor {
+  min-height: 100%;
+  box-sizing: border-box;
+  padding-block: 1.5rem 40vh;
+  padding-inline: max(1.5rem, calc((100% - 46rem) / 2));
+  line-height: 1.6;
+  outline: none;
+  overflow-wrap: anywhere;
+  caret-color: var(--ink);
+}
+
+.whisper-editor p {
+  margin: 0 0 0.7em;
+}
+
+.whisper-editor h1,
+.whisper-editor h2,
+.whisper-editor h3 {
+  line-height: 1.25;
+  margin: 1.2em 0 0.5em;
+}
+
+.whisper-editor ul,
+.whisper-editor ol {
+  padding-left: 1.6em;
+  margin: 0 0 0.7em;
+}
+
+.whisper-editor blockquote {
+  margin: 0 0 0.7em;
+  padding-left: 1em;
+  border-left: 3px solid var(--menu-edge);
+  color: var(--ink-quiet);
+}
+
+.whisper-editor code {
+  font-family: ui-monospace, 'Cascadia Mono', Consolas, 'DejaVu Sans Mono', monospace;
+  font-size: 0.9em;
+  background: var(--bar);
+  padding: 0.1em 0.3em;
+}
+
+.whisper-editor pre {
+  background: var(--bar);
+  border: 1px solid var(--menu-edge);
+  padding: 0.6em 0.8em;
+  overflow-x: auto;
+}
+
+.whisper-editor pre code {
+  background: none;
+  padding: 0;
+}
+
+.whisper-editor a {
+  color: var(--focus);
+}
+
+/* The section rule: the author's dividing line. */
+.whisper-editor hr {
+  border: 0;
+  border-top: 1px solid var(--menu-edge);
+  margin: 1.1rem 0;
+}
+
+.whisper-editor hr.ProseMirror-selectednode {
+  border-top-color: var(--focus);
+}
+
+/* The assistant's reply: marked by a line down its left side, and its state shown above it while it matters. */
+.whisper-editor section.reply {
+  margin: 0 0 1.1rem;
+  padding: 0.1rem 0 0.1rem 1rem;
+  border-left: 3px solid var(--reply-mark);
+  color: var(--ink-reply);
+}
+
+.whisper-editor section.reply::before {
+  display: block;
+  margin-bottom: 0.3rem;
+  color: var(--ink-quiet);
+  font-size: 0.8rem;
+}
+
+.whisper-editor section.reply[data-state='waiting']::before {
+  content: 'Waiting for the assistant…';
+}
+
+.whisper-editor section.reply[data-state='writing']::before {
+  content: 'The assistant is writing…';
+}
+
+.whisper-editor section.reply[data-state='stopped']::after,
+.whisper-editor section.reply[data-state='failed']::after {
+  display: block;
+  color: var(--ink-quiet);
+  font-size: 0.8rem;
+}
+
+.whisper-editor section.reply[data-state='stopped']::after {
+  content: 'Stopped.';
+}
+
+.whisper-editor section.reply[data-state='failed']::after {
+  content: 'The reply ended with a problem.';
+}
+
+/* Tiptap's own marker for an empty whisper: a quiet prompt where the author begins. */
+.whisper-editor p.is-editor-empty:first-child::before {
+  content: attr(data-placeholder);
+  float: left;
+  height: 0;
+  color: var(--ink-quiet);
+  pointer-events: none;
 }
 
 button {
@@ -103,36 +209,11 @@ button:hover {
   background: var(--highlight);
 }
 
-button:focus-visible,
-.compose:focus-visible {
+button:focus-visible {
   outline: 2px solid var(--focus);
   outline-offset: -2px;
 }
 
-.loom-problem {
-  color: var(--problem);
-  white-space: pre-wrap;
-}
-
-.compose {
-  flex: none;
-  height: 9rem;
-  resize: vertical;
-  margin: 0;
-  padding-block: 0.9rem;
-  padding-inline: max(1.5rem, calc((100% - 46rem) / 2));
-  font: inherit;
-  line-height: 1.55;
-  color: var(--ink);
-  background: var(--bar);
-  border: 0;
-  border-top: 1px solid var(--menu-edge);
-  border-radius: 0;
-}
-
-.compose::placeholder {
-  color: var(--ink-quiet);
-}
 
 .status {
   flex: none;
@@ -148,6 +229,10 @@ button:focus-visible,
 
 .status-text {
   white-space: pre-wrap;
+}
+
+.status-activity {
+  color: var(--ink);
 }
 
 .status-text[data-state='failed'] {

@@ -12,7 +12,7 @@ test('opens a window, through the bridge only, keeping its data beside itself', 
 
     await expect(page).toHaveTitle(/Insanity_Loom/);
     await expect(page.locator('#menubar')).toBeVisible();
-    await expect(page.getByRole('textbox', { name: 'Write here' })).toBeVisible();
+    await expect(page.locator('.whisper-editor')).toBeVisible();
 
     // The bridge answered: the engine's versions can only have come from the preload.
     const electronVersion = await page.evaluate(

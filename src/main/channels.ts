@@ -10,6 +10,7 @@ import {
   isSignInPage,
   JOURNAL_CHANNELS,
   MAXIMUM_SECTION_LENGTH,
+  MAXIMUM_WHISPER_LENGTH,
   type AssistantEvent,
   type ConnectionPanelState,
 } from '../shared/assistant';
@@ -143,7 +144,8 @@ export function startServices(dataFolder: string, logsFolder: string, journal: J
   });
 
   ipcMain.handle(JOURNAL_CHANNELS.loadDraft, () => journal.loadDraft());
-  ipcMain.handle(JOURNAL_CHANNELS.saveDraft, (_event, draft: unknown) => journal.saveDraft(text(draft, 'draft', MAXIMUM_SECTION_LENGTH)));
+  ipcMain.handle(JOURNAL_CHANNELS.loadWhisper, () => journal.loadWhisper());
+  ipcMain.handle(JOURNAL_CHANNELS.saveWhisper, (_event, xhtml: unknown) => journal.saveWhisper(text(xhtml, 'whisper', MAXIMUM_WHISPER_LENGTH)));
 
   return assistant;
 }

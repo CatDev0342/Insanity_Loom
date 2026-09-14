@@ -14,16 +14,14 @@
   <body>
     <nav id="menubar" class="menubar"></nav>
     <main id="loom" class="loom">
-      <div id="conversation" class="conversation" aria-label="Conversation" aria-live="polite"></div>
-      <textarea
-        id="compose"
-        class="compose"
-        aria-label="Write here"
-        placeholder="Write here. A line with only --- (then Enter) sends everything above it. Ctrl+Enter sends it all."
-      ></textarea>
+      <div id="asks" class="asks" hidden></div>
+      <div class="whisper-scroll">
+        <div id="whisper" class="whisper-host"></div>
+      </div>
     </main>
     <footer class="status">
       <span id="status-text" class="status-text" role="status">Starting…</span>
+      <span id="activity" class="status-activity" aria-live="polite"></span>
       <span id="account" class="status-account" aria-label="Signed in as"></span>
       <button id="reconnect" class="status-action" type="button" hidden>Reconnect</button>
       <button id="sign-in" class="status-action" type="button" hidden>Sign In…</button>

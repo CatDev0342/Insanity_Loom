@@ -15,11 +15,11 @@ test.afterEach(async () => {
   await application.close();
 });
 
-test('right-clicking the writing area opens a square menu of editing commands', async () => {
-  const compose = page.locator('#compose');
-  await compose.click();
+test('right-clicking the whisper opens a square menu of editing commands', async () => {
+  const whisper = page.locator('.whisper-editor');
+  await whisper.click();
   await page.keyboard.type('some words to select');
-  await compose.click({ button: 'right' });
+  await whisper.click({ button: 'right' });
 
   const menu = page.getByRole('menu', { name: 'Context menu' });
   await expect(menu).toBeVisible();
@@ -28,24 +28,21 @@ test('right-clicking the writing area opens a square menu of editing commands', 
   // Nothing is selected yet, so Copy cannot act.
   await expect(menu.getByRole('menuitem', { name: /Copy/ })).toHaveAttribute('aria-disabled', 'true');
 
-  // The underlined letter chooses: A for Select All. Focus goes back to the writing area first.
+  // The underlined letter chooses: A for Select All. Focus goes back to the whisper first.
   await page.keyboard.press('a');
   await expect(menu).toBeHidden();
-  const selected = await compose.evaluate((area) => {
-    const box = area as unknown as { selectionStart: number; selectionEnd: number };
-    return box.selectionEnd - box.selectionStart;
-  });
-  expect(selected).toBe('some words to select'.length);
+  const selected = await page.evaluate(() => (globalThis as unknown as { getSelection(): { toString(): string } }).getSelection().toString());
+  expect(selected).toBe('some words to select');
 });
 
-test('Esc closes the right-click menu, leaving the writing area as it was', async () => {
-  const compose = page.locator('#compose');
-  await compose.click({ button: 'right' });
+test('Esc closes the right-click menu, leaving the whisper as it was', async () => {
+  const whisper = page.locator('.whisper-editor');
+  await whisper.click({ button: 'right' });
   const menu = page.getByRole('menu', { name: 'Context menu' });
   await expect(menu).toBeVisible();
   await page.keyboard.press('Escape');
   await expect(menu).toBeHidden();
-  await expect(compose).toBeFocused();
+  await expect(whisper).toBeFocused();
 });
 
 test('the right-click menu appears over a dialog, too', async () => {
