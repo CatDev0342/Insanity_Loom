@@ -751,9 +751,12 @@ button:focus-visible {
   flex: none;
 }
 
-/* The two that may be long give way first, and are cut with an ellipsis rather than wrapping. */
+/* Everything that is words gives way before anything that is a control: a button pushed out of a bar that cannot
+   grow is a button the author cannot press. */
 .status-text,
-.status-activity {
+.status-activity,
+.status-whisper,
+.status-account {
   flex: 0 1 auto;
   min-width: 0;
   overflow: hidden;
@@ -1120,8 +1123,10 @@ button:disabled {
 }
 
 /* The advanced find window: wider than a panel, with its results in a fixed-width list so lines stand under lines. */
+/* Wider than the other panels, but never wider than the window it stands in. */
 .panel-wide {
-  min-width: 46rem;
+  min-width: min(46rem, calc(100vw - 4rem));
+  max-width: calc(100vw - 4rem);
 }
 
 .hall-results {

@@ -115,3 +115,30 @@ test('the editing shortcuts are one stop for the keyboard, with the arrows movin
   await expect(bold).not.toBeFocused();
   await expect(italic).not.toBeFocused();
 });
+
+test('a smaller window keeps every control within reach', async () => {
+  // A laptop screen, not a build machine's: the writing narrows, and nothing must be pushed out of the window.
+  await application.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0]?.setSize(900, 700));
+  await expect(page.locator('#toolbar')).toBeVisible();
+
+  // The panels are still there, narrower.
+  await expect(page.locator('#navigation')).toBeVisible();
+  await expect(page.locator('#thoughts')).toBeVisible();
+
+  // The editing shortcuts, the status bar's buttons, and the find bar's own buttons can all still be pressed.
+  await expect(page.getByRole('toolbar', { name: 'Editing' }).getByRole('button', { name: 'Bold' })).toBeVisible();
+  await expect(page.locator('#connection-settings')).toBeVisible();
+  await page.locator('.whisper-editor').click();
+  await page.keyboard.press('Control+h');
+  const bar = page.getByRole('search', { name: 'Find in this whisper' });
+  await expect(bar.getByRole('button', { name: 'Replace All' })).toBeVisible();
+  await page.keyboard.press('Escape');
+
+  // And the advanced find window fits the window it stands in.
+  await page.keyboard.press('Control+Shift+g');
+  const window = page.getByRole('dialog', { name: 'Find in Files' });
+  await expect(window.getByRole('button', { name: 'Find All' })).toBeVisible();
+  await expect(window.getByRole('button', { name: 'Close' })).toBeVisible();
+  const fits = await window.evaluate((element) => element.getBoundingClientRect().width <= globalThis.innerWidth);
+  expect(fits).toBe(true);
+});
