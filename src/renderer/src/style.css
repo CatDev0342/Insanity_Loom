@@ -182,6 +182,12 @@ body {
   max-width: 24rem;
 }
 
+/* Where the keyboard is, shown the same way as in the panels. */
+.find-bar input:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 0;
+}
+
 .find-said {
   min-width: 6rem;
   color: var(--ink-quiet);
