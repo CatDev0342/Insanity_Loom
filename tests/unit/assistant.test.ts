@@ -45,6 +45,14 @@ function start(
 const replyText = (events: AssistantEvent[]): string =>
   events.flatMap((event) => (event.type === 'replyText' ? [event.text] : [])).join('');
 
+/**
+ * The last event of one kind. The assistant says several things at once when a conversation opens — its ways of
+ * working, what it offers to be asked to do, how full it is — and which lands last is not ours to say.
+ */
+function lastOfType(events: readonly AssistantEvent[], type: AssistantEvent['type']): AssistantEvent | undefined {
+  return [...events].reverse().find((event) => event.type === type);
+}
+
 describe('the assistant connection', () => {
   it('connects, begins a conversation, and streams a reply', async () => {
     const { assistant, events } = start();
@@ -159,14 +167,14 @@ describe('the assistant connection', () => {
 
     await assistant.setMode('auto');
     expect(remembered).toEqual(['auto']);
-    expect(events.at(-1)).toMatchObject({ type: 'modes', current: 'auto' });
+    expect(lastOfType(events, 'modes')).toMatchObject({ type: 'modes', current: 'auto' });
     await expect(assistant.setMode('no-such-mode')).rejects.toThrow(/no way of working called/);
   });
 
   it('puts the remembered way of working back in use for a new conversation', async () => {
     const { assistant, events } = start(undefined, { assistantMode: 'auto', setAssistantMode: () => undefined });
     await assistant.connect();
-    expect(events.at(-1)).toMatchObject({ type: 'modes', current: 'auto' });
+    expect(lastOfType(events, 'modes')).toMatchObject({ type: 'modes', current: 'auto' });
   });
 
   it('lists earlier conversations', async () => {
