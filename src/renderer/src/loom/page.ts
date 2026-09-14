@@ -32,6 +32,7 @@ import { ReferenceBar, type ReferenceBarElements } from './reference-bar';
 import { Thoughts, type ThoughtsElements } from './thoughts';
 import type { UpdateStanding } from '../../../shared/updates';
 import { NOTHING_YET, withPiece, type ReplyBeingWritten } from './one-reply';
+import { sendAgain, wentUnheard } from './sending-again';
 import { Saving } from './saving';
 import { theAuthorsOwn } from './the-authors-own';
 import { whatWasLost } from './nothing-lost';
@@ -81,6 +82,8 @@ const UNTITLED = 'Untitled whisper';
 interface Waiting {
   readonly replyId: string;
   readonly markdown: string;
+  /** How many times it has gone out. A turn nobody answered is sent again; one that keeps failing is not, forever. */
+  readonly tries: number;
 }
 
 /** How a reply that ended is marked, by the protocol's reason for the ending. */
@@ -113,7 +116,7 @@ export class Loom {
   private whisperName = '';
 
   /** The reply being written: its own identity, what has arrived, and which message the last piece belonged to. */
-  private writing: ({ replyId: string } & ReplyBeingWritten) | undefined;
+  private writing: ({ replyId: string; sent: string; tries: number } & ReplyBeingWritten) | undefined;
   private renderScheduled = false;
 
   /**
@@ -314,7 +317,7 @@ export class Loom {
     const editor = this.requireEditor();
     for (const turn of turns) {
       const replyId = turn.replyId === '' ? editor.placeReply(turn.sectionId) : turn.replyId;
-      this.waiting.push({ replyId, markdown: turn.markdown });
+      this.waiting.push({ replyId, markdown: turn.markdown, tries: 0 });
     }
     this.saveNow();
     this.sendNext();
@@ -656,7 +659,7 @@ export class Loom {
     this.withoutMovingTheWriting(() => {
       replyId = editor.placeReply(sectionId);
     });
-    this.waiting.push({ replyId, markdown });
+    this.waiting.push({ replyId, markdown, tries: 0 });
     this.saveNow();
     if (this.state !== 'connected') {
       this.showNotice('The assistant is not there at the moment. This turn is kept, and goes as soon as it returns.');
@@ -668,12 +671,12 @@ export class Loom {
     if (this.writing !== undefined || this.state !== 'connected' || this.replay !== undefined) return;
     const next = this.waiting.shift();
     if (next === undefined) return;
-    this.writing = { replyId: next.replyId, ...NOTHING_YET };
+    this.writing = { replyId: next.replyId, sent: next.markdown, tries: next.tries + 1, ...NOTHING_YET };
     this.requireEditor().setReplyState(next.replyId, 'writing');
     // The reply arrives as events; the promise settles when it has finished, which replyFinished also reports.
     this.assistant.send(next.markdown).catch((problem: unknown) => {
       this.showProblem(problem instanceof Error ? problem.message : String(problem));
-      this.finishWriting('failed');
+      this.endWriting('failed');
     });
   }
 
@@ -732,9 +735,32 @@ export class Loom {
     this.sendNext();
   }
 
-  /** A reply cut off by a lost connection or a new conversation is marked so; the sections waiting stay waiting. */
+  /** A reply cut off by a lost connection or a new conversation is ended the same way any unanswered turn is. */
   private abandonWriting(state: ReplyState): void {
-    if (this.writing !== undefined) this.finishWriting(state);
+    if (this.writing !== undefined) this.endWriting(state);
+  }
+
+  /**
+   * Ends the reply being written, and sends its turn again when nothing whatever came back.
+   *
+   * A turn that got not one word — the connection went, or the host went quiet with the author away — never happened
+   * at all. It goes back to the front of the queue and is sent again as soon as the assistant is there, rather than
+   * sitting unanswered until the author notices, closes the program and opens it again (the designer, 2026-Sep-14).
+   * When something had arrived, what came is kept and the reply is marked: sending it again would answer the same
+   * turn twice. A turn the assistant genuinely finished without saying anything is finished, not unanswered, and a
+   * turn the author stopped is stopped because they said so.
+   */
+  private endWriting(state: ReplyState): void {
+    const writing = this.writing;
+    if (writing === undefined) return;
+    const unanswered = wentUnheard(writing, state);
+    const again = sendAgain(writing, state);
+    // Put back before ending: ending sends whatever is queued, and this turn is ahead of anything said after it.
+    if (again) this.waiting.unshift({ replyId: writing.replyId, markdown: writing.sent, tries: writing.tries });
+    this.finishWriting(again ? 'waiting' : state);
+    if (!again && unanswered) {
+      this.showNotice('That turn could not be got through to the assistant. It is kept here; send it again when the assistant is back.');
+    }
   }
 
   // ——— What the assistant says ———
@@ -779,9 +805,14 @@ export class Loom {
         // The assistant may be prompted by something other than the author — whatever runs it, finishing a task it
         // was set. What it says then is part of this conversation, so it is written into the whisper as a reply of
         // its own, rather than falling on the floor and being "caught up with" the next time the whisper is opened.
-        this.writing ??= { replyId: this.requireEditor().placeReplyAtEnd(), ...NOTHING_YET };
+        this.writing ??= { replyId: this.requireEditor().placeReplyAtEnd(), sent: '', tries: 1, ...NOTHING_YET };
         // Several messages make one reply; they are parted as paragraphs rather than run together.
-        this.writing = { replyId: this.writing.replyId, ...withPiece(this.writing, event.text, event.messageId) };
+        this.writing = {
+          replyId: this.writing.replyId,
+          sent: this.writing.sent,
+          tries: this.writing.tries,
+          ...withPiece(this.writing, event.text, event.messageId),
+        };
         this.elements.activity.textContent = '';
         this.scheduleRender();
         return;
@@ -812,7 +843,7 @@ export class Loom {
         this.ask(event.requestId, event.title, event.choices);
         return;
       case 'replyFinished':
-        this.finishWriting(endingState(event.reason));
+        this.endWriting(endingState(event.reason));
         return;
       case 'problem':
         this.showProblem(event.message);

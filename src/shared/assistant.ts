@@ -195,3 +195,17 @@ export const MAXIMUM_WHISPER_LENGTH = 50_000_000;
 
 /** The longest section the page may send in one piece, in characters: far beyond any real writing, but bounded. */
 export const MAXIMUM_SECTION_LENGTH = 1_000_000;
+
+/**
+ * Whether a failure is the assistant saying the conversation no longer fits in its context window ("Prompt is too
+ * long"). It is not an error in the author's writing and must never be shown to them as one: it means room has to be
+ * made before the same words can go again.
+ */
+export function isContextFull(message: string): boolean {
+  const said = message.toLowerCase();
+  return (
+    said.includes('prompt is too long') ||
+    said.includes('too many tokens') ||
+    (said.includes('context') && (said.includes('exceed') || said.includes('too long') || said.includes('overflow')))
+  );
+}

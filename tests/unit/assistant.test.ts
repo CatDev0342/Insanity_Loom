@@ -39,6 +39,7 @@ afterEach(async () => {
 function start(
   hostCommand: string[] = [process.execPath, FAKE_ASSISTANT],
   memory: ModeMemory = { assistantMode: '', setAssistantMode: () => undefined },
+  quietSeconds?: number,
 ): { assistant: Assistant; events: AssistantEvent[] } {
   const folder = mkdtempSync(join(tmpdir(), 'insanity-loom-'));
   const events: AssistantEvent[] = [];
@@ -54,6 +55,7 @@ function start(
     folder,
     (event) => events.push(event),
     memory,
+    quietSeconds,
   );
   running.push({ assistant, folder });
   return { assistant, events };
@@ -210,3 +212,38 @@ describe('the assistant connection', () => {
     expect(last?.type === 'status' && last.detail).toMatch(/could not find the assistant host program/);
   });
 });
+
+describe('when a turn cannot get through', () => {
+  it('makes room and sends the same words again, rather than losing them', async () => {
+    const { assistant, events } = start();
+    await assistant.connect();
+    await assistant.send('a conversation grown too long');
+
+    // The author is told what is happening, in words about the conversation and not about their writing.
+    const said = events.flatMap((event) => (event.type === 'problem' ? [event.message] : []));
+    expect(said.some((message) => message.includes('Room is being made'))).toBe(true);
+    expect(said.some((message) => message.includes('Prompt is too long'))).toBe(false);
+    // And the turn was answered on the second try, with no help from the author.
+    expect(replyText(events)).toContain('Answered once there was room.');
+    expect(lastOfType(events, 'replyFinished')).toEqual({ type: 'replyFinished', reason: 'end_turn' });
+  });
+
+  it('notices a host that has gone quiet, and connects again instead of waiting forever', async () => {
+    // A second of silence rather than three quarters of a minute: the same watch, wound tighter.
+    const { assistant, events } = start(undefined, undefined, 1);
+    await assistant.connect();
+    const sent = assistant.send('go quiet now');
+    // The send never comes back on its own — that is the bug. What must come back is the program.
+    await Promise.race([sent, new Promise((resolve) => setTimeout(resolve, QUIET_ENOUGH_MS))]);
+
+    const said = events.flatMap((event) => (event.type === 'problem' ? [event.message] : []));
+    expect(said.some((message) => message.includes('stopped answering'))).toBe(true);
+    // The turn is ended, so the page is free to send it again; and the connection is being made afresh.
+    expect(events.some((event) => event.type === 'replyFinished' && event.reason === 'error')).toBe(true);
+    expect(events.some((event) => event.type === 'status' && event.state === 'connecting')).toBe(true);
+  }, LONG_ENOUGH_FOR_A_QUIET_HOST_MS);
+});
+
+/** Long enough for a one-second watch to run out and for the check after it to go unanswered. */
+const QUIET_ENOUGH_MS = 20_000;
+const LONG_ENOUGH_FOR_A_QUIET_HOST_MS = 40_000;

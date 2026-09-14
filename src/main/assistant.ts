@@ -19,8 +19,10 @@ import {
   type SessionMode,
   type SignInMethod,
 } from '../shared/assistant';
+import { isContextFull } from '../shared/assistant';
 import { describePlace, hostCommand, type ConnectionSettings } from '../shared/connection';
 import type { Journal } from './journal';
+import { answersWithin, QUIET_SECONDS_BEFORE_A_CHECK, SECONDS_TO_ANSWER_A_CHECK, Watchdog } from './liveness';
 
 // The most past conversations listed at once, and the most pages of them asked for to reach it.
 const MOST_CONVERSATIONS_LISTED = 50;
@@ -48,6 +50,17 @@ const ADDRESS = /https:\/\/[^\s"'<>]+/g;
 // control characters by definition, which is what the rule below would otherwise forbid.
 // eslint-disable-next-line no-control-regex
 const TERMINAL_CODES = /\u001b\[[0-9;?]*[A-Za-z]|\u001b\][^\u0007]*\u0007/g;
+
+/**
+ * A failure in words. An agent reports a full context window as a protocol error, and puts the reason in the message
+ * or in the data beside it depending on which agent it is; both are read, so neither hides it.
+ */
+function describeFailure(cause: unknown): { readonly message: string; readonly whole: string } {
+  const message = cause instanceof Error ? cause.message : String(cause);
+  const data = typeof cause === 'object' && cause !== null ? (cause as { data?: unknown }).data : undefined;
+  const beside = data === undefined ? '' : typeof data === 'string' ? data : JSON.stringify(data);
+  return { message: beside === '' || message.includes(beside) ? message : `${message}: ${beside}`, whole: `${message} ${beside}` };
+}
 
 function isSignInRequired(cause: unknown): boolean {
   return typeof cause === 'object' && cause !== null && (cause as { code?: unknown }).code === SIGN_IN_REQUIRED_CODE;
@@ -196,6 +209,8 @@ export class Assistant {
   private readonly recentErrors: string[] = [];
   private readonly log: WriteStream;
   private signingIn: ChildProcess | undefined;
+  /** Watches a turn that has gone out, so a host that has gone quiet is noticed rather than waited on forever. */
+  private readonly watchdog: Watchdog;
 
   /** The ways of working this assistant offers, and the one in use. */
   private modes: { available: readonly SessionMode[]; current: string } = { available: [], current: '' };
@@ -204,16 +219,28 @@ export class Assistant {
     settings: ConnectionSettings,
     private readonly journal: Journal,
     logsFolder: string,
-    private readonly emit: Emit,
+    private readonly tell: Emit,
     private readonly memory: ModeMemory = { assistantMode: '', setAssistantMode: () => undefined },
+    /** How long a turn may go in silence before the host is asked whether it is still there. Tests shorten it. */
+    quietSeconds: number = QUIET_SECONDS_BEFORE_A_CHECK,
   ) {
     this.settings = settings;
     this.log = createWriteStream(join(logsFolder, HOST_LOG_FILE_NAME), { flags: 'a' });
+    this.watchdog = new Watchdog(() => void this.checkStillThere(), quietSeconds);
   }
 
   /** Uses new settings from the next connection on. */
   useSettings(settings: ConnectionSettings): void {
     this.settings = settings;
+  }
+
+  /**
+   * Passes an event to the page, and counts it as a sign of life: anything the assistant says, of any kind, proves
+   * it is still there and starts the silence over.
+   */
+  private emit(event: AssistantEvent): void {
+    this.watchdog.heard();
+    this.tell(event);
   }
 
   private status(state: ConnectionState, detail: string): void {
@@ -571,8 +598,17 @@ export class Assistant {
     return found.slice(0, MOST_CONVERSATIONS_LISTED);
   }
 
-  async send(text: string): Promise<void> {
+  /**
+   * Sends one turn. `afterMakingRoom` is set on the second try only, so room is made once and not in a circle.
+   *
+   * A conversation that has outgrown the context window fails with "Prompt is too long". That is not a failure of the
+   * author's writing and their words are not thrown away for it: room is made the way Compact makes it, and the same
+   * turn goes again by itself. Only if it still does not fit is the author told, and told plainly what it means.
+   */
+  async send(text: string, afterMakingRoom = false): Promise<void> {
     const { connection, conversationId } = this.requireConversation();
+    const sentOn = this.open;
+    this.watchdog.waiting();
     try {
       const result = await connection.prompt({ sessionId: conversationId, prompt: [{ type: 'text', text }] });
       this.emit({ type: 'replyFinished', reason: result.stopReason });
@@ -582,9 +618,58 @@ export class Assistant {
         this.needSignIn();
         return;
       }
-      this.emit({ type: 'problem', message: cause instanceof Error ? cause.message : String(cause) });
+      // A turn already given up on — the host went quiet and the connection was made again — has been answered for
+      // once. Its request failing later, as the old connection falls away, is the same failure and is not said twice.
+      if (this.open !== sentOn) return;
+      const failure = describeFailure(cause);
+      const full = isContextFull(failure.whole);
+      if (full && !afterMakingRoom) {
+        this.emit({ type: 'problem', message: 'The context window was full. Room is being made, and this turn goes again by itself.' });
+        this.watchdog.idle();
+        await this.compact();
+        if (this.open !== undefined && this.conversationId !== undefined) {
+          await this.send(text, true);
+          return;
+        }
+      }
+      this.emit({
+        type: 'problem',
+        message: full
+          ? 'The context window is full and room could not be made. This turn is kept: compact the conversation, or begin a new one, and send it again.'
+          : failure.message,
+      });
       this.emit({ type: 'replyFinished', reason: 'error' });
+    } finally {
+      this.watchdog.idle();
     }
+  }
+
+  /**
+   * The assistant has said nothing at all for a long time. It is asked a question of its own; what is looked for is
+   * not the answer but that one comes — a refusal proves there is something there to refuse. When none comes, the
+   * host has gone quiet, and being quiet is indistinguishable from being gone: the connection is made again, and the
+   * page sends the turn it never heard back on. This is what the author used to do by closing the program and
+   * opening it again (the designer, 2026-Sep-14).
+   */
+  private async checkStillThere(): Promise<void> {
+    const opened = this.open;
+    if (opened === undefined) return;
+    if (opened.host.exitCode !== null || opened.host.signalCode !== null) return; // Its stopping is handled already.
+    const alive = await answersWithin(
+      opened.connection.listSessions({ cwd: this.settings.workingFolder, cursor: null }),
+      SECONDS_TO_ANSWER_A_CHECK,
+    );
+    if (this.open !== opened) return;
+    if (alive) {
+      // The host is there and answering; this one turn is merely slow. Nothing is cancelled on a living host —
+      // a turn thinking hard about a long command says nothing for a while, and killing it would be the worse
+      // mistake. It is simply watched again, and asked about again if the silence goes on.
+      this.watchdog.waiting();
+      return;
+    }
+    this.emit({ type: 'problem', message: 'The assistant stopped answering. Connecting again, and sending your turn once more.' });
+    this.emit({ type: 'replyFinished', reason: 'error' });
+    await this.connect();
   }
 
   /**
@@ -631,6 +716,7 @@ export class Assistant {
   }
 
   private dropConnection(): void {
+    this.watchdog.idle();
     this.modes = { available: [], current: '' };
     this.cancelPendingPermissions();
     this.open = undefined;

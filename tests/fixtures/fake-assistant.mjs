@@ -17,6 +17,9 @@ import { existsSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { createInterface } from 'node:readline';
 import { Readable, Writable } from 'node:stream';
 
+// The JSON-RPC code for a failure on the agent's own side, which is how an agent reports a full context window.
+const INTERNAL_ERROR_CODE = -32603;
+
 const SIGNED_IN = 'signed-in';
 const GOOD_CODE = 'good-code';
 const argumentAfter = (flag) => {
@@ -88,6 +91,12 @@ function startAgent() {
       const CONTEXT_SIZE = 200_000;
       const CONTEXT_PER_TURN = 20_000;
       let contextUsed = 0;
+      // Set once room has been made, so a conversation that was too long fits on the next try.
+      let roomHasBeenMade = false;
+      // Set when the host is told to go quiet: it goes on running and answers nothing at all, which is what a
+      // container suspended while the author was away looks like from outside.
+      let goneQuiet = false;
+      const answerNothing = () => new Promise(() => undefined);
       const reportContext = (sessionId) =>
         client.sessionUpdate({ sessionId, update: { sessionUpdate: 'usage_update', used: contextUsed, size: CONTEXT_SIZE } });
       const offerCommands = (sessionId) =>
@@ -130,9 +139,10 @@ function startAgent() {
           await client.sessionUpdate({ sessionId, update: { sessionUpdate: 'current_mode_update', currentModeId: modeId } });
           return {};
         },
-        listSessions: ({ cwd }) => ({
-          sessions: [{ sessionId: 'fake-earlier', cwd, title: 'An earlier conversation', updatedAt: '2026-09-13T12:00:00Z' }],
-        }),
+        listSessions: ({ cwd }) =>
+          goneQuiet
+            ? answerNothing()
+            : { sessions: [{ sessionId: 'fake-earlier', cwd, title: 'An earlier conversation', updatedAt: '2026-09-13T12:00:00Z' }] },
         loadSession: async ({ sessionId }) => {
           mustSignIn();
           for (let exchange = 1; exchange <= historyExchanges; exchange++) {
@@ -162,6 +172,7 @@ function startAgent() {
             });
             await wait(PIECE_INTERVAL_MS);
             contextUsed = Math.round(contextUsed / 4);
+            roomHasBeenMade = true;
             await client.sessionUpdate({
               sessionId,
               update: {
@@ -173,6 +184,19 @@ function startAgent() {
             });
             await reportContext(sessionId);
             return { stopReason: 'end_turn' };
+          }
+
+          if (text.includes('too long')) {
+            // A conversation that no longer fits: refused once, and answered when room has been made.
+            // Reported the way an agent reports it: a protocol error carrying the reason, not a crash.
+            if (!roomHasBeenMade) throw new acp.RequestError(INTERNAL_ERROR_CODE, 'Prompt is too long');
+            await say(sessionId, 'Answered once there was room.');
+            return { stopReason: 'end_turn' };
+          }
+
+          if (text.includes('go quiet')) {
+            goneQuiet = true;
+            return await answerNothing();
           }
 
           await think(sessionId, `Thinking about what to say to: ${text}`);
