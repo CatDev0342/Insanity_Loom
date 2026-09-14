@@ -6,6 +6,9 @@
 // it opens a section, closes it, or stands in the middle, and the sides are drawn to suit.
 //
 // Nothing about the writing inside changes — not its size, its spacing or its colour. The box is around it.
+//
+// The boxes are drawn **while section isolation is on** (40.11), and not otherwise: they show the author what a reach
+// would take. With isolation off, a reach takes the whole whisper, and there is nothing for a box to say.
 
 import { Extension } from '@tiptap/core';
 import { Plugin, PluginKey } from '@tiptap/pm/state';
@@ -44,14 +47,24 @@ export function boxesFor(state: EditorState): DecorationSet {
   return DecorationSet.create(state.doc, boxes);
 }
 
-export const SectionsDrawn = Extension.create({
+export interface SectionsDrawnOptions {
+  /** Whether section isolation is on. Asked each time the whisper is drawn, so turning it on shows the boxes at once. */
+  isolating: () => boolean;
+}
+
+export const SectionsDrawn = Extension.create<SectionsDrawnOptions>({
   name: 'sectionsDrawn',
 
+  addOptions() {
+    return { isolating: () => false };
+  },
+
   addProseMirrorPlugins() {
+    const { isolating } = this.options;
     return [
       new Plugin({
         key: new PluginKey('sectionsDrawn'),
-        props: { decorations: (state) => boxesFor(state) },
+        props: { decorations: (state) => (isolating() ? boxesFor(state) : null) },
       }),
     ];
   },

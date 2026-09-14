@@ -688,9 +688,9 @@ body {
   padding-bottom: 0.7rem;
 }
 
-/* The assistant's reply is a section of its own, and wears the same box; the line down its left side stays, so it is
-   still plain at a glance whose writing it is. */
-.whisper-editor section.reply {
+/* The assistant's reply is a section of its own, and wears the same box while isolation is on; the line down its left
+   side stays whatever happens, so it is always plain at a glance whose writing it is. */
+.whisper-editor.is-isolating section.reply {
   border: 1px solid var(--attention);
   border-left: 3px solid var(--reply-mark);
   padding: 0.7rem 0.9rem;

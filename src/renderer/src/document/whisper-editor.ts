@@ -87,7 +87,7 @@ export class WhisperEditor {
         Picture,
         ProtectBusyReplies,
         SectionKeys.configure({ onSectionFinished: (sectionId) => this.sectionFinished(sectionId, options.onSectionFinished) }),
-        SectionsDrawn,
+        SectionsDrawn.configure({ isolating: () => this.isolating }),
         WhisperPaste,
         HeadingIdentities,
         MarkFoundHeading,
@@ -290,9 +290,12 @@ export class WhisperEditor {
     this.editor.commands.focus('end');
   }
 
-  /** Turns section isolation on or off. */
+  /** Turns section isolation on or off. The boxes around the sections follow it, so the author sees what it means. */
   isolateSections(isolating: boolean): void {
     this.isolating = isolating;
+    this.editor.view.dom.classList.toggle('is-isolating', isolating);
+    // The whisper is drawn again at once: what is drawn depends on this, and nothing else has changed to prompt it.
+    this.editor.view.dispatch(this.editor.state.tr.setMeta('addToHistory', false));
   }
 
   get isolatingSections(): boolean {

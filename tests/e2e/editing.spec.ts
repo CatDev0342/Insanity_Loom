@@ -219,10 +219,19 @@ test('each section is drawn in a box of its own, and Quote answers what was said
   await page.keyboard.press('Control+Enter');
   await expect(page.locator('.reply')).toHaveCount(1);
 
-  // The box is drawn around each section, in the gold the status bar uses. Nothing inside it is changed.
+  // No boxes while section isolation is off: a reach takes the whole whisper, and there is nothing for them to say.
+  await expect(page.locator('.whisper-editor .section-opens')).toHaveCount(0);
+
+  // With it on, each section is drawn in a box, in the gold the status bar uses. Nothing inside it is changed.
+  await page.keyboard.press('Control+Shift+i');
   const gold = await page.locator('.whisper-editor .section-opens').first().evaluate((element) => getComputedStyle(element).borderTopColor);
   expect(gold).toBe('rgb(176, 138, 62)');
   await expect(page.locator('.whisper-editor .section-closes')).not.toHaveCount(0);
+
+  // And off again, they go.
+  await page.keyboard.press('Control+Shift+i');
+  await expect(page.locator('.whisper-editor .section-opens')).toHaveCount(0);
+  await page.keyboard.press('Control+Shift+i');
 
   // The turn's own line says which turn it was, on the left.
   const label = await page.locator('.whisper-editor hr').first().evaluate((element) => ({
