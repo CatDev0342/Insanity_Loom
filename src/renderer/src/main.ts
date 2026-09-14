@@ -7,6 +7,7 @@ import { MenuBar } from './menu/menubar';
 import { MENUS } from './menu/model';
 import { LinkPanel, type WhisperHeading } from './panels/link-panel';
 import { PointsHerePanel } from './panels/points-here-panel';
+import { SearchPanel } from './panels/search-panel';
 import { PreferencesPanel } from './panels/preferences-panel';
 import { SignInPanel } from './panels/sign-in-panel';
 
@@ -45,6 +46,7 @@ const preferences = new PreferencesPanel(required<HTMLDialogElement>('#preferenc
 const signIn = new SignInPanel(required<HTMLDialogElement>('#sign-in-dialog'), bridge.assistant);
 const link = new LinkPanel(required<HTMLDialogElement>('#link-dialog'));
 const pointsHere = new PointsHerePanel(required<HTMLDialogElement>('#points-here-dialog'));
+const search = new SearchPanel(required<HTMLDialogElement>('#search-dialog'));
 required<HTMLButtonElement>('#sign-in').addEventListener('click', () => void signIn.show());
 
 /**
@@ -80,11 +82,19 @@ async function showWhatPointsHere(): Promise<void> {
   loom.focusWhisper();
 }
 
+/** File ▸ Find in the Alcove: the whispers holding some writing; choosing one opens it. */
+async function findInTheAlcove(): Promise<void> {
+  const chosen = await search.ask((looked) => bridge.whispers.search(looked));
+  if (chosen !== '') await loom.openNamedWhisper(chosen);
+  loom.focusWhisper();
+}
+
 async function run(command: AnyCommandId): Promise<void> {
   // Undo and Redo in the whisper are the whisper's own: its history holds only the author's changes.
   if ((command === 'edit.undo' || command === 'edit.redo') && loom.runEditCommand(command)) return;
   if (isFormatCommand(command)) return runFormat(command);
   if (command === 'whisper.pointsHere') return showWhatPointsHere();
+  if (command === 'whisper.search') return findInTheAlcove();
   if (!isPageCommand(command)) return bridge.runCommand(command);
   if (command === 'app.preferences') return preferences.show();
   if (command === 'assistant.signIn') return signIn.show();

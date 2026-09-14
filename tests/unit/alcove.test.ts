@@ -153,3 +153,44 @@ describe('what points here', () => {
     expect(held.pointingAt(name).some((whisper) => whisper.name === name)).toBe(false);
   });
 });
+
+describe('finding writing in the alcove', () => {
+  it('finds what the author would read, not the markup around it', () => {
+    const held = alcove();
+    held.create(
+      'About the loom',
+      '<html xmlns="http://www.w3.org/1999/xhtml"><head><title>About the loom</title></head><body>' +
+        '<article class="whisper"><p>The <strong>loom</strong> holds a whisper. A loom again.</p></article></body></html>',
+      WHEN,
+    );
+    held.create('Somewhere else', '<p>nothing of the kind here</p>', WHEN);
+
+    const found = held.search('loom holds');
+    expect(found).toHaveLength(1);
+    // The words are read as they stand on the page, across the markup between them.
+    expect(found[0]?.glimpse).toContain('The loom holds a whisper');
+    // What is only in the markup is not writing, and is not found.
+    expect(held.search('strong')).toHaveLength(0);
+    expect(held.search('xhtml')).toHaveLength(0);
+  });
+
+  it('counts every place the writing appears, and pays no heed to capitals', () => {
+    const held = alcove();
+    held.create('A conversation', '<p>Loom, loom, LOOM.</p>', WHEN);
+    const found = held.search('loom');
+    expect(found[0]?.found).toBe(3);
+  });
+
+  it('finds nothing for nothing', () => {
+    const held = alcove();
+    held.create('A conversation', '<p>words</p>', WHEN);
+    expect(held.search('   ')).toEqual([]);
+  });
+
+  it('reads the characters a file writes for itself', () => {
+    const held = alcove();
+    held.create('A conversation', '<p>Salt &amp; Pepper &lt;here&gt;</p>', WHEN);
+    expect(held.search('Salt & Pepper')).toHaveLength(1);
+    expect(held.search('<here>')).toHaveLength(1);
+  });
+});

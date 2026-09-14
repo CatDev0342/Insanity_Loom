@@ -179,6 +179,9 @@ export function startServices(dataFolder: string, logsFolder: string, journal: J
   ipcMain.handle(WHISPER_CHANNELS.pointingHere, (_event, name: unknown) =>
     whispers.pointingHere(text(name, 'whisper name', MAXIMUM_PATH_LENGTH)),
   );
+  ipcMain.handle(WHISPER_CHANNELS.search, (_event, looked: unknown) =>
+    whispers.search(text(looked, 'search', MAXIMUM_IDENTIFIER_LENGTH)),
+  );
   ipcMain.handle(LINK_CHANNELS.open, (_event, address: unknown) => openAddress(text(address, 'address', MAXIMUM_ADDRESS_LENGTH)));
 
   return assistant;

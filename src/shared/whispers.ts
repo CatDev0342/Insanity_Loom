@@ -27,6 +27,16 @@ export interface WhisperPointingHere {
   readonly headings: readonly string[];
 }
 
+/** A whisper holding the writing looked for, and a glimpse of where it was found. */
+export interface WhisperFound {
+  readonly name: string;
+  readonly title: string;
+  /** How many times the writing appears in it. */
+  readonly found: number;
+  /** A little of the whisper around the first place it appears. */
+  readonly glimpse: string;
+}
+
 /** A link from one whisper into another, or into a place in this one. */
 export interface WhisperLink {
   /** The whisper's file name, or '' for a link within the whisper the author is in. */
@@ -79,6 +89,8 @@ export interface WhispersBridge {
   contents(name: string): Promise<string>;
   /** The whispers that link to this one. */
   pointingHere(name: string): Promise<readonly WhisperPointingHere[]>;
+  /** The whispers in the alcove holding this writing. */
+  search(looked: string): Promise<readonly WhisperFound[]>;
   /** Asks the author for a whisper to open. Undefined when they choose none. */
   choose(): Promise<OpenWhisper | undefined>;
   /** Names the whisper's file after the conversation's title, keeping the date it began; returns where it now is. */
@@ -98,6 +110,7 @@ export const WHISPER_CHANNELS = {
   openNamed: 'insanity-loom:whisper-open-named',
   contents: 'insanity-loom:whisper-contents',
   pointingHere: 'insanity-loom:whisper-pointing-here',
+  search: 'insanity-loom:whisper-search',
   rename: 'insanity-loom:whisper-rename',
   showAlcove: 'insanity-loom:alcove-show',
 } as const;

@@ -8,6 +8,7 @@ export const PAGE_COMMANDS = [
   'whisper.open',
   'whisper.showAlcove',
   'whisper.pointsHere',
+  'whisper.search',
   'assistant.reconnect',
   'assistant.newConversation',
   'assistant.resumeConversation',
@@ -21,7 +22,7 @@ export const PAGE_COMMANDS = [
 export type PageCommandId = (typeof PAGE_COMMANDS)[number];
 
 /** The page commands the loom carries out (the rest are the page's own panels). */
-export type AssistantCommandId = Exclude<PageCommandId, 'app.preferences' | 'assistant.signIn' | 'whisper.pointsHere'>;
+export type AssistantCommandId = Exclude<PageCommandId, 'app.preferences' | 'assistant.signIn' | 'whisper.pointsHere' | 'whisper.search'>;
 
 /** Any command a menu entry may name. */
 export type AnyCommandId = CommandId | PageCommandId | FormatCommandId;

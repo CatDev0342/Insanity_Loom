@@ -24,6 +24,45 @@ const LONGEST_TITLE_IN_NAME = 60;
 // eslint-disable-next-line no-control-regex
 const FORBIDDEN_IN_NAME = new RegExp('[<>:"/\\|?*\u0000-\u001f]', 'g');
 
+/** How much of a whisper is shown around what was found, in characters either side. */
+const GLIMPSE_EITHER_SIDE = 40;
+
+/** The characters a whisper's file writes for themselves, as XML asks. */
+const WRITTEN_FOR: Readonly<Record<string, string>> = {
+  '&amp;': '&',
+  '&lt;': '<',
+  '&gt;': '>',
+  '&quot;': '"',
+  '&apos;': "'",
+  '&#39;': "'",
+};
+
+/**
+ * The writing in a whisper's file, without the markup around it: what the author would read on the page. Enough to
+ * find words by; the whisper itself is the thing that is opened.
+ */
+function writingOf(xhtml: string): string {
+  const body = xhtml.replace(/<head\b[\s\S]*?<\/head>/i, '');
+  return body
+    .replace(/<[^>]*>/g, ' ')
+    .replace(/&[a-z#0-9]+;/gi, (written) => WRITTEN_FOR[written.toLowerCase()] ?? ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function countOf(writing: string, wanted: string): number {
+  let count = 0;
+  for (let at = writing.indexOf(wanted); at !== -1; at = writing.indexOf(wanted, at + wanted.length)) count += 1;
+  return count;
+}
+
+/** What is shown of a whisper around the writing found in it, with an ellipsis where it was cut. */
+function glimpseAt(writing: string, where: number, length: number): string {
+  const from = Math.max(0, where - GLIMPSE_EITHER_SIDE);
+  const to = Math.min(writing.length, where + length + GLIMPSE_EITHER_SIDE);
+  return `${from > 0 ? '…' : ''}${writing.slice(from, to)}${to < writing.length ? '…' : ''}`;
+}
+
 /** A link's address as it stands in a whisper's file. */
 const LINK_ADDRESS = /href="([^"]*)"/g;
 
@@ -176,6 +215,23 @@ export class Alcove {
         headings.add(decodeURIComponent(addressAfterName(address).replace(/^#/, '')));
       }
       if (headings.size > 0) found.push({ name: whisper.name, headings: [...headings] });
+    }
+    return found;
+  }
+
+  /**
+   * The whispers holding this writing, most recent first, with a glimpse of where it was found. The alcove itself is
+   * read each time, so what is found is what is on disk, never an index that has drifted from it.
+   */
+  search(looked: string): readonly { readonly name: string; readonly found: number; readonly glimpse: string }[] {
+    const wanted = looked.trim().toLowerCase();
+    if (wanted === '') return [];
+    const found: { name: string; found: number; glimpse: string }[] = [];
+    for (const whisper of this.list()) {
+      const words = writingOf(readFileSync(whisper.path, 'utf8'));
+      const where = words.toLowerCase().indexOf(wanted);
+      if (where === -1) continue;
+      found.push({ name: whisper.name, found: countOf(words.toLowerCase(), wanted), glimpse: glimpseAt(words, where, wanted.length) });
     }
     return found;
   }

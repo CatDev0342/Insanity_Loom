@@ -171,3 +171,28 @@ test('File ▸ What Points Here lists the whispers that link to this one, and op
   await expect(panel).toBeHidden();
   await expect(page.locator('#whisper-name')).toHaveText(pointing ?? '');
 });
+
+test('File ▸ Find in the Alcove finds a whisper by its writing, and opens it', async () => {
+  const whisper = page.locator('.whisper-editor');
+  await whisper.click();
+  await page.keyboard.type('a thought about weaving');
+  const holding = await page.locator('#whisper-name').textContent();
+
+  // Another whisper, which does not hold it.
+  await page.keyboard.press('Control+n');
+  await whisper.click();
+  await page.keyboard.type('something else entirely');
+
+  await page.keyboard.press('Control+Shift+f');
+  const panel = page.getByRole('dialog', { name: 'Find in the Alcove' });
+  await expect(panel).toBeVisible();
+  await panel.getByLabel('Find:').fill('about weaving');
+  await panel.getByRole('button', { name: 'Find' }).click();
+  await expect(panel.getByRole('status')).toContainText('1 whisper holds');
+  await expect(panel.getByRole('listbox')).toContainText('a thought about weaving');
+
+  await panel.getByRole('button', { name: 'Open' }).click();
+  await expect(panel).toBeHidden();
+  await expect(page.locator('#whisper-name')).toHaveText(holding ?? '');
+  await expect(whisper).toContainText('a thought about weaving');
+});

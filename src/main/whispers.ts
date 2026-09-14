@@ -4,7 +4,7 @@
 import { BrowserWindow, dialog, shell } from 'electron';
 import { existsSync } from 'node:fs';
 import { basename, dirname, join } from 'node:path';
-import type { OpenWhisper, WhisperInAlcove, WhisperPointingHere } from '../shared/whispers';
+import type { OpenWhisper, WhisperFound, WhisperInAlcove, WhisperPointingHere } from '../shared/whispers';
 import { Alcove, DEFAULT_ALCOVE_NAME } from './alcove';
 import type { Journal } from './journal';
 import type { PreferenceStore } from './preference-store';
@@ -54,6 +54,16 @@ export class Whispers {
       name: whisper.name,
       title: Whispers.titleFromName(whisper.name),
       headings: whisper.headings,
+    }));
+  }
+
+  /** The whispers holding this writing, most recent first. */
+  search(looked: string): readonly WhisperFound[] {
+    return this.alcove.search(looked).map((whisper) => ({
+      name: whisper.name,
+      title: Whispers.titleFromName(whisper.name),
+      found: whisper.found,
+      glimpse: whisper.glimpse,
     }));
   }
 
