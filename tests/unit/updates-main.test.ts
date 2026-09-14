@@ -3,7 +3,7 @@ import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'nod
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
-import { howToUpdate, putTheUpdateInPlace, updateWaiting } from '../../src/main/updates';
+import { handOverToTheHelper, HELPER_LOG, howTheUpdateWent, howToUpdate, updateWaiting } from '../../src/main/updates';
 
 const made: string[] = [];
 afterEach(() => {
@@ -41,7 +41,7 @@ describe('whether a copy can update itself', () => {
 });
 
 describe('an update waiting to be put in place', () => {
-  it('is put in place at the start, and cleared away afterwards', () => {
+  function anUpdateWaiting(): { data: string; program: string; packagePath: string } {
     const data = folder();
     const program = folder();
     writeFileSync(join(program, 'app.asar'), 'the old program');
@@ -50,31 +50,43 @@ describe('an update waiting to be put in place', () => {
     const packagePath = join(waiting, 'part.zip');
     writeFileSync(packagePath, 'a package');
     writeFileSync(join(waiting, 'update.json'), JSON.stringify({ version: '0.0.84', package: packagePath }));
+    return { data, program, packagePath };
+  }
 
-    const put = putTheUpdateInPlace({ ...HERE, programFolder: program, dataFolder: data }, (_package, into) => {
-      writeFileSync(join(into, 'app.asar'), 'the new program');
-    });
+  it('is handed to a helper, because the program cannot replace the file it is running from', () => {
+    const { data, program } = anUpdateWaiting();
+    let setGoing = '';
+    const standing = handOverToTheHelper(
+      { ...HERE, programFolder: program, dataFolder: data },
+      (_package: string, into: string) => writeFileSync(join(into, 'app.asar'), 'the new program'),
+      (scriptPath: string) => {
+        setGoing = scriptPath;
+      },
+      join(program, 'Insanity_Loom.exe'),
+    );
 
-    expect(put).toBe('0.0.84');
-    expect(readFileSync(join(program, 'app.asar'), 'utf8')).toBe('the new program');
-    expect(updateWaiting(data)).toBeUndefined();
+    expect(standing).toEqual({ kind: 'waiting for a restart', version: '0.0.84' });
+    // The helper was written and set going, and the program itself has touched nothing.
+    expect(setGoing).toContain('put-in-place.ps1');
+    expect(readFileSync(join(program, 'app.asar'), 'utf8')).toBe('the old program');
+    const script = readFileSync(setGoing, 'utf8');
+    expect(script).toContain('Wait-Process');
+    expect(script).toContain('Copy-Item');
+    expect(script).toContain('Insanity_Loom.exe');
   });
 
-  it('leaves the program exactly as it was when anything goes wrong', () => {
-    const data = folder();
-    const program = folder();
-    writeFileSync(join(program, 'app.asar'), 'the old program');
-    const waiting = join(data, 'Update');
-    mkdirSync(waiting, { recursive: true });
-    const packagePath = join(waiting, 'part.zip');
-    writeFileSync(packagePath, 'a package');
-    writeFileSync(join(waiting, 'update.json'), JSON.stringify({ version: '0.0.84', package: packagePath }));
+  it('leaves the program exactly as it was when the package cannot be opened, and says so', () => {
+    const { data, program } = anUpdateWaiting();
+    const standing = handOverToTheHelper(
+      { ...HERE, programFolder: program, dataFolder: data },
+      () => {
+        throw new Error('that package is not a package');
+      },
+      () => undefined,
+      join(program, 'Insanity_Loom.exe'),
+    );
 
-    const put = putTheUpdateInPlace({ ...HERE, programFolder: program, dataFolder: data }, () => {
-      throw new Error('that package is not a package');
-    });
-
-    expect(put).toBe('');
+    expect(standing.kind).toBe('went wrong');
     // A program that runs is worth more than a program that is new.
     expect(readFileSync(join(program, 'app.asar'), 'utf8')).toBe('the old program');
     expect(updateWaiting(data)).toBeUndefined();
@@ -82,5 +94,43 @@ describe('an update waiting to be put in place', () => {
 
   it('says there is nothing waiting when there is not', () => {
     expect(updateWaiting(folder())).toBeUndefined();
+  });
+});
+
+describe('how an update went, read at the next start', () => {
+  it('says nothing when no update was ever handed over', () => {
+    expect(howTheUpdateWent({ ...HERE, dataFolder: folder(), programFolder: folder() })).toBeUndefined();
+  });
+
+  it('says it took when the program is now the version that was waiting', () => {
+    const data = folder();
+    const waiting = join(data, 'Update');
+    mkdirSync(waiting, { recursive: true });
+    const packagePath = join(waiting, 'part.zip');
+    writeFileSync(packagePath, 'a package');
+    writeFileSync(join(waiting, 'update.json'), JSON.stringify({ version: '0.0.84', package: packagePath }));
+    writeFileSync(join(waiting, HELPER_LOG), 'Put in place.');
+
+    const went = howTheUpdateWent({ ...HERE, version: '0.0.84', dataFolder: data, programFolder: folder() });
+    expect(went).toEqual({ kind: 'the newest', version: '0.0.84' });
+    expect(updateWaiting(data)).toBeUndefined();
+  });
+
+  it('says plainly when it did not take, rather than starting up looking unchanged', () => {
+    const data = folder();
+    const waiting = join(data, 'Update');
+    mkdirSync(waiting, { recursive: true });
+    const packagePath = join(waiting, 'part.zip');
+    writeFileSync(packagePath, 'a package');
+    writeFileSync(join(waiting, 'update.json'), JSON.stringify({ version: '0.0.84', package: packagePath }));
+    writeFileSync(join(waiting, HELPER_LOG), 'The update could not be put in place: access denied');
+
+    // Still 0.0.83: this is exactly what the author saw, and it must not pass in silence.
+    const went = howTheUpdateWent({ ...HERE, dataFolder: data, programFolder: folder() });
+    expect(went?.kind).toBe('went wrong');
+    expect(went).toMatchObject({ why: expect.stringContaining('access denied') });
+    expect(went).toMatchObject({ why: expect.stringContaining('0.0.84') });
+    // And it is not tried again and again: what failed once is cleared away.
+    expect(updateWaiting(data)).toBeUndefined();
   });
 });

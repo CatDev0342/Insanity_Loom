@@ -165,7 +165,12 @@ async function checkForUpdates(): Promise<void> {
     return;
   }
   loom.sayAboutUpdates({ kind: 'fetching', version: standing.version }, undefined);
-  loom.sayAboutUpdates(await bridge.updates.fetch(), () => void bridge.updates.restart());
+  loom.sayAboutUpdates(await bridge.updates.fetch(), () => {
+    // If the hand-over fails, the program is still here to say so — it only quits once the helper is going.
+    void bridge.updates.restart().then((how) => {
+      if (how.kind === 'went wrong') loom.sayAboutUpdates(how);
+    });
+  });
 }
 
 async function run(command: AnyCommandId): Promise<void> {
@@ -238,4 +243,8 @@ loom.followTheCaret(() => toolbar.refresh());
 toolbar.refresh();
 new ContextMenu(bridge.editing, run, (where) => loom.quote(where));
 
-void loom.start();
+void loom.start().then(async () => {
+  // How an update handed over at the last quit went, said as soon as there is a window to say it in.
+  const how = await bridge.updates.howItWent();
+  if (how !== undefined) loom.sayHowTheUpdateWent(how);
+});

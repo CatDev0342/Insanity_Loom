@@ -27,7 +27,16 @@ import { WINDOW_BACKGROUND_COLOR } from './index';
 import { PAGE_PREFERENCES } from './security';
 import { LAYOUT_CHANNELS } from '../shared/layout';
 import { UPDATE_CHANNELS } from '../shared/updates';
-import { fetchTheNewest, howToUpdate, updateSurroundings, whatIsNewest } from './updates';
+import {
+  fetchTheNewest,
+  handOverToTheHelper,
+  howToUpdate,
+  openPackage,
+  setTheHelperGoing,
+  takeHowTheUpdateWent,
+  updateSurroundings,
+  whatIsNewest,
+} from './updates';
 import { searchHall } from './hall';
 import { LINK_CHANNELS } from '../shared/links';
 import { openAddress } from './links';
@@ -300,10 +309,20 @@ export function startServices(dataFolder: string, logsFolder: string, journal: J
       return { kind: 'went wrong', why: problem instanceof Error ? problem.message : String(problem) };
     }
   });
+  /**
+   * Puts the waiting update in place and starts the program again.
+   *
+   * The program cannot replace the file it is running from, so it does neither itself: a short helper is set going,
+   * it waits for this process to be gone, moves the files over, and starts the program. That is why there is no
+   * `app.relaunch()` here — the helper does the starting, once the files are its own to move.
+   */
   ipcMain.handle(UPDATE_CHANNELS.restart, () => {
-    app.relaunch();
+    const standing = handOverToTheHelper(updateSurroundings(), openPackage, setTheHelperGoing, app.getPath('exe'));
+    if (standing.kind !== 'waiting for a restart') return standing;
     app.quit();
+    return standing;
   });
+  ipcMain.handle(UPDATE_CHANNELS.howItWent, () => takeHowTheUpdateWent() ?? null);
   ipcMain.handle(LAYOUT_CHANNELS.panelWidths, () => preferences.panelWidths);
   ipcMain.handle(LAYOUT_CHANNELS.savePanelWidths, (_event, widths: unknown) => {
     preferences.setPanelWidths(readPanelWidths(widths));

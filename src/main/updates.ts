@@ -6,12 +6,18 @@
 // running, never over it: a running program holds its own files open, and a half-written one would be a program that
 // will not start.
 //
-// It is put in place at the next start, before anything is loaded from it — which is the one moment nothing holds it.
+// Putting it in place is the hard half, and the first attempt was wrong. "At the next start, before anything is
+// loaded from it" cannot work: **the program's own code lives in app.asar**, so by the time any line of this file
+// runs, the very file being replaced is already open, and Windows will not let go of it. The copy failed, the update
+// was thrown away, and the program carried on as it was without a word (the designer, 2026-Sep-14).
+//
+// So it is put in place by something that is not this program: a short helper that waits for this process to be gone,
+// moves the files over, and starts the program again. Nothing else can do it, because everything else is us.
 
 import { app } from 'electron';
-import { spawnSync } from 'node:child_process';
+import { spawn, spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { cpSync, existsSync, mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { isNewer, type NewestBuild, type UpdateStanding } from '../shared/updates';
 
@@ -109,28 +115,126 @@ export function updateWaiting(dataFolder: string): WaitingUpdate | undefined {
   }
 }
 
+/** Where the helper writes what it did, so a failure can be explained rather than guessed at. */
+export const HELPER_LOG = 'put-in-place.log';
+
+/** What the helper is told: whose ending to wait for, what to move where, and what to start afterwards. */
+export interface HelperOrders {
+  readonly pid: number;
+  readonly opened: string;
+  readonly programFolder: string;
+  readonly exe: string;
+  readonly log: string;
+}
+
+/** A path as PowerShell reads it literally: single quotes, with any of its own doubled. */
+function asLiteral(path: string): string {
+  return `'${path.replace(/'/g, "''")}'`;
+}
+
 /**
- * Puts a waiting update in place, at the one moment nothing holds the files: the very start, before anything has been
- * loaded from them. Anything that goes wrong leaves the program exactly as it was, which is a program that runs.
+ * The helper, in PowerShell.
+ *
+ * It waits for the program to be gone before it touches anything — a file still open is a file that cannot be
+ * replaced, and that was the whole of the first attempt's failure. Then the files go over, and the program starts
+ * again. Everything it does is written down: if it cannot do it, the program must be able to say so afterwards
+ * rather than start up looking unchanged and saying nothing.
  */
-export function putTheUpdateInPlace(here: UpdateSurroundings, unzip: (packagePath: string, into: string) => void): string {
+export function helperScript(orders: HelperOrders): string {
+  return [
+    '$ErrorActionPreference = "Stop"',
+    `$log = ${asLiteral(orders.log)}`,
+    '"Waiting for Insanity_Loom to close." | Out-File -FilePath $log -Encoding utf8',
+    'try {',
+    `  Wait-Process -Id ${String(orders.pid)} -Timeout ${String(SECONDS_TO_WAIT_FOR_THE_PROGRAM)} -ErrorAction SilentlyContinue`,
+    '} catch {',
+    '  "The program did not close in time: $_" | Out-File -FilePath $log -Append -Encoding utf8',
+    '}',
+    // Even once the process is gone, Windows can hold its files for a moment longer.
+    `Start-Sleep -Milliseconds ${String(SETTLING_MILLISECONDS)}`,
+    'try {',
+    `  Copy-Item -Path (Join-Path ${asLiteral(orders.opened)} '*') -Destination ${asLiteral(orders.programFolder)} -Recurse -Force`,
+    '  "Put in place." | Out-File -FilePath $log -Append -Encoding utf8',
+    '} catch {',
+    '  "The update could not be put in place: $_" | Out-File -FilePath $log -Append -Encoding utf8',
+    '}',
+    `Start-Process -FilePath ${asLiteral(orders.exe)}`,
+  ].join('\n');
+}
+
+/** How long the helper waits for the program to be gone, and how long it lets Windows settle afterwards. */
+const SECONDS_TO_WAIT_FOR_THE_PROGRAM = 60;
+const SETTLING_MILLISECONDS = 500;
+
+/**
+ * Opens the waiting update, sets the helper going, and says whether it did. The caller quits straight afterwards:
+ * the helper is waiting for exactly that, and will start the program again once the files are its own.
+ */
+export function handOverToTheHelper(
+  here: UpdateSurroundings,
+  unzip: (packagePath: string, into: string) => void,
+  setGoing: (scriptPath: string) => void,
+  exe: string,
+): UpdateStanding {
   const waiting = updateWaiting(here.dataFolder);
-  if (waiting === undefined) return '';
+  if (waiting === undefined) return { kind: 'went wrong', why: 'There is no update waiting to be put in place.' };
   const folder = join(here.dataFolder, WAITING);
   const opened = join(folder, 'opened');
   try {
     rmSync(opened, { recursive: true, force: true });
     mkdirSync(opened, { recursive: true });
     unzip(waiting.package, opened);
-    // Everything is put in place at once, each file moved over the one it replaces.
-    cpSync(opened, here.programFolder, { recursive: true, force: true });
+    const scriptPath = join(folder, 'put-in-place.ps1');
+    writeFileSync(
+      scriptPath,
+      helperScript({ pid: process.pid, opened, programFolder: here.programFolder, exe, log: join(folder, HELPER_LOG) }),
+      'utf8',
+    );
+    setGoing(scriptPath);
+    return { kind: 'waiting for a restart', version: waiting.version };
+  } catch (cause) {
     rmSync(folder, { recursive: true, force: true });
-    return waiting.version;
-  } catch {
-    // The program stays as it was; the update is thrown away rather than left half-done.
-    rmSync(folder, { recursive: true, force: true });
-    return '';
+    return { kind: 'went wrong', why: `The update could not be made ready: ${cause instanceof Error ? cause.message : String(cause)}` };
   }
+}
+
+/**
+ * How an update that was handed over went, read at the next start. An update that did not take **must be said**: the
+ * first attempt failed silently, and a program that starts up looking exactly as it did is the worst possible answer
+ * to "did that work?".
+ */
+export function howTheUpdateWent(here: UpdateSurroundings): UpdateStanding | undefined {
+  const waiting = updateWaiting(here.dataFolder);
+  const folder = join(here.dataFolder, WAITING);
+  if (waiting === undefined) {
+    // Nothing waiting, but a log left behind means a helper ran and did not get as far as leaving an update to find.
+    if (!existsSync(join(folder, HELPER_LOG))) return undefined;
+    const why = readFileSync(join(folder, HELPER_LOG), 'utf8').trim();
+    rmSync(folder, { recursive: true, force: true });
+    return why.includes('Put in place.') ? undefined : { kind: 'went wrong', why };
+  }
+  const took = !isNewer(waiting.version, here.version);
+  const log = join(folder, HELPER_LOG);
+  const why = existsSync(log) ? readFileSync(log, 'utf8').trim() : 'The helper left no word of what happened.';
+  rmSync(folder, { recursive: true, force: true });
+  return took
+    ? { kind: 'the newest', version: here.version }
+    : { kind: 'went wrong', why: `Insanity_Loom ${waiting.version} was fetched but did not go into place. ${why}` };
+}
+
+/** What was found about the last update at the start, kept until the page asks for it. */
+let foundAtStart: UpdateStanding | undefined;
+
+/** Read at the start, before there is a window to say it in. */
+export function noteHowTheUpdateWent(here: UpdateSurroundings): void {
+  foundAtStart = howTheUpdateWent(here);
+}
+
+/** Said once, to the page, and then forgotten: it is news, not a standing state. */
+export function takeHowTheUpdateWent(): UpdateStanding | undefined {
+  const found = foundAtStart;
+  foundAtStart = undefined;
+  return found;
 }
 
 /** Where this copy of the program is, what it is, and what it runs on. */
@@ -142,6 +246,19 @@ export function updateSurroundings(): UpdateSurroundings {
     version: app.getVersion(),
     electron: process.versions.electron,
   };
+}
+
+/**
+ * Sets the helper going, detached and outliving this program — which is the point of it. Nothing of it is waited
+ * for: the program is about to quit, and the helper is waiting for exactly that.
+ */
+export function setTheHelperGoing(scriptPath: string): void {
+  const helper = spawn(
+    'powershell',
+    ['-NoProfile', '-NonInteractive', '-WindowStyle', 'Hidden', '-ExecutionPolicy', 'Bypass', '-File', scriptPath],
+    { detached: true, stdio: 'ignore', windowsHide: true },
+  );
+  helper.unref();
 }
 
 /** Where a fetched update waits, for anything that needs to know. */
@@ -165,12 +282,3 @@ export function openPackage(packagePath: string, into: string): void {
   if (unzip.status !== 0) throw new Error(`The update could not be opened: ${String(unzip.stderr)}`);
 }
 
-/** Moves a file, falling back to a copy across drives. */
-export function moveInto(from: string, to: string): void {
-  try {
-    renameSync(from, to);
-  } catch {
-    cpSync(from, to, { recursive: true, force: true });
-    rmSync(from, { recursive: true, force: true });
-  }
-}

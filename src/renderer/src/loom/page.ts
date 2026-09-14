@@ -548,6 +548,16 @@ export class Loom {
   }
 
   /** What is happening about updates, said above the whisper, with the one thing to do about it when there is one. */
+  /**
+   * How an update handed over at the last quit went, said as soon as the program is up. One that did not take **must**
+   * be said: a program that starts up looking exactly as it did is the worst possible answer to "did that work?"
+   * (the designer, 2026-Sep-14).
+   */
+  sayHowTheUpdateWent(standing: UpdateStanding): void {
+    if (standing.kind === 'the newest') this.showNotice(`Insanity_Loom is now ${standing.version}.`);
+    else this.sayAboutUpdates(standing);
+  }
+
   sayAboutUpdates(standing: UpdateStanding, restart?: () => void): void {
     switch (standing.kind) {
       case 'looking':
@@ -575,7 +585,7 @@ export class Loom {
         );
         return;
       case 'went wrong':
-        this.showProblem(`The newest Insanity_Loom could not be fetched: ${standing.why}`);
+        this.showProblem(`The update did not go through: ${standing.why}`);
         return;
     }
   }

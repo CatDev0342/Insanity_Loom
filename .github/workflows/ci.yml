@@ -110,9 +110,16 @@ jobs:
         if: runner.os == 'Windows' && github.ref == 'refs/heads/main'
         shell: pwsh
         run: |
-          $ours = 'dist/win-unpacked/resources/app.asar', 'dist/win-unpacked/resources/dictionaries',
-                  'dist/win-unpacked/LICENSE', 'dist/win-unpacked/NOTICE', 'dist/win-unpacked/THIRD_PARTY_NOTICES.txt'
-          Compress-Archive -Path $ours -DestinationPath dist/Insanity_Loom-Windows-app.zip -Force
+          # The package mirrors the shape of the program folder, because putting it in place is a copy straight over
+          # that folder: app.asar belongs under resources\, not beside the executable. It did not, and an update that
+          # had got past every other obstacle would still have put the files in the wrong places.
+          $part = 'dist/app-part'
+          Remove-Item -Recurse -Force $part -ErrorAction SilentlyContinue
+          New-Item -ItemType Directory -Force -Path "$part/resources" | Out-Null
+          Copy-Item dist/win-unpacked/resources/app.asar "$part/resources/"
+          Copy-Item -Recurse dist/win-unpacked/resources/dictionaries "$part/resources/"
+          Copy-Item dist/win-unpacked/LICENSE, dist/win-unpacked/NOTICE, dist/win-unpacked/THIRD_PARTY_NOTICES.txt $part
+          Compress-Archive -Path "$part/*" -DestinationPath dist/Insanity_Loom-Windows-app.zip -Force
 
       # Both packages are named for what they are rather than for which build they came from, so the newest replaces
       # the last rather than joining a pile of them. Which build it is, is in Help ▸ About and in the release's notes.

@@ -9,7 +9,7 @@ import { Journal } from './journal';
 import { PreferenceStore } from './preference-store';
 import { dataFoldersIn, findProgramFolder, prepareDataFolders, type DataFolders } from './portable';
 import { keepChromiumToItself } from './privacy';
-import { openPackage, putTheUpdateInPlace, updateSurroundings } from './updates';
+import { noteHowTheUpdateWent, updateSurroundings } from './updates';
 import { PAGE_PREFERENCES, restrictEveryPage } from './security';
 
 // The window's opening size, in screen points, and the smallest it may be made. The minimum keeps the page usable,
@@ -86,9 +86,10 @@ function start(): void {
   // Before anything else: Chromium is told to keep itself to itself. Its switches are read only as it starts.
   keepChromiumToItself(app);
 
-  // An update fetched last time is put in place now, which is the one moment nothing is holding those files. It is
-  // put in place before a window exists, so the author never sees half a program.
-  putTheUpdateInPlace(updateSurroundings(), openPackage);
+  // How an update handed over at the last quit went. It is only read here; putting it in place was the helper's
+  // work, because this program cannot replace the file it is itself running from (updates.ts). An update that did
+  // not take is said plainly as soon as there is a window to say it in.
+  noteHowTheUpdateWent(updateSurroundings());
 
   let folders: DataFolders;
   try {

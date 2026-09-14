@@ -29,13 +29,20 @@ export interface UpdatesBridge {
   /** Fetches the newest build's own part and puts it aside, to be put in place when the program next starts. */
   fetch(): Promise<UpdateStanding>;
   /** Closes the program and starts it again, so a fetched update is put in place. */
-  restart(): Promise<void>;
+  restart(): Promise<UpdateStanding>;
+  /**
+   * How an update handed over at the last quit went, asked once when the program starts, or nothing when there was
+   * none. An update that did not take must be said: a program that starts up looking exactly as it did is the worst
+   * possible answer to "did that work?" (the designer, 2026-Sep-14).
+   */
+  howItWent(): Promise<UpdateStanding | undefined>;
 }
 
 export const UPDATE_CHANNELS = {
   look: 'insanity-loom:update-look',
   fetch: 'insanity-loom:update-fetch',
   restart: 'insanity-loom:update-restart',
+  howItWent: 'insanity-loom:update-how-it-went',
 } as const;
 
 /** Whether a build is newer than the one running, by the number each carries. */

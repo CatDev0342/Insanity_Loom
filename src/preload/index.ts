@@ -125,9 +125,8 @@ const bridge: InsanityLoomBridge = {
   updates: {
     look: () => ipcRenderer.invoke(UPDATE_CHANNELS.look),
     fetch: () => ipcRenderer.invoke(UPDATE_CHANNELS.fetch),
-    restart: async () => {
-      await ipcRenderer.invoke(UPDATE_CHANNELS.restart);
-    },
+    restart: () => ipcRenderer.invoke(UPDATE_CHANNELS.restart),
+    howItWent: async () => (await ipcRenderer.invoke(UPDATE_CHANNELS.howItWent)) ?? undefined,
   },
 
   layout: {
