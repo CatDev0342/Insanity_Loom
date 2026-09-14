@@ -6,6 +6,9 @@
 //
 // Square, quiet, and never taking focus: pressing one must leave the author where they were writing, or the command
 // would have nothing to act on.
+//
+// By the keyboard it is one stop, not twenty: Tab reaches the strip, the arrows move along it, Home and End go to its
+// ends. A row of buttons that each demand their own Tab press is a wall between the author and their writing.
 
 import type { AnyCommandId } from '../commands';
 import type { CommandStandingSource } from './menubar';
@@ -86,6 +89,8 @@ export class Toolbar {
       // The press must not take the author out of their writing, or the command would have nothing to act on.
       element.addEventListener('mousedown', (event) => event.preventDefault());
       element.addEventListener('click', () => void runCommand(entry.command));
+      element.addEventListener('keydown', (event) => this.onKey(event));
+      element.tabIndex = this.buttons.length === 0 ? 0 : -1;
       container.append(element);
       this.buttons.push({ element, command: entry.command });
     }
@@ -98,5 +103,33 @@ export class Toolbar {
       element.disabled = !standing.enabled;
       element.setAttribute('aria-pressed', standing.checked ? 'true' : 'false');
     }
+    // The strip's one stop must be a button that can be pressed, or the keyboard reaches a dead thing.
+    if (this.buttons.some(({ element }) => element.tabIndex === 0 && !element.disabled)) return;
+    const usable = this.buttons.find(({ element }) => !element.disabled);
+    for (const { element } of this.buttons) element.tabIndex = element === usable?.element ? 0 : -1;
+  }
+
+  /** Which button a key asks for, or nothing when the key is not the strip's. */
+  private static buttonFor(key: string, at: number, count: number): number | undefined {
+    if (key === 'ArrowLeft') return (at - 1 + count) % count;
+    if (key === 'ArrowRight') return (at + 1) % count;
+    if (key === 'Home') return 0;
+    if (key === 'End') return count - 1;
+    return undefined;
+  }
+
+  /** The arrows move along the strip; Home and End go to its ends. */
+  private onKey(event: KeyboardEvent): void {
+    const usable = this.buttons.filter(({ element }) => !element.disabled);
+    const at = usable.findIndex(({ element }) => element === event.target);
+    if (at === -1) return;
+    const next = Toolbar.buttonFor(event.key, at, usable.length);
+    if (next === undefined) return;
+    event.preventDefault();
+    for (const { element } of this.buttons) element.tabIndex = -1;
+    const moved = usable[next]?.element;
+    if (moved === undefined) return;
+    moved.tabIndex = 0;
+    moved.focus();
   }
 }

@@ -95,3 +95,23 @@ test('Find in Files searches the hall it belongs to, library and all', async () 
   await expect(page.locator('#library-pane textarea')).toHaveValue(/40\.6 — THE WIKI/);
   await expect(page.locator('#library-pane .library-pinned')).toContainText('40');
 });
+
+test('the editing shortcuts are one stop for the keyboard, with the arrows moving along them', async () => {
+  const toolbar = page.getByRole('toolbar', { name: 'Editing' });
+  const bold = toolbar.getByRole('button', { name: 'Bold' });
+  const italic = toolbar.getByRole('button', { name: 'Italic' });
+
+  await bold.focus();
+  await expect(bold).toBeFocused();
+  await page.keyboard.press('ArrowRight');
+  await expect(italic).toBeFocused();
+  await page.keyboard.press('End');
+  await expect(toolbar.getByRole('button', { name: 'Clear formatting' })).toBeFocused();
+  await page.keyboard.press('Home');
+  await expect(bold).toBeFocused();
+
+  // One stop: Tab from the strip leaves it rather than walking every button.
+  await page.keyboard.press('Tab');
+  await expect(bold).not.toBeFocused();
+  await expect(italic).not.toBeFocused();
+});

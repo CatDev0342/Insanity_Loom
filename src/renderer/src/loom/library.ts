@@ -178,13 +178,24 @@ export class Library {
     this.elements.libraryInside.append(holder);
     this.list.hidden = true;
     this.open = { section, holder };
-    // The place cited, in view, with everything around it: the author came to see its surroundings.
-    const lines = writing.value.split(/\r?\n/);
-    const before = lines.slice(0, Math.max(0, section.line - 1)).join('\n').length;
-    writing.focus();
-    writing.setSelectionRange(before, before);
-    writing.blur();
-    writing.scrollTop = Math.max(0, (section.line - 1) * LINE_HEIGHT_GUESS - writing.clientHeight / 3);
+    Library.showLine(writing, section.line);
+  }
+
+  /**
+   * Puts the line the author came for in view, and selects it so their eye lands on it.
+   *
+   * How tall a line is drawn is measured rather than assumed: a guess lands in the wrong place the moment the font
+   * or the window changes, and the author is then looking at the wrong part of their own library.
+   */
+  private static showLine(writing: HTMLTextAreaElement, line: number): void {
+    if (line <= 0) return;
+    const lines = writing.value.split('\n');
+    const before = lines.slice(0, line - 1).join('\n').length + (line > 1 ? 1 : 0);
+    const ends = before + (lines[line - 1]?.length ?? 0);
+    writing.setSelectionRange(before, ends);
+    const measured = Number.parseFloat(getComputedStyle(writing).lineHeight);
+    const tall = Number.isFinite(measured) && measured > 0 ? measured : LINE_HEIGHT_WHEN_UNMEASURED;
+    writing.scrollTop = Math.max(0, (line - 1) * tall - writing.clientHeight / 3);
   }
 
   /** Puts the document away; the list comes back exactly where it was. */
@@ -231,8 +242,8 @@ export class Library {
   }
 }
 
-/** How tall a line of the library is drawn, in pixels, for finding the place cited before the document is measured. */
-const LINE_HEIGHT_GUESS = 19;
+/** How tall a line is taken to be when the page cannot say — a window not yet drawn has no measurements. */
+const LINE_HEIGHT_WHEN_UNMEASURED = 19;
 
 /** How long an entry the author was taken to stays marked, in milliseconds. */
 const FOUND_MS = 1500;
