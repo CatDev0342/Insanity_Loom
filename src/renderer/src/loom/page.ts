@@ -87,6 +87,8 @@ interface Waiting {
   readonly markdown: string;
   /** How many times it has gone out. A turn nobody answered is sent again; one that keeps failing is not, forever. */
   readonly tries: number;
+  /** When the author closed it, so its label can say how long it has been waiting. */
+  readonly since: number;
 }
 
 /** How a reply that ended is marked, by the protocol's reason for the ending. */
@@ -323,7 +325,7 @@ export class Loom {
     const editor = this.requireEditor();
     for (const turn of turns) {
       const replyId = turn.replyId === '' ? editor.placeReply(turn.sectionId) : turn.replyId;
-      this.waiting.push({ replyId, markdown: turn.markdown, tries: 0 });
+      this.waiting.push({ replyId, markdown: turn.markdown, tries: 0, since: Date.now() });
     }
     this.saveNow();
     this.sendNext();
@@ -441,6 +443,7 @@ export class Loom {
         case 'assistant.newConversation':
           this.abandonWriting('stopped');
           this.waiting.length = 0;
+          this.stopSayingHowLong();
           await this.keepACopyFirst('before a new conversation');
           this.requireEditor().clear();
           this.conversationId = '';
@@ -665,7 +668,8 @@ export class Loom {
     this.withoutMovingTheWriting(() => {
       replyId = editor.placeReply(sectionId);
     });
-    this.waiting.push({ replyId, markdown, tries: 0 });
+    this.waiting.push({ replyId, markdown, tries: 0, since: Date.now() });
+    this.startSayingHowLong();
     this.saveNow();
     if (this.state !== 'connected') {
       this.showNotice('The assistant is not there at the moment. This turn is kept, and goes as soon as it returns.');
@@ -677,6 +681,7 @@ export class Loom {
     if (this.writing !== undefined || this.state !== 'connected' || this.replay !== undefined) return;
     const next = this.waiting.shift();
     if (next === undefined) return;
+    this.writingSince = next.since;
     this.writing = { replyId: next.replyId, sent: next.markdown, tries: next.tries + 1, ...NOTHING_YET };
     this.requireEditor().setReplyState(next.replyId, 'writing');
     this.startSayingHowLong();
@@ -723,24 +728,33 @@ export class Loom {
   }
 
   /**
-   * Keeps the label on the reply saying how long the assistant has been writing.
+   * Keeps every unanswered reply's label saying how long it has been — the one being written, and every one queued
+   * behind it.
    *
-   * "The assistant is writing…" reads the same after two seconds and after twenty minutes, so a turn that has quietly
-   * died looks exactly like one thinking hard (the designer's screenshot, 2026-Sep-14). The time is written straight
-   * onto the drawn reply rather than into the whisper: how long a reply took is not part of what was said, and has no
-   * business in the file or in the author's undo history.
+   * "The assistant is writing…" and "Waiting for the assistant…" read the same after two seconds and after twenty
+   * minutes, so a turn that has quietly died looks exactly like one thinking hard (the designer, 2026-Sep-14). The
+   * time is written straight onto the drawn reply rather than into the whisper: how long a reply took is not part of
+   * what was said, and has no business in the file or in the author's undo history.
    */
+  private sayHowLong(): void {
+    const now = Date.now();
+    const editor = this.editor;
+    if (editor === undefined) return;
+    const unanswered: { replyId: string; since: number }[] = [
+      ...(this.writing === undefined ? [] : [{ replyId: this.writing.replyId, since: this.writingSince }]),
+      ...this.waiting.map((one) => ({ replyId: one.replyId, since: one.since })),
+    ];
+    for (const one of unanswered) {
+      const drawn = editor.replyElement(one.replyId);
+      if (drawn !== undefined) drawn.dataset['waited'] = howLong((now - one.since) / MILLISECONDS_PER_SECOND);
+    }
+    if (unanswered.length === 0) this.stopSayingHowLong();
+  }
+
+  /** Starts saying how long, if nothing is saying it yet. The ticker stops itself once everything is answered. */
   private startSayingHowLong(): void {
-    this.stopSayingHowLong();
-    this.writingSince = Date.now();
-    const say = (): void => {
-      const writing = this.writing;
-      const drawn = writing === undefined ? undefined : this.editor?.replyElement(writing.replyId);
-      if (drawn === undefined) return;
-      drawn.dataset['waited'] = howLong((Date.now() - this.writingSince) / MILLISECONDS_PER_SECOND);
-    };
-    say();
-    this.writingTimer = setInterval(say, TICK_SECONDS * MILLISECONDS_PER_SECOND);
+    this.sayHowLong();
+    this.writingTimer ??= setInterval(() => this.sayHowLong(), TICK_SECONDS * MILLISECONDS_PER_SECOND);
   }
 
   private stopSayingHowLong(): void {
@@ -752,8 +766,8 @@ export class Loom {
   private finishWriting(state: ReplyState): void {
     const writing = this.writing;
     if (writing === undefined) return;
-    this.stopSayingHowLong();
     this.writing = undefined;
+    this.sayHowLong();
     const editor = this.requireEditor();
     this.withoutMovingTheWriting(() => {
       if (writing.markdown === '') editor.setReplyState(writing.replyId, state);
@@ -791,7 +805,7 @@ export class Loom {
     const unanswered = wentUnheard(writing, state);
     const again = sendAgain(writing, state);
     // Put back before ending: ending sends whatever is queued, and this turn is ahead of anything said after it.
-    if (again) this.waiting.unshift({ replyId: writing.replyId, markdown: writing.sent, tries: writing.tries });
+    if (again) this.waiting.unshift({ replyId: writing.replyId, markdown: writing.sent, tries: writing.tries, since: this.writingSince });
     this.finishWriting(again ? 'waiting' : state);
     if (!again && unanswered) {
       this.showNotice('That turn could not be got through to the assistant. It is kept here; send it again when the assistant is back.');
@@ -917,6 +931,7 @@ export class Loom {
         this.replay = { way: 'fill', author: '', reply: '', replyMessageId: '', lastSection: null };
         this.abandonWriting('stopped');
         this.waiting.length = 0;
+        this.stopSayingHowLong();
         this.title = 'Resumed conversation';
       } else {
         // The whisper holds writing of its own and this is another conversation. **It is not ours to empty.** The
@@ -1019,6 +1034,7 @@ export class Loom {
     const editor = this.requireEditor();
     this.abandonWriting('stopped');
     this.waiting.length = 0;
+    this.stopSayingHowLong();
     await this.keepACopyFirst('before a new whisper');
     // Nothing is saved until the new whisper has a file of its own: emptying the document while the whisper being
     // left is still the one open would write the emptiness over it.
@@ -1086,6 +1102,7 @@ export class Loom {
     const editor = this.requireEditor();
     this.abandonWriting('stopped');
     this.waiting.length = 0;
+    this.stopSayingHowLong();
     await this.keepACopyFirst('before another whisper was opened');
     // As with a new whisper: nothing is saved while the document is being swapped, so the whisper being left keeps
     // what it holds.
