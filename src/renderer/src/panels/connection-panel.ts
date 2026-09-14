@@ -99,7 +99,7 @@ export class ConnectionPanel {
   private readonly fields: Fields;
   private readonly intro: HTMLParagraphElement;
   private readonly savedProblem: HTMLParagraphElement;
-  private readonly preview: HTMLOutputElement;
+  private readonly preview: HTMLElement;
   private readonly problems: HTMLUListElement;
   private readonly result: HTMLParagraphElement;
   private readonly ok: HTMLButtonElement;
@@ -178,7 +178,10 @@ export class ConnectionPanel {
 
     const previewLabel = element('div', 'panel-preview-label');
     previewLabel.textContent = 'The command that will run:';
-    this.preview = element('output', 'panel-preview');
+    // A plain block, not an <output>: an output element counts as a status message, and the panel's one status
+    // message is the result line below, so the two would be mistaken for each other.
+    this.preview = element('div', 'panel-preview');
+    this.preview.setAttribute('aria-label', 'The command that will run');
     this.problems = element('ul', 'panel-problems');
     this.problems.setAttribute('role', 'alert');
     this.result = element('p', 'panel-result');

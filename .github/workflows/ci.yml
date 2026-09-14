@@ -58,6 +58,14 @@ jobs:
         if: runner.os == 'Windows'
         run: npx playwright test
 
+      - name: Keep the traces of failed end-to-end tests
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: end-to-end-traces-${{ runner.os }}
+          path: test-results/
+          if-no-files-found: ignore
+
       - name: Package (portable)
         run: npx electron-builder --publish never
 

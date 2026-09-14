@@ -10,5 +10,8 @@ export default defineConfig({
   timeout: TEST_TIME_LIMIT_MS,
   // One application at a time: each test starts its own copy, and copies share the development Data folder.
   workers: 1,
-  reporter: [['list']],
+  // On GitHub, failures are also reported as annotations on the run, where they can be read without its logs.
+  reporter: process.env['GITHUB_ACTIONS'] === 'true' ? [['list'], ['github']] : [['list']],
+  // A failed test keeps a trace — screenshots, the page's structure and every step — in test-results/.
+  use: { trace: 'retain-on-failure' },
 });
