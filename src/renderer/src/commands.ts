@@ -8,9 +8,13 @@ export const PAGE_COMMANDS = [
   'assistant.resumeConversation',
   'assistant.stop',
   'assistant.connectionSettings',
+  'app.preferences',
 ] as const;
 
 export type PageCommandId = (typeof PAGE_COMMANDS)[number];
+
+/** The page commands the loom carries out (the rest are the page's own panels). */
+export type AssistantCommandId = Exclude<PageCommandId, 'app.preferences'>;
 
 /** Any command a menu entry may name. */
 export type AnyCommandId = CommandId | PageCommandId;

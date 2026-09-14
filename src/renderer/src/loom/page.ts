@@ -3,7 +3,7 @@
 
 import type { AssistantBridge, AssistantEvent, ConnectionBridge, ConnectionState } from '../../../shared/assistant';
 import { ConnectionPanel } from '../panels/connection-panel';
-import type { PageCommandId } from '../commands';
+import type { AssistantCommandId } from '../commands';
 import { Compose } from './compose';
 import { Conversation } from './conversation';
 import { chooseConversation } from './resume';
@@ -70,7 +70,7 @@ export class Loom {
     else this.onEvent({ type: 'status', state: 'disconnected', detail: 'Not connected. Assistant ▸ Reconnect connects.' });
   }
 
-  async run(command: PageCommandId): Promise<void> {
+  async run(command: AssistantCommandId): Promise<void> {
     try {
       switch (command) {
         case 'assistant.reconnect':

@@ -230,9 +230,9 @@ export class MenuBar {
     void this.runCommand(entry.command.command);
   }
 
-  /** True while a dialog is open: the menus stand aside for it, as they do under any modal dialog. */
+  /** True while a dialog or a right-click menu is open: the menu bar stands aside for it, as under any modal dialog. */
   private get dialogIsOpen(): boolean {
-    return document.querySelector('dialog[open]') !== null;
+    return document.querySelector('dialog[open], :popover-open') !== null;
   }
 
   private onKeyDown(event: KeyboardEvent): void {

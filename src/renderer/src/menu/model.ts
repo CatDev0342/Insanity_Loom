@@ -55,6 +55,8 @@ export const MENUS: readonly TopMenu[] = [
       command('&Paste', 'edit.paste', ['Ctrl+V'], true),
       SEPARATOR,
       command('Select &All', 'edit.selectAll', ['Ctrl+A'], true),
+      SEPARATOR,
+      command('Pr&eferences…', 'app.preferences'),
     ],
   },
   {

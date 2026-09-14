@@ -1,9 +1,11 @@
 // The page: the menu bar, and the loom beneath it.
 
-import { isPageCommand } from './commands';
+import { isPageCommand, type AnyCommandId } from './commands';
 import { Loom } from './loom/page';
+import { ContextMenu } from './menu/context-menu';
 import { MenuBar } from './menu/menubar';
 import { MENUS } from './menu/model';
+import { PreferencesPanel } from './panels/preferences-panel';
 
 function required<T extends Element>(selector: string): T {
   const element = document.querySelector<T>(selector);
@@ -28,8 +30,15 @@ const loom = new Loom(
   bridge.journal,
 );
 
-new MenuBar(required<HTMLElement>('#menubar'), MENUS, (command) =>
-  isPageCommand(command) ? loom.run(command) : bridge.runCommand(command),
-);
+const preferences = new PreferencesPanel(required<HTMLDialogElement>('#preferences-dialog'), bridge.editing);
+
+async function run(command: AnyCommandId): Promise<void> {
+  if (!isPageCommand(command)) return bridge.runCommand(command);
+  if (command === 'app.preferences') return preferences.show();
+  return loom.run(command);
+}
+
+new MenuBar(required<HTMLElement>('#menubar'), MENUS, run);
+new ContextMenu(bridge.editing, run);
 
 void loom.start();

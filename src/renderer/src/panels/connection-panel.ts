@@ -16,7 +16,7 @@ import {
   type AssistantPlace,
   type ConnectionSettings,
 } from '../../../shared/connection';
-import { parseLabel } from '../menu/labels';
+import { button, choice, dialogButtons, element, enableAccessKeys, group, row as textRow } from './kit';
 
 /** How the panel was closed: saved (OK, or Apply before closing) or not. */
 export type PanelOutcome = 'saved' | 'unchanged';
@@ -36,62 +36,6 @@ interface Fields {
   readonly hostArguments: HTMLTextAreaElement;
   readonly handshakeSeconds: HTMLInputElement;
   readonly connectOnStart: HTMLInputElement;
-}
-
-function element<K extends keyof HTMLElementTagNameMap>(tag: K, className = ''): HTMLElementTagNameMap[K] {
-  const made = document.createElement(tag);
-  if (className !== '') made.className = className;
-  return made;
-}
-
-/** Writes a label with its access key underlined, and records the key on the control it names. */
-function labelFor(control: HTMLElement, written: string, into: HTMLElement): void {
-  const parsed = parseLabel(written);
-  const key = element('span', 'access-key');
-  key.textContent = parsed.text.charAt(parsed.accessKeyIndex);
-  into.append(parsed.text.slice(0, parsed.accessKeyIndex), key, parsed.text.slice(parsed.accessKeyIndex + 1));
-  control.dataset['accessKey'] = parsed.accessKey;
-}
-
-function textRow(id: string, label: string, control: HTMLInputElement | HTMLTextAreaElement, extra?: HTMLElement): HTMLElement {
-  const row = element('div', 'panel-row');
-  control.id = id;
-  const caption = element('label');
-  caption.htmlFor = id;
-  labelFor(control, label, caption);
-  const holder = element('div', 'panel-control');
-  holder.append(control);
-  if (extra !== undefined) holder.append(extra);
-  row.append(caption, holder);
-  return row;
-}
-
-function choice(type: 'radio' | 'checkbox', id: string, label: string, name = ''): { row: HTMLElement; input: HTMLInputElement } {
-  const input = element('input');
-  input.type = type;
-  input.id = id;
-  if (name !== '') input.name = name;
-  const caption = element('label');
-  caption.htmlFor = id;
-  labelFor(input, label, caption);
-  const row = element('div', 'panel-choice');
-  row.append(input, caption);
-  return { row, input };
-}
-
-function button(label: string, className = ''): HTMLButtonElement {
-  const made = element('button', className);
-  made.type = 'button';
-  labelFor(made, label, made);
-  return made;
-}
-
-function group(legend: string, ...rows: HTMLElement[]): HTMLFieldSetElement {
-  const set = element('fieldset', 'panel-group');
-  const title = element('legend');
-  title.textContent = legend;
-  set.append(title, ...rows);
-  return set;
 }
 
 export class ConnectionPanel {
@@ -189,19 +133,9 @@ export class ConnectionPanel {
 
     this.test = button('&Test Connection');
     const openLog = button('Open Host Lo&g');
-    this.ok = element('button', 'panel-default');
-    this.ok.type = 'submit';
-    this.ok.textContent = 'OK';
-    const cancel = element('button');
-    cancel.type = 'button';
-    cancel.textContent = 'Cancel';
-    this.apply = button('Appl&y');
-    const leftButtons = element('div', 'panel-buttons-left');
-    leftButtons.append(this.test, openLog);
-    const rightButtons = element('div', 'panel-buttons-right');
-    rightButtons.append(this.ok, cancel, this.apply);
-    const buttons = element('div', 'panel-buttons');
-    buttons.append(leftButtons, rightButtons);
+    const { bar: buttons, ok, cancel, apply } = dialogButtons([this.test, openLog]);
+    this.ok = ok;
+    this.apply = apply;
 
     this.form = element('form', 'panel');
     this.form.method = 'dialog';
@@ -238,14 +172,7 @@ export class ConnectionPanel {
     this.test.addEventListener('click', () => void this.runTest());
     openLog.addEventListener('click', () => void this.openLog());
     this.findContainers.addEventListener('click', () => void this.listContainers());
-    dialog.addEventListener('keydown', (event) => this.onAccessKey(event));
-    // Access letters are underlined while Alt is held, as in any desktop dialog.
-    dialog.addEventListener('keydown', (event) => {
-      if (event.key === 'Alt') this.form.classList.add('shows-access-keys');
-    });
-    dialog.addEventListener('keyup', (event) => {
-      if (event.key === 'Alt') this.form.classList.remove('shows-access-keys');
-    });
+    enableAccessKeys(dialog, this.form);
   }
 
   /** Opens the panel with the settings in use, and resolves when it closes. */
@@ -377,23 +304,6 @@ export class ConnectionPanel {
       }
     } catch (problem) {
       this.say(problem instanceof Error ? problem.message : String(problem), true);
-    }
-  }
-
-  /** Alt+letter: the field or button whose label carries that access key, as in any desktop dialog. */
-  private onAccessKey(event: KeyboardEvent): void {
-    if (!event.altKey || event.ctrlKey || event.metaKey || event.key.length !== 1) return;
-    const key = event.key.toLowerCase();
-    const target = [...this.form.querySelectorAll<HTMLElement>('[data-access-key]')].find(
-      (candidate) => candidate.dataset['accessKey'] === key && !candidate.closest('fieldset:disabled'),
-    );
-    if (target === undefined) return;
-    event.preventDefault();
-    if (target instanceof HTMLButtonElement || (target instanceof HTMLInputElement && (target.type === 'radio' || target.type === 'checkbox'))) {
-      target.click();
-      target.focus();
-    } else {
-      target.focus();
     }
   }
 }

@@ -449,3 +449,62 @@ button:disabled {
   outline: 2px solid var(--focus);
   outline-offset: 0;
 }
+
+/* The right-click menu: the menu bar's own look, placed where the author clicked. */
+.context-menu {
+  position: fixed;
+  inset: auto;
+  margin: 0;
+  min-width: 13rem;
+  padding-block: 0.2rem;
+  color: var(--ink);
+  background: var(--menu);
+  border: 1px solid var(--menu-edge);
+  border-radius: 0;
+  box-shadow: 2px 2px 6px var(--menu-shadow);
+  font-size: 0.8125rem;
+  outline: none;
+  user-select: none;
+}
+
+.context-menu .menu-entry[aria-disabled='true'] {
+  color: var(--ink-quiet);
+}
+
+.context-menu .menu-entry.is-emphasized .menu-entry-label {
+  font-weight: 600;
+}
+
+.context-menu.shows-access-keys .access-key {
+  text-decoration: underline;
+}
+
+/* A scrolling list of checkboxes, as for spelling languages. */
+.panel-checklist {
+  flex: 1;
+  max-height: 9rem;
+  overflow-y: auto;
+  padding: 0.35rem 0.5rem;
+  background: var(--ground);
+  border: 1px solid var(--menu-edge);
+}
+
+.panel-note {
+  margin: 0;
+  color: var(--ink-quiet);
+}
+
+.panel-control select {
+  flex: 1;
+  min-width: 0;
+  font: inherit;
+  color: var(--ink);
+  background: var(--ground);
+  border: 1px solid var(--menu-edge);
+  border-radius: 0;
+}
+
+.panel-control select:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 0;
+}

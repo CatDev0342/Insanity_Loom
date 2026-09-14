@@ -1,9 +1,10 @@
 // Insanity_Loom's layer underneath: it starts first, decides where everything is kept, and opens the window.
 
-import { app, BrowserWindow, dialog, Menu } from 'electron';
+import { app, BrowserWindow, dialog, Menu, nativeTheme } from 'electron';
 import { join } from 'node:path';
 import { startServices } from './channels';
 import { listenForCommands } from './commands';
+import { startEditingServices } from './editing';
 import { Journal } from './journal';
 import { dataFoldersIn, findProgramFolder, prepareDataFolders, type DataFolders } from './portable';
 import { PAGE_PREFERENCES, restrictEveryPage } from './security';
@@ -99,6 +100,9 @@ function start(): void {
   void app.whenReady().then(() => {
     restrictEveryPage();
     listenForCommands();
+    // Insanity_Loom is dark, so the system draws its window frame and title bar dark too.
+    nativeTheme.themeSource = 'dark';
+    startEditingServices(folders.data);
     const assistant = startServices(folders.data, folders.logs, new Journal(folders.data));
     app.on('before-quit', () => void assistant.close());
     // No native menu: Insanity_Loom draws its own menu bar in the page (src/renderer/src/menu), so it looks and

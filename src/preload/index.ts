@@ -6,6 +6,7 @@ import { contextBridge, ipcRenderer, type IpcRendererEvent } from 'electron';
 import { ASSISTANT_CHANNELS, CONNECTION_CHANNELS, JOURNAL_CHANNELS, type AssistantEvent } from '../shared/assistant';
 import type { InsanityLoomBridge } from '../shared/bridge';
 import { RUN_COMMAND_CHANNEL } from '../shared/commands';
+import { EDITING_CHANNELS, type ContextDetails } from '../shared/editing';
 
 const bridge: InsanityLoomBridge = {
   versions: {
@@ -42,6 +43,21 @@ const bridge: InsanityLoomBridge = {
     test: (settings) => ipcRenderer.invoke(CONNECTION_CHANNELS.test, settings),
     listContainers: (dockerProgram) => ipcRenderer.invoke(CONNECTION_CHANNELS.containers, dockerProgram),
     openLog: () => ipcRenderer.invoke(CONNECTION_CHANNELS.openLog),
+  },
+
+  editing: {
+    onContextMenu: (listener) => {
+      const relay = (_event: IpcRendererEvent, details: ContextDetails): void => listener(details);
+      ipcRenderer.on(EDITING_CHANNELS.contextMenu, relay);
+      return () => {
+        ipcRenderer.removeListener(EDITING_CHANNELS.contextMenu, relay);
+      };
+    },
+    replaceMisspelling: (suggestion) => ipcRenderer.invoke(EDITING_CHANNELS.replace, suggestion),
+    loadSpelling: () => ipcRenderer.invoke(EDITING_CHANNELS.load),
+    saveSpelling: (preferences) => ipcRenderer.invoke(EDITING_CHANNELS.save, preferences),
+    addToDictionary: (word) => ipcRenderer.invoke(EDITING_CHANNELS.addWord, word),
+    removeFromDictionary: (word) => ipcRenderer.invoke(EDITING_CHANNELS.removeWord, word),
   },
 
   journal: {

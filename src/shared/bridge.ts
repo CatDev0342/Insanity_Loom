@@ -2,6 +2,7 @@
 
 import type { AssistantBridge, ConnectionBridge, JournalBridge } from './assistant';
 import type { CommandId } from './commands';
+import type { EditingBridge } from './editing';
 
 export interface InsanityLoomBridge {
   /** The versions of the engine Insanity_Loom runs on, for the About box and for bug reports. */
@@ -19,6 +20,9 @@ export interface InsanityLoomBridge {
 
   /** The connection settings: reading, saving, testing, and the help the Connection Settings panel needs. */
   readonly connection: ConnectionBridge;
+
+  /** Right-click menus, spelling and the personal dictionary. */
+  readonly editing: EditingBridge;
 
   /** Where the author's unsent writing is kept safe. */
   readonly journal: JournalBridge;
