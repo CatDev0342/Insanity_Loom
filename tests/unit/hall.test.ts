@@ -73,7 +73,7 @@ describe('searching the hall', () => {
     whisper(folder, '2026-09-14 1200 First', '<p>The loom stands here.</p><p>Nothing of note.</p><h2>A loom again</h2>');
     whisper(folder, '2026-09-14 1300 Second', '<p>No mention here.</p>');
 
-    const found = searchHall(folder, { ...PLAIN, looked: 'loom' });
+    const found = searchHall([folder], { ...PLAIN, looked: 'loom' });
     expect(found.looked).toBe(2);
     expect(found.found).toBe(2);
     expect(found.hits).toHaveLength(1);
@@ -89,8 +89,8 @@ describe('searching the hall', () => {
   it('looks in the folders beneath the alcove, and says which folder a whisper is in', () => {
     const folder = alcove();
     whisper(join(folder, 'Older'), '2026-09-01 1000 Kept', '<p>The loom again.</p>');
-    expect(searchHall(folder, { ...PLAIN, looked: 'loom', everywhere: false }).hits).toHaveLength(0);
-    const found = searchHall(folder, { ...PLAIN, looked: 'loom', everywhere: true });
+    expect(searchHall([folder], { ...PLAIN, looked: 'loom', everywhere: false }).hits).toHaveLength(0);
+    const found = searchHall([folder], { ...PLAIN, looked: 'loom', everywhere: true });
     expect(found.hits[0]?.folder).toBe('Older');
   });
 
@@ -99,8 +99,8 @@ describe('searching the hall', () => {
     whisper(folder, '2026-09-14 1200 First', '<p>Nothing here.</p>');
     writeFileSync(join(folder, '2026-09-14 1200 First.thoughts.md'), '## Turn 1 · now\n\nThinking about the loom.\n');
 
-    expect(searchHall(folder, { ...PLAIN, looked: 'loom', includeThoughts: false }).hits).toHaveLength(0);
-    const found = searchHall(folder, { ...PLAIN, looked: 'loom', includeThoughts: true });
+    expect(searchHall([folder], { ...PLAIN, looked: 'loom', includeThoughts: false }).hits).toHaveLength(0);
+    const found = searchHall([folder], { ...PLAIN, looked: 'loom', includeThoughts: true });
     expect(found.hits).toHaveLength(1);
     expect(found.hits[0]?.kind).toBe('thinking');
     // The thinking is found, and what opens is the whisper it belongs to.
@@ -111,7 +111,7 @@ describe('searching the hall', () => {
   it('says plainly when a regular expression will not read, rather than finding nothing', () => {
     const folder = alcove();
     whisper(folder, '2026-09-14 1200 First', '<p>Anything.</p>');
-    const found = searchHall(folder, { ...PLAIN, looked: '(unclosed', regularExpression: true });
+    const found = searchHall([folder], { ...PLAIN, looked: '(unclosed', regularExpression: true });
     expect(found.problem).toContain('not a search');
     expect(found.hits).toHaveLength(0);
   });
@@ -120,19 +120,19 @@ describe('searching the hall', () => {
     const folder = alcove();
     whisper(folder, '2026-09-14 1200 First', '<p>The loom stands here.</p>');
     // A hall may name an alcove the author has not made yet, or one on a drive that is not plugged in.
-    expect(searchHall(join(folder, 'not there at all'), { ...PLAIN, looked: 'loom' })).toEqual({
+    expect(searchHall([join(folder, 'not there at all')], { ...PLAIN, looked: 'loom' })).toEqual({
       hits: [],
       found: 0,
       looked: 0,
       problem: '',
     });
-    expect(searchHall(folder, { ...PLAIN, looked: 'loom' }).found).toBe(1);
+    expect(searchHall([folder], { ...PLAIN, looked: 'loom' }).found).toBe(1);
   });
 
   it('finds nothing for nothing, without reading a single file', () => {
     const folder = alcove();
     whisper(folder, '2026-09-14 1200 First', '<p>Anything.</p>');
-    expect(searchHall(folder, { ...PLAIN, looked: '   ' })).toEqual({ hits: [], found: 0, looked: 0, problem: '' });
+    expect(searchHall([folder], { ...PLAIN, looked: '   ' })).toEqual({ hits: [], found: 0, looked: 0, problem: '' });
   });
 });
 
@@ -145,7 +145,7 @@ describe("searching the hall's library as well", () => {
     return {
       name: 'A hall',
       path: join(folder, 'A hall.greathall'),
-      alcove: folder,
+      alcoves: [folder],
       library,
       libraryName: 'Test Library',
       documents: [{ address: '40', file: '40_DOCUMENT.md', title: 'The document' }],
@@ -157,8 +157,8 @@ describe("searching the hall's library as well", () => {
     const hall = hallWith(folder);
     whisper(folder, '2026-09-14 1200 A whisper', '<p>Nothing about it here.</p>');
 
-    expect(searchHall(folder, { ...PLAIN, looked: 'whispers', includeLibrary: false }, hall).hits).toHaveLength(0);
-    const found = searchHall(folder, { ...PLAIN, looked: 'whispers', includeLibrary: true }, hall);
+    expect(searchHall([folder], { ...PLAIN, looked: 'whispers', includeLibrary: false }, hall).hits).toHaveLength(0);
+    const found = searchHall([folder], { ...PLAIN, looked: 'whispers', includeLibrary: true }, hall);
     expect(found.hits).toHaveLength(1);
     expect(found.hits[0]).toMatchObject({ kind: 'library', address: '40', title: 'The document', folder: 'Test Library' });
     expect(found.hits[0]?.lines[0]).toMatchObject({ line: 5, text: 'Links between whispers.' });
@@ -168,7 +168,19 @@ describe("searching the hall's library as well", () => {
     const folder = alcove();
     const hall = hallWith(folder);
     whisper(folder, '2026-09-14 1200 A whisper', '<p>Links between whispers, as it happens.</p>');
-    const found = searchHall(folder, { ...PLAIN, looked: 'Links between whispers', includeLibrary: true }, hall);
+    const found = searchHall([folder], { ...PLAIN, looked: 'Links between whispers', includeLibrary: true }, hall);
     expect(found.hits.map((hit) => hit.kind)).toEqual(['library', 'whisper']);
+  });
+});
+
+describe('a hall of several alcoves', () => {
+  it('searches every one of them', () => {
+    const first = alcove();
+    const second = alcove();
+    whisper(first, '2026-09-14 1200 In the first', '<p>The loom stands here.</p>');
+    whisper(second, '2026-09-14 1300 In the second', '<p>And the loom stands here as well.</p>');
+    const found = searchHall([first, second], { ...PLAIN, looked: 'loom' });
+    expect(found.looked).toBe(2);
+    expect(found.hits.map((hit) => hit.title).sort()).toEqual(['2026-09-14 1200 In the first', '2026-09-14 1300 In the second']);
   });
 });

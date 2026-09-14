@@ -214,6 +214,7 @@ export class Loom {
   async start(): Promise<void> {
     // The GreatHall opened last time, if there was one: the author never opens it twice.
     this.library.useHall(await this.greatHall.current());
+    this.showWhatIsCited();
     // An empty panel looks broken; it says what it is waiting for.
     this.thoughts.say('What the assistant thinks while it answers will appear here, and be kept beside the whisper.');
     await this.openWhisper();
@@ -276,6 +277,24 @@ export class Loom {
     this.showTitle();
   }
 
+  /**
+   * Fills the Library with what this whisper's own replies cite. The whisper is the record of its conversation, so
+   * its citations are read back out of it: opening another whisper shows what that conversation referred to.
+   */
+  private showWhatIsCited(): void {
+    const editor = this.editor;
+    if (editor === undefined) return;
+    this.library.forget();
+    const addresses = this.library.addresses;
+    if (addresses.length === 0) return;
+    void (async () => {
+      for (const citation of editor.citations(addresses, referencesIn)) {
+        await this.library.cite(citation.turn, citation.addresses);
+      }
+      this.referenceBar.drawSoon();
+    })();
+  }
+
   /** Asks what points at the whisper open, for the panel on the left. Quietly: it is a nicety, not a promise. */
   private showWhatPointsHere(): void {
     const name = this.whisperName;
@@ -305,6 +324,7 @@ export class Loom {
 
   private showTitle(): void {
     this.showWhatPointsHere();
+    this.showWhatIsCited();
     this.navigation.draw();
     document.title = this.whisperName === '' ? `${this.title} — ${PAGE_TITLE}` : `${this.whisperName} — ${PAGE_TITLE}`;
     this.elements.whisperName.textContent = this.whisperName;
@@ -384,6 +404,7 @@ export class Loom {
       const chosen = await this.greatHall.choose();
       if (chosen === undefined) return;
       this.library.useHall(chosen);
+      this.showWhatIsCited();
       this.showNotice(`The GreatHall "${chosen.name}" is open. What the assistant cites will be listed in the Library.`);
     } catch (problem) {
       this.showProblem(problem instanceof Error ? problem.message : String(problem));

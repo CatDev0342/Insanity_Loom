@@ -52,6 +52,14 @@ export class Library {
     return this.hall?.documents.map((document) => document.address) ?? [];
   }
 
+  /** Forgets what was cited: another whisper is another conversation, and its own citations are read from it. */
+  forget(): void {
+    this.cited.length = 0;
+    this.drawn.clear();
+    this.list.replaceChildren();
+    this.say();
+  }
+
   /** What the assistant cited in a reply to one turn: added to the list, in the order written, nothing twice. */
   async cite(turn: number, addresses: readonly string[]): Promise<void> {
     if (this.hall === undefined || addresses.length === 0) return;

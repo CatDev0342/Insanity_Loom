@@ -271,7 +271,7 @@ export function startServices(dataFolder: string, logsFolder: string, journal: J
   ipcMain.handle(HALL_CHANNELS.search, (_event, asked: unknown) => {
     // A GreatHall says where its own whispers are; without one, the alcove the author chose.
     const hall = halls.current;
-    return searchHall(hall?.alcove ?? whispers.alcoveFolder, readHallSearch(asked), hall);
+    return searchHall(hall?.alcoves ?? [whispers.alcoveFolder], readHallSearch(asked), hall);
   });
   ipcMain.handle(LINK_CHANNELS.open, (_event, address: unknown) => openAddress(text(address, 'address', MAXIMUM_ADDRESS_LENGTH)));
 

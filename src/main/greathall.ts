@@ -29,6 +29,16 @@ function beside(folder: string, written: string, fallback: string): string {
   return isAbsolute(path) ? path : resolve(folder, path);
 }
 
+/**
+ * Where this hall's whispers are kept. One alcove may be named with "alcove", several with "alcoves"; a hall is a
+ * collection of connected alcoves, and its file says which. The first is where new whispers go.
+ */
+function readAlcoves(folder: string, hall: Record<string, unknown>): readonly string[] {
+  const many = Array.isArray(hall['alcoves']) ? hall['alcoves'].filter((one): one is string => typeof one === 'string') : [];
+  const named = many.length > 0 ? many : [asText(hall['alcove'])];
+  return named.map((one) => beside(folder, one, '.'));
+}
+
 /** Reads a GreatHall file. Throws, saying what is wrong, when it is not one. */
 export function readGreatHall(path: string): GreatHall {
   let said: unknown;
@@ -58,7 +68,7 @@ export function readGreatHall(path: string): GreatHall {
   return {
     name: asText(hall['name']) === '' ? basename(path).replace(/\.greathall$/i, '') : asText(hall['name']),
     path,
-    alcove: beside(folder, asText(hall['alcove']), '.'),
+    alcoves: readAlcoves(folder, hall),
     library: beside(folder, asText(library['folder']), '.'),
     libraryName: asText(library['name']) === '' ? 'Library' : asText(library['name']),
     documents,

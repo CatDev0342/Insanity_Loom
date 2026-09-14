@@ -48,11 +48,26 @@ describe('the GreatHall file', () => {
     const { folder, file } = hall();
     const read = readGreatHall(file);
     expect(read.name).toBe('CoreGame');
-    expect(read.alcove).toBe(join(folder, 'Alcove'));
+    expect(read.alcoves).toEqual([join(folder, 'Alcove')]);
     expect(read.library).toBe(join(folder, 'Library'));
     expect(read.documents.map((document) => document.address)).toEqual(['40', 'PKG_mapgen']);
     // A document that says nothing about its title is called after its file.
     expect(read.documents[1]?.title).toBe('PKG_mapgen');
+  });
+
+  it('may name several alcoves, because a hall is a collection of connected ones', () => {
+    const { folder, file } = hall();
+    writeFileSync(
+      file,
+      JSON.stringify({
+        format: GREATHALL_FORMAT,
+        name: 'CoreGame',
+        alcoves: ['Alcove', '../Another alcove'],
+        library: { folder: 'Library', documents: [{ address: '40', file: '40_DOCUMENT.md' }] },
+      }),
+    );
+    const read = readGreatHall(file);
+    expect(read.alcoves).toEqual([join(folder, 'Alcove'), join(folder, '..', 'Another alcove')]);
   });
 
   it('refuses a file that is not one of ours, saying why', () => {

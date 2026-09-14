@@ -24,8 +24,11 @@ export interface GreatHall {
   readonly name: string;
   /** Where this hall's file is, in full, so everything else can be found from it. */
   readonly path: string;
-  /** Where the whispers of this hall are kept, in full. */
-  readonly alcove: string;
+  /**
+   * Where the whispers of this hall are kept, in full. A hall is a collection of connected alcoves (`10.3`), so its
+   * file may name several; the first is where new whispers go, and all of them are searched.
+   */
+  readonly alcoves: readonly string[];
   /** Where the library's documents are, in full. */
   readonly library: string;
   readonly libraryName: string;

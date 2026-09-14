@@ -69,6 +69,22 @@ test('keeps everything cited, turn after turn, and marks them on the bar between
   await expect(page.locator('#reference-bar .reference-mark')).toHaveCount(2);
 });
 
+test('shows what this whisper cited, and what another whisper cited when it is opened', async () => {
+  await page.getByRole('tab', { name: 'Library' }).click();
+  await ask('The first whisper, about 40.6.2.');
+  await expect(page.locator('.reply')).toHaveCount(1);
+  await expect(page.locator('#library-pane .library-entry')).toHaveCount(1);
+
+  // Another whisper is another conversation: its own citations, and none of the last one's.
+  await page.keyboard.press('Control+n');
+  await expect(page.locator('#library-pane .library-entry')).toHaveCount(0);
+  await ask('The second whisper, about 40.8.');
+  await expect(page.locator('.reply')).toHaveCount(1);
+  const entries = page.locator('#library-pane .library-entry');
+  await expect(entries).toHaveCount(1);
+  await expect(entries.first()).toContainText('40.8');
+});
+
 test('says so plainly when no GreatHall is open', async () => {
   await application.close();
   prepareData('fake assistant');

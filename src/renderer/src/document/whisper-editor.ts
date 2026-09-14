@@ -328,6 +328,28 @@ export class WhisperEditor {
     return drawn instanceof HTMLElement ? drawn : undefined;
   }
 
+  /**
+   * Everything the assistant's replies in this whisper cite, turn by turn, in the order they stand.
+   *
+   * The citations are not kept anywhere: they are read back out of the whisper, which is the record of its own
+   * conversation. Opening a whisper therefore shows what *that* conversation referred to, with nothing carried over
+   * from the last one and nothing lost between runs.
+   */
+  citations(addresses: readonly string[], referencesIn: (written: string, addresses: readonly string[]) => readonly string[]): readonly {
+    readonly turn: number;
+    readonly addresses: readonly string[];
+  }[] {
+    const found: { turn: number; addresses: readonly string[] }[] = [];
+    this.doc.forEach((node) => {
+      if (node.type.name !== 'reply') return;
+      const cited = referencesIn(node.textContent, addresses);
+      if (cited.length === 0) return;
+      const answers = node.attrs['answers'];
+      found.push({ turn: typeof answers === 'string' ? this.turnOf(answers).number : 0, addresses: cited });
+    });
+    return found;
+  }
+
   /** Which turn a reply answers: the turn of the rule it was placed after. */
   turnAnswering(replyId: string): number {
     const found = findReply(this.doc, replyId);

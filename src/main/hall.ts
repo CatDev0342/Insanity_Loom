@@ -144,7 +144,7 @@ function searchLibrary(hall: GreatHall, looking: RegExp): { readonly hits: HallH
   return { hits, looked, found };
 }
 
-export function searchHall(alcove: string, asked: HallSearch, hall?: GreatHall): HallFound {
+export function searchHall(alcoves: readonly string[], asked: HallSearch, hall?: GreatHall): HallFound {
   if (asked.looked.trim() === '') return { hits: [], found: 0, looked: 0, problem: '' };
   let looking: RegExp;
   try {
@@ -162,7 +162,10 @@ export function searchHall(alcove: string, asked: HallSearch, hall?: GreatHall):
     looked += library.looked;
     found += library.found;
   }
-  for (const path of filesIn(alcove, asked.everywhere)) {
+  // Every alcove of the hall, one after another: a hall is a collection of connected alcoves. Each file is kept with
+  // the alcove it came from, so a result can say which folder of which alcove it stands in.
+  const files = alcoves.flatMap((alcove) => filesIn(alcove, asked.everywhere).map((path) => ({ alcove, path })));
+  for (const { alcove, path } of files) {
     const isWhisper = path.toLowerCase().endsWith(WHISPER_SUFFIX);
     const isThoughts = asked.includeThoughts && path.toLowerCase().endsWith(THOUGHTS_SUFFIX);
     if (!isWhisper && !isThoughts) continue;
