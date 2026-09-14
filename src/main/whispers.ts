@@ -6,6 +6,7 @@ import { existsSync } from 'node:fs';
 import { basename, dirname, join } from 'node:path';
 import type { OpenWhisper, WhisperFound, WhisperInAlcove, WhisperPointingHere } from '../shared/whispers';
 import { Alcove, DEFAULT_ALCOVE_NAME } from './alcove';
+import { writeFileSafely } from './files';
 import type { Journal } from './journal';
 import type { PreferenceStore } from './preference-store';
 
@@ -134,6 +135,25 @@ export class Whispers {
     this.alcove.useFolder(folder);
     this.preferences.setAlcoveFolder(folder);
     return folder;
+  }
+
+  /**
+   * Writes the whisper out as Markdown, wherever the author says. Their own folders are theirs: the file goes where
+   * they choose, not into the alcove, and the whisper itself is untouched.
+   */
+  async exportMarkdown(window: BrowserWindow | null, suggestedName: string, markdown: string): Promise<string> {
+    const options = {
+      title: 'Export as Markdown',
+      defaultPath: join(this.alcove.path, suggestedName),
+      filters: [
+        { name: 'Markdown', extensions: ['md'] },
+        { name: 'All files', extensions: ['*'] },
+      ],
+    };
+    const answer = window === null ? await dialog.showSaveDialog(options) : await dialog.showSaveDialog(window, options);
+    if (answer.canceled || answer.filePath === undefined || answer.filePath === '') return '';
+    writeFileSafely(answer.filePath, markdown);
+    return answer.filePath;
   }
 
   async showAlcove(): Promise<void> {

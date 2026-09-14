@@ -280,6 +280,9 @@ export class Loom {
         case 'whisper.showAlcove':
           await this.whispers.showAlcove();
           return;
+        case 'whisper.exportMarkdown':
+          await this.exportMarkdown();
+          return;
       }
     } catch (problem) {
       this.showProblem(problem instanceof Error ? problem.message : String(problem));
@@ -623,6 +626,14 @@ export class Loom {
     this.showTitle();
     if (this.state === 'connected' && whisper.conversationId !== '') await this.assistant.resumeConversation(whisper.conversationId);
     editor.focus();
+  }
+
+  /** File ▸ Export as Markdown: the whisper written out for tools that read Markdown, wherever the author says. */
+  private async exportMarkdown(): Promise<void> {
+    const suggested = `${this.whisperName.replace(/\.xhtml$/i, '') || this.title}.md`;
+    const written = await this.whispers.exportMarkdown(suggested, this.requireEditor().asMarkdown());
+    if (written !== '') this.showNotice(`The whisper was written out as "${written}".`);
+    this.editor?.focus();
   }
 
   private async useTitle(title: string): Promise<void> {

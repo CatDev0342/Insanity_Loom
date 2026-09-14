@@ -204,6 +204,31 @@ export class WhisperEditor {
     });
   }
 
+  /**
+   * The whole whisper as Markdown, for tools that read Markdown rather than XHTML — the author's own library among
+   * them. What the author wrote stands as it is; a section rule stays the line of three hyphens they typed; the
+   * assistant's replies are quoted, which is how a Markdown reader shows writing that is someone else's, and which
+   * mirrors the line down their left side here.
+   */
+  asMarkdown(): string {
+    const pieces: string[] = [];
+    this.doc.forEach((node) => {
+      if (node.type.name === 'reply') {
+        // The reply's own writing, not the reply node itself, which Markdown has no word for.
+        const written = this.toMarkdown({ type: 'doc', content: node.content.toJSON() as JSONContent[] }).trim();
+        pieces.push(
+          written
+            .split('\n')
+            .map((line) => (line === '' ? '>' : `> ${line}`))
+            .join('\n'),
+        );
+        return;
+      }
+      pieces.push(this.toMarkdown({ type: 'doc', content: [node.toJSON() as JSONContent] }).trim());
+    });
+    return `${pieces.filter((piece) => piece !== '').join('\n\n')}\n`;
+  }
+
   /** What the whisper already holds of its conversation: finished sections, and the last reply's state. */
   get record(): WhisperRecord {
     let sections = 0;

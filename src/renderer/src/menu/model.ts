@@ -54,6 +54,8 @@ export const MENUS: readonly TopMenu[] = [
       command('&New Whisper', 'whisper.new', ['Ctrl+N']),
       command('&Open Whisper…', 'whisper.open', ['Ctrl+O']),
       SEPARATOR,
+      command('&Export as Markdown…', 'whisper.exportMarkdown'),
+      SEPARATOR,
       command('&Find in the Alcove…', 'whisper.search', ['Ctrl+Shift+F']),
       command('What Points &Here…', 'whisper.pointsHere', ['Ctrl+Shift+H']),
       SEPARATOR,

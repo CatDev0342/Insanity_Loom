@@ -140,6 +140,20 @@ describe('replies', () => {
   });
 });
 
+describe('the whisper as Markdown', () => {
+  it('writes the author as they are and quotes the assistant', () => {
+    const { whisper: w } = whisper(
+      '<h2 id="a-heading">A heading</h2><p>The author wrote <strong>this</strong>.</p>' +
+        '<hr data-section-id="s1" />' +
+        '<section data-author="assistant" data-reply-id="r1" data-state="finished"><p>The reply, with a list:</p><ul><li><p>one</p></li></ul></section>' +
+        '<p>and on.</p>',
+    );
+    expect(w.asMarkdown()).toBe(
+      ['## A heading', '', 'The author wrote **this**.', '', '---', '', '> The reply, with a list:', '>', '> - one', '', 'and on.', ''].join('\n'),
+    );
+  });
+});
+
 describe('the whisper file', () => {
   it('round-trips through XHTML, keeping replies and section rules', () => {
     const { whisper: w, sections } = whisper('<p>Hello &amp; <em>welcome</em></p><p></p>');

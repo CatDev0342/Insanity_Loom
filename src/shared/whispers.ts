@@ -95,6 +95,11 @@ export interface WhispersBridge {
   choose(): Promise<OpenWhisper | undefined>;
   /** Names the whisper's file after the conversation's title, keeping the date it began; returns where it now is. */
   rename(path: string, title: string): Promise<OpenWhisper>;
+  /**
+   * Writes the whisper out as Markdown, asking the author where. Returns the file written, or '' when they chose
+   * none.
+   */
+  exportMarkdown(suggestedName: string, markdown: string): Promise<string>;
   /** Opens the alcove in the system's file manager. */
   showAlcove(): Promise<void>;
 }
@@ -112,5 +117,6 @@ export const WHISPER_CHANNELS = {
   pointingHere: 'insanity-loom:whisper-pointing-here',
   search: 'insanity-loom:whisper-search',
   rename: 'insanity-loom:whisper-rename',
+  exportMarkdown: 'insanity-loom:whisper-export-markdown',
   showAlcove: 'insanity-loom:alcove-show',
 } as const;

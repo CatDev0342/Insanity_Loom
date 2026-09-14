@@ -82,6 +82,7 @@ const bridge: InsanityLoomBridge = {
     pointingHere: (name) => ipcRenderer.invoke(WHISPER_CHANNELS.pointingHere, name),
     search: (looked) => ipcRenderer.invoke(WHISPER_CHANNELS.search, looked),
     rename: (path, title) => ipcRenderer.invoke(WHISPER_CHANNELS.rename, path, title),
+    exportMarkdown: (suggestedName, markdown) => ipcRenderer.invoke(WHISPER_CHANNELS.exportMarkdown, suggestedName, markdown),
     showAlcove: () => ipcRenderer.invoke(WHISPER_CHANNELS.showAlcove),
   },
 
