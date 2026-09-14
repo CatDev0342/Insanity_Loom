@@ -55,13 +55,38 @@ body {
 /* The panels give up width before they give up their place: a smaller window narrows them, and only a window too
    small to hold writing at all puts them away. A build machine's screen is 1024 points wide; an author's may be. */
 .side-panel {
-  flex: 0 1 19rem;
   display: flex;
   flex-direction: column;
-  min-width: 11rem;
+  min-width: 8rem;
   min-height: 0;
   background: var(--bar);
   font-size: 0.9rem;
+}
+
+.side-panel-left {
+  flex: 0 0 var(--left-panel-width, 17rem);
+}
+
+.side-panel-right {
+  flex: 0 0 var(--right-panel-width, 19rem);
+}
+
+/* The bars between the three: drag to give one section the room another does not need. */
+.splitter {
+  flex: none;
+  width: 5px;
+  background: var(--menu-edge);
+  cursor: col-resize;
+}
+
+.splitter:hover,
+.splitter[data-dragging='true'] {
+  background: var(--focus);
+}
+
+.splitter:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: -2px;
 }
 
 /* What a tab shows: its own scroll, so moving between tabs keeps each where it was left. */
@@ -433,7 +458,7 @@ body {
   display: flex;
   flex-direction: column;
   gap: 0.5rem;
-  padding: 0.6rem max(1.5rem, calc((100% - 46rem) / 2));
+  padding: 0.6rem 2rem;
   background: var(--bar);
   border-bottom: 1px solid var(--menu-edge);
 }
@@ -474,7 +499,9 @@ body {
   min-height: 100%;
   box-sizing: border-box;
   padding-block: 1.5rem 40vh;
-  padding-inline: max(1.5rem, calc((100% - 46rem) / 2));
+  /* The writing fills the room it is given. The author decides how wide that room is by dragging the bars beside it
+     (splitters.ts), so the program has no business keeping a column of its own and leaving the rest empty. */
+  padding-inline: 2rem;
   line-height: 1.6;
   outline: none;
   overflow-wrap: anywhere;

@@ -100,6 +100,7 @@ describe('preferences', () => {
       assistantMode: '',
       alcoveFolder: '',
       greatHallPath: '',
+      panelWidths: { left: 0, right: 0 },
     });
   });
 

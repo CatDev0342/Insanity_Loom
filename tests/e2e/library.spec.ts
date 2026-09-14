@@ -142,3 +142,37 @@ test('a smaller window keeps every control within reach', async () => {
   const fits = await window.evaluate((element) => element.getBoundingClientRect().width <= globalThis.innerWidth);
   expect(fits).toBe(true);
 });
+
+test('the three sections divide the window, and the bars between them move it', async () => {
+  const navigation = page.locator('#navigation');
+  const whisper = page.locator('.whisper-editor');
+
+  // The writing fills the room between the panels rather than sitting in a column of its own.
+  const room = await page.evaluate(() => {
+    const writing = document.querySelector('.whisper-editor');
+    const middle = document.querySelector('.middle');
+    if (writing === null || middle === null) return 0;
+    return middle.getBoundingClientRect().width - writing.getBoundingClientRect().width;
+  });
+  expect(room).toBeLessThan(8);
+
+  // Dragging a bar gives the room to one section and takes it from another.
+  const wasWide = (await navigation.boundingBox())?.width ?? 0;
+  const splitter = page.locator('#left-splitter');
+  const bar = await splitter.boundingBox();
+  await page.mouse.move((bar?.x ?? 0) + 2, (bar?.y ?? 0) + 100);
+  await page.mouse.down();
+  await page.mouse.move((bar?.x ?? 0) + 120, (bar?.y ?? 0) + 100, { steps: 8 });
+  await page.mouse.up();
+  const nowWide = (await navigation.boundingBox())?.width ?? 0;
+  expect(nowWide).toBeGreaterThan(wasWide + 60);
+
+  // The keyboard moves it too: it is a separator, and says how wide the panel now is.
+  await splitter.focus();
+  await page.keyboard.press('ArrowLeft');
+  await expect(splitter).toHaveAttribute('aria-valuenow', /\d+/);
+  expect((await navigation.boundingBox())?.width ?? 0).toBeLessThan(nowWide);
+
+  // And the writing keeps whatever the panels do not take.
+  await expect(whisper).toBeVisible();
+});

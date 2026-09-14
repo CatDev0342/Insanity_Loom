@@ -5,6 +5,7 @@ import { Loom } from './loom/page';
 import { ContextMenu } from './menu/context-menu';
 import { MenuBar } from './menu/menubar';
 import { PanelTabs } from './loom/panel-tabs';
+import { Splitters } from './loom/splitters';
 import { Toolbar } from './menu/toolbar';
 import { MENUS } from './menu/model';
 import { LinkPanel, type WhisperHeading } from './panels/link-panel';
@@ -21,6 +22,9 @@ function required<T extends Element>(selector: string): T {
 }
 
 const bridge = window.insanityLoom;
+
+/** How long after the last drag the widths are written down, in milliseconds. */
+const WIDTHS_WRITTEN_AFTER_MS = 400;
 
 const loom = new Loom(
   {
@@ -169,6 +173,23 @@ const standingOf = (command: AnyCommandId): { enabled: boolean; checked: boolean
 };
 
 new MenuBar(required<HTMLElement>('#menubar'), MENUS, run, standingOf);
+
+// The bars between the three sections. The author decides how the window is divided, and it stays divided that way.
+const splitters = new Splitters(
+  {
+    leftSplitter: required<HTMLElement>('#left-splitter'),
+    rightSplitter: required<HTMLElement>('#right-splitter'),
+    leftPanel: required<HTMLElement>('#navigation'),
+    rightPanel: required<HTMLElement>('#thoughts'),
+  },
+  (widths) => {
+    // Written a moment after the author stops dragging, not at every pixel of it.
+    window.clearTimeout(savingWidths);
+    savingWidths = window.setTimeout(() => void bridge.layout.savePanelWidths(widths), WIDTHS_WRITTEN_AFTER_MS);
+  },
+);
+let savingWidths = 0;
+void bridge.layout.panelWidths().then((widths) => splitters.use(widths));
 
 // The tabs at the top of each side panel. The left panel holds one thing for now; the right holds the assistant's
 // thinking and the library it is citing.

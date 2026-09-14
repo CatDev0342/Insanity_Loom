@@ -43,6 +43,16 @@ export class PreferenceStore {
     return this.preferences.greatHallPath;
   }
 
+  /** How the author divided the screen. */
+  get panelWidths(): { readonly left: number; readonly right: number } {
+    return this.preferences.panelWidths;
+  }
+
+  setPanelWidths(panelWidths: { readonly left: number; readonly right: number }): void {
+    if (panelWidths.left === this.preferences.panelWidths.left && panelWidths.right === this.preferences.panelWidths.right) return;
+    this.write(preferencesWith(this.preferences, { panelWidths }));
+  }
+
   setGreatHallPath(greatHallPath: string): void {
     if (greatHallPath === this.preferences.greatHallPath) return;
     this.write(preferencesWith(this.preferences, { greatHallPath }));

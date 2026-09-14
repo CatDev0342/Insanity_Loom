@@ -5,6 +5,7 @@ import type { CommandId } from './commands';
 import type { EditingBridge } from './editing';
 import type { GreatHallBridge } from './greathall';
 import type { HallBridge } from './hall';
+import type { LayoutBridge } from './layout';
 import type { LinksBridge } from './links';
 import type { WhispersBridge } from './whispers';
 
@@ -39,6 +40,9 @@ export interface InsanityLoomBridge {
 
   /** The GreatHall in use: what belongs together, and the library it cites. */
   readonly greatHall: GreatHallBridge;
+
+  /** How the author divided the window between its three sections. */
+  readonly layout: LayoutBridge;
 
   /** Where the author's unsent writing is kept safe. */
   readonly journal: JournalBridge;

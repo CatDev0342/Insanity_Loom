@@ -26,12 +26,15 @@ export interface Preferences {
   readonly alcoveFolder: string;
   /** The GreatHall file last opened, so the next start opens it again; '' when none has been. */
   readonly greatHallPath: string;
+  /** How wide the author made the panels either side of the whisper, in pixels; 0 for the width the page gives them. */
+  readonly panelWidths: { readonly left: number; readonly right: number };
 }
 
 export const DEFAULT_PREFERENCES: Preferences = {
   version: PREFERENCES_VERSION,
   spelling: DEFAULT_SPELLING,
   greatHallPath: '',
+  panelWidths: { left: 0, right: 0 },
   assistantMode: '',
   alcoveFolder: '',
 };
@@ -86,6 +89,7 @@ export function loadPreferences(dataFolder: string): Preferences {
       assistantMode: parsed['version'] === SECOND_VERSION ? readMode(parsed['assistantMode'], file) : '',
       alcoveFolder: '',
       greatHallPath: '',
+      panelWidths: { left: 0, right: 0 },
     };
     savePreferences(dataFolder, upgraded);
     return upgraded;
@@ -99,11 +103,19 @@ export function loadPreferences(dataFolder: string): Preferences {
     assistantMode: readMode(parsed['assistantMode'], file),
     alcoveFolder: readFolder(parsed['alcoveFolder'], file),
     greatHallPath: typeof parsed['greatHallPath'] === 'string' ? parsed['greatHallPath'] : '',
+    panelWidths: readPanelWidths(parsed['panelWidths']),
   };
 }
 
 export function savePreferences(dataFolder: string, preferences: Preferences): void {
   writeFileSafely(join(dataFolder, PREFERENCES_FILE_NAME), `${JSON.stringify(preferences, null, JSON_INDENT)}\n`);
+}
+
+/** How the author divided the screen, as far as it can be believed: anything else is the page's own choice. */
+export function readPanelWidths(value: unknown): { readonly left: number; readonly right: number } {
+  const said = (typeof value === 'object' && value !== null ? value : {}) as Record<string, unknown>;
+  const width = (one: unknown): number => (typeof one === 'number' && Number.isFinite(one) && one >= 0 ? Math.round(one) : 0);
+  return { left: width(said['left']), right: width(said['right']) };
 }
 
 export function readFolder(value: unknown, where: string): string {

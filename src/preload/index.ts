@@ -9,6 +9,7 @@ import { RUN_COMMAND_CHANNEL } from '../shared/commands';
 import { EDITING_CHANNELS, type ContextDetails } from '../shared/editing';
 import { GREATHALL_CHANNELS } from '../shared/greathall';
 import { HALL_CHANNELS } from '../shared/hall';
+import { LAYOUT_CHANNELS } from '../shared/layout';
 import { LINK_CHANNELS } from '../shared/links';
 import { WHISPER_CHANNELS } from '../shared/whispers';
 
@@ -97,6 +98,11 @@ const bridge: InsanityLoomBridge = {
 
   hall: {
     search: (asked) => ipcRenderer.invoke(HALL_CHANNELS.search, asked),
+  },
+
+  layout: {
+    panelWidths: () => ipcRenderer.invoke(LAYOUT_CHANNELS.panelWidths),
+    savePanelWidths: (widths) => ipcRenderer.invoke(LAYOUT_CHANNELS.savePanelWidths, widths),
   },
 
   greatHall: {

@@ -133,3 +133,15 @@ describe('the bar between the panels', () => {
     expect(whichWay(undefined, view)).toBe('none');
   });
 });
+
+describe('how the window is divided', () => {
+  it('keeps a panel within what the window can hold', async () => {
+    const { widthWithin } = await import('../../src/renderer/src/loom/splitters');
+    // Narrow enough to tuck away, never so wide that the writing has nowhere to go.
+    expect(widthWithin(300, 1600)).toBe(300);
+    expect(widthWithin(20, 1600)).toBe(120);
+    expect(widthWithin(1500, 1600)).toBe(720);
+    // A tiny window still leaves a panel usable rather than a sliver.
+    expect(widthWithin(300, 400)).toBe(180);
+  });
+});

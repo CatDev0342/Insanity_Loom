@@ -18,9 +18,11 @@ import { DEFAULT_CONNECTION, type ConnectionSettings } from '../shared/connectio
 import { Assistant, HOST_LOG_FILE_NAME } from './assistant';
 import type { Journal } from './journal';
 import type { PreferenceStore } from './preference-store';
+import { readPanelWidths } from './preferences';
 import { GREATHALL_CHANNELS } from '../shared/greathall';
 import { GreatHalls } from './greathall';
 import { HALL_CHANNELS, type HallSearch } from '../shared/hall';
+import { LAYOUT_CHANNELS } from '../shared/layout';
 import { searchHall } from './hall';
 import { LINK_CHANNELS } from '../shared/links';
 import { openAddress } from './links';
@@ -262,6 +264,10 @@ export function startServices(dataFolder: string, logsFolder: string, journal: J
       text(stamp, 'stamp', MAXIMUM_IDENTIFIER_LENGTH),
     ),
   );
+  ipcMain.handle(LAYOUT_CHANNELS.panelWidths, () => preferences.panelWidths);
+  ipcMain.handle(LAYOUT_CHANNELS.savePanelWidths, (_event, widths: unknown) => {
+    preferences.setPanelWidths(readPanelWidths(widths));
+  });
   ipcMain.handle(HALL_CHANNELS.search, (_event, asked: unknown) => {
     // A GreatHall says where its own whispers are; without one, the alcove the author chose.
     const hall = halls.current;
