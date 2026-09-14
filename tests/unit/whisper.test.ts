@@ -149,6 +149,9 @@ describe('the whisper file', () => {
 
     const file = toXhtml({ title: 'A & B', conversationId: 'conversation-1', bodyHtml: w.html });
     expect(file.startsWith('<?xml version="1.0" encoding="UTF-8"?>')).toBe(true);
+    // The whisper carries its own look, so it reads as itself wherever it is opened.
+    expect(file).toContain('<style>');
+    expect(file).toContain("section[data-author='assistant']");
     const read = fromXhtml(file);
     expect(read.title).toBe('A & B');
     expect(read.conversationId).toBe('conversation-1');

@@ -3,6 +3,38 @@
 // about it in the page's head: its title, the program that wrote it, and the conversation it belongs to.
 
 export const XHTML_NAMESPACE = 'http://www.w3.org/1999/xhtml';
+
+/**
+ * How a whisper looks when it is opened outside Insanity_Loom. It is carried in the file itself rather than left in a
+ * stylesheet beside it, so a whisper sent to someone, copied onto a stick or kept in a backup still reads as itself,
+ * with nothing to lose on the way. It says what Insanity_Loom says: a column of writing, the assistant's replies
+ * marked down their left side, a section rule between them.
+ */
+const WHISPER_STYLE = `
+      :root { color-scheme: dark light; }
+      body {
+        margin: 0;
+        padding: 2rem 1rem;
+        background: #1e1e22;
+        color: #e8e6e3;
+        font-family: system-ui, 'Segoe UI', Ubuntu, Cantarell, 'Noto Sans', sans-serif;
+        line-height: 1.5;
+      }
+      article.whisper { max-width: 46rem; margin: 0 auto; }
+      article.whisper h1, article.whisper h2, article.whisper h3 { line-height: 1.25; margin: 1.6em 0 0.4em; }
+      article.whisper p { margin: 0 0 0.8em; }
+      article.whisper a { color: #8fb0e8; }
+      article.whisper code { font-family: ui-monospace, Consolas, 'DejaVu Sans Mono', monospace; }
+      article.whisper pre { padding: 0.6rem 0.8rem; overflow-x: auto; background: #26262b; }
+      article.whisper blockquote { margin: 0 0 0.8em; padding-left: 0.9rem; border-left: 3px solid #45454d; color: #9a978f; }
+      article.whisper hr { height: 0; margin: 1.4em 0; border: 0; border-top: 1px solid #45454d; }
+      article.whisper section[data-author='assistant'] {
+        margin: 0 0 1em;
+        padding-left: 0.9rem;
+        border-left: 3px solid #4d6a9a;
+        color: #cfd8e6;
+      }
+`;
 const CONVERSATION_META = 'insanity-loom-conversation';
 const GENERATOR = 'Insanity_Loom';
 
@@ -39,6 +71,8 @@ export function toXhtml(file: WhisperFile): string {
     `<title>${escapeText(file.title)}</title>`,
     `<meta name="generator" content="${GENERATOR}" />`,
     `<meta name="${CONVERSATION_META}" content="${escapeAttribute(file.conversationId)}" />`,
+    '<meta name="viewport" content="width=device-width, initial-scale=1" />',
+    `<style>${WHISPER_STYLE}    </style>`,
     '</head>',
     '<body>',
     '<article class="whisper">',
