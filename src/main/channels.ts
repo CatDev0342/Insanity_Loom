@@ -21,7 +21,10 @@ import type { PreferenceStore } from './preference-store';
 import { readPanelWidths } from './preferences';
 import { GREATHALL_CHANNELS } from '../shared/greathall';
 import { GreatHalls } from './greathall';
-import { HALL_CHANNELS, type HallSearch } from '../shared/hall';
+import { HALL_CHANNELS, type HallChosen, type HallSearch } from '../shared/hall';
+import { findWindow, openFindWindow } from './find-window';
+import { WINDOW_BACKGROUND_COLOR } from './index';
+import { PAGE_PREFERENCES } from './security';
 import { LAYOUT_CHANNELS } from '../shared/layout';
 import { searchHall } from './hall';
 import { LINK_CHANNELS } from '../shared/links';
@@ -45,6 +48,17 @@ const MOST_ADDRESSES_ASKED_ABOUT = 200;
 const CONTAINER_LIST_TIME_LIMIT_MS = 15_000;
 
 const PANEL = 'the Connection Settings panel';
+
+/** What was chosen in the Find in Files window, checked before it is handed on. */
+function readHallChosen(value: unknown): HallChosen {
+  const said = (typeof value === 'object' && value !== null ? value : {}) as Record<string, unknown>;
+  return {
+    path: text(said['path'], 'path', MAXIMUM_PATH_LENGTH),
+    looked: text(said['looked'], 'search', MAXIMUM_IDENTIFIER_LENGTH),
+    address: text(said['address'], 'address', MAXIMUM_IDENTIFIER_LENGTH),
+    line: typeof said['line'] === 'number' && Number.isFinite(said['line']) ? Math.max(0, Math.round(said['line'])) : 0,
+  };
+}
 
 /** The addresses the page asked about, checked: the layer underneath trusts nothing it is handed. */
 function readAddresses(value: unknown): readonly string[] {
@@ -271,6 +285,17 @@ export function startServices(dataFolder: string, logsFolder: string, journal: J
   ipcMain.handle(LAYOUT_CHANNELS.panelWidths, () => preferences.panelWidths);
   ipcMain.handle(LAYOUT_CHANNELS.savePanelWidths, (_event, widths: unknown) => {
     preferences.setPanelWidths(readPanelWidths(widths));
+  });
+  ipcMain.handle(HALL_CHANNELS.openWindow, (event) => {
+    openFindWindow(windowOf(event), WINDOW_BACKGROUND_COLOR, PAGE_PREFERENCES);
+  });
+  ipcMain.handle(HALL_CHANNELS.closeWindow, () => findWindow()?.close());
+  // What was chosen in the Find in Files window is handed to the program's own window, which is where whispers are.
+  ipcMain.handle(HALL_CHANNELS.goTo, (event, chosen: unknown) => {
+    const asked = readHallChosen(chosen);
+    for (const window of BrowserWindow.getAllWindows()) {
+      if (window.webContents.id !== event.sender.id && window.getParentWindow() === null) window.webContents.send(HALL_CHANNELS.wentTo, asked);
+    }
   });
   ipcMain.handle(HALL_CHANNELS.search, (_event, asked: unknown) => {
     // A GreatHall says where its own whispers are; without one, the alcove the author chose.

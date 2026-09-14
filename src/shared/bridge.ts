@@ -4,7 +4,7 @@ import type { AssistantBridge, ConnectionBridge, JournalBridge } from './assista
 import type { CommandId } from './commands';
 import type { EditingBridge } from './editing';
 import type { GreatHallBridge } from './greathall';
-import type { HallBridge } from './hall';
+import type { FindWindowBridge, HallBridge } from './hall';
 import type { LayoutBridge } from './layout';
 import type { LinksBridge } from './links';
 import type { WhispersBridge } from './whispers';
@@ -37,6 +37,9 @@ export interface InsanityLoomBridge {
 
   /** Searching everything the author has written. */
   readonly hall: HallBridge;
+
+  /** The Find in Files window, which stands beside the program rather than inside it. */
+  readonly findWindow: FindWindowBridge;
 
   /** The GreatHall in use: what belongs together, and the library it cites. */
   readonly greatHall: GreatHallBridge;

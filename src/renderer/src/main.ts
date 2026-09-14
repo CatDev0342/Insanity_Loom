@@ -10,7 +10,6 @@ import { Toolbar } from './menu/toolbar';
 import { MENUS } from './menu/model';
 import { LinkPanel, type WhisperHeading } from './panels/link-panel';
 import { PointsHerePanel } from './panels/points-here-panel';
-import { HallPanel } from './panels/hall-panel';
 import { SearchPanel } from './panels/search-panel';
 import { PreferencesPanel } from './panels/preferences-panel';
 import { SignInPanel } from './panels/sign-in-panel';
@@ -80,7 +79,6 @@ const signIn = new SignInPanel(required<HTMLDialogElement>('#sign-in-dialog'), b
 const link = new LinkPanel(required<HTMLDialogElement>('#link-dialog'));
 const pointsHere = new PointsHerePanel(required<HTMLDialogElement>('#points-here-dialog'));
 const search = new SearchPanel(required<HTMLDialogElement>('#search-dialog'));
-const hall = new HallPanel(required<HTMLDialogElement>('#hall-dialog'));
 required<HTMLButtonElement>('#sign-in').addEventListener('click', () => void signIn.show());
 
 /**
@@ -128,13 +126,18 @@ async function findInTheAlcove(): Promise<void> {
   loom.findFor(asked.looked);
 }
 
-/** File ▸ Find in Files: everything the author has written; choosing a result opens it at the words. */
+/**
+ * File ▸ Find in Files: everything the author has written, in a window of its own beside the program, so it can be
+ * left open while they write. What they choose there arrives here (`onGoTo`).
+ */
 async function findInFiles(): Promise<void> {
-  const chosen = await hall.ask((asked) => bridge.hall.search(asked));
-  if (chosen === undefined) {
-    loom.focusWhisper();
-    return;
-  }
+  await bridge.findWindow.open();
+}
+
+bridge.findWindow.onGoTo((chosen) => void goToWhatWasFound(chosen));
+
+/** Goes to what was chosen in the Find in Files window. */
+async function goToWhatWasFound(chosen: { path: string; looked: string; address: string; line: number }): Promise<void> {
   // A place in the library opens in the Library tab, where the library is read and edited; a whisper opens as one.
   if (chosen.address !== '') {
     await loom.openLibraryAt(chosen.address, chosen.line);

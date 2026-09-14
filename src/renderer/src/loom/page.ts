@@ -64,6 +64,9 @@ export interface LoomElements
 /** What Claude Code calls the command that makes room in its context window (src/main/assistant.ts). */
 const COMPACT_COMMAND = 'compact';
 
+/** How long a notice with nothing to answer stays on the page, in milliseconds. */
+const NOTICE_STAYS_MS = 9000;
+
 const PAGE_TITLE = 'Insanity_Loom';
 const UNTITLED = 'Untitled whisper';
 
@@ -510,11 +513,8 @@ export class Loom {
     const isolating = !editor.isolatingSections;
     editor.isolateSections(isolating);
     this.elements.isolation.hidden = !isolating;
-    this.showNotice(
-      isolating
-        ? 'Section isolation is on: Select All takes the section you are in.'
-        : 'Section isolation is off: Select All takes the whole whisper.',
-    );
+    // Nothing is said above the whisper: the button shows itself pressed and the status bar says it is on. A notice
+    // for something the author can already see is a notice they must then dismiss.
     editor.focus();
   }
 
@@ -1088,7 +1088,13 @@ export class Loom {
     this.elements.asks.hidden = this.elements.asks.childElementCount === 0;
   }
 
-  /** A quiet word to the author about something Insanity_Loom did, dismissable, above the whisper. */
+  /**
+   * A quiet word to the author about something Insanity_Loom did, above the whisper.
+   *
+   * A notice goes by itself after a while, and a second notice of the same kind replaces the first: a strip of them
+   * piles up and squeezes the writing into a sliver, which is what happened to the designer on 2026-Sep-14. Problems
+   * are not notices — those stay until they are dismissed.
+   */
   private showNotice(message: string, offer?: { readonly name: string; readonly take: () => void }): void {
     this.showCard(message, 'ask ask-notice', 'status', offer);
   }
@@ -1124,7 +1130,16 @@ export class Loom {
       note.append(take);
     }
     note.append(dismiss);
+    // One of a kind at a time: a notice arriving replaces the last, rather than joining a queue of them.
+    if (role === 'status') for (const older of [...this.elements.asks.querySelectorAll('.ask-notice')]) older.remove();
     this.elements.asks.append(note);
     this.elements.asks.hidden = false;
+    // A notice with nothing to answer goes by itself; one that offers something waits to be answered.
+    if (role === 'status' && offer === undefined) {
+      window.setTimeout(() => {
+        note.remove();
+        this.elements.asks.hidden = this.elements.asks.childElementCount === 0;
+      }, NOTICE_STAYS_MS);
+    }
   }
 }

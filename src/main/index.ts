@@ -19,7 +19,7 @@ const WINDOW_MINIMUM_HEIGHT = 360;
 
 // The window's ground color before the page has drawn, so opening never flashes white on a dark page or the reverse.
 // It matches the page's own background (src/renderer/src/style.css).
-const WINDOW_BACKGROUND_COLOR = '#1e1e22';
+export const WINDOW_BACKGROUND_COLOR = '#1e1e22';
 
 // The exit code for a start that cannot go on: anything other than 0 tells the system the program failed.
 const EXIT_CODE_CANNOT_START = 1;

@@ -211,8 +211,8 @@ test('Find in Files searches everything written, and goes to the words', async (
   await page.keyboard.type('the second whisper, about nothing in particular');
 
   await page.keyboard.press('Control+Shift+g');
-  const window = page.getByRole('dialog', { name: 'Find in Files' });
-  await expect(window).toBeVisible();
+  const window = await application.waitForEvent('window');
+  await expect(window.locator('#find-in-files')).toBeVisible();
   // The shape of an advanced find window: what to find, where to look, how to match, and the results.
   await expect(window.getByLabel('The whole GreatHall (every folder beneath the alcove)')).toBeChecked();
   await expect(window.getByLabel('Match case')).not.toBeChecked();
@@ -233,7 +233,6 @@ test('Find in Files searches everything written, and goes to the words', async (
   await window.getByRole('button', { name: 'Find All' }).click();
   await window.getByRole('listbox').selectOption({ index: 1 });
   await window.getByRole('button', { name: 'Go To' }).click();
-  await expect(window).toBeHidden();
 
   // The whisper holding it is open, and the author has landed on the words.
   await expect(page.locator('#whisper-name')).toHaveText(holding ?? '');

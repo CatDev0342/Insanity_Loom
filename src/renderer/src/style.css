@@ -453,8 +453,12 @@ body {
 }
 
 /* The loom: questions from the assistant above, the whisper filling the window below them. */
+/* The strip above the whisper says what needs answering — and never grows beyond a third of the window, whatever
+   arrives. The writing is what the author came for. */
 .asks {
   flex: none;
+  max-height: 33vh;
+  overflow-y: auto;
   display: flex;
   flex-direction: column;
   gap: 0.5rem;
@@ -1172,6 +1176,41 @@ button:disabled {
 
 .context-menu.shows-access-keys .access-key {
   text-decoration: underline;
+}
+
+/* Find in Files standing in a window of its own: the panel fills the window, and its box is not a dialog but the page. */
+body.find-window {
+  height: 100%;
+  overflow: hidden;
+}
+
+.find-window-inside {
+  height: 100%;
+  padding: 0.6rem;
+  box-sizing: border-box;
+  overflow: auto;
+}
+
+.find-window-panel {
+  position: static;
+  display: block;
+  width: 100%;
+  max-width: none;
+  margin: 0;
+  padding: 0;
+  background: none;
+  border: 0;
+  color: inherit;
+}
+
+.find-window-panel .panel-wide {
+  min-width: 0;
+  max-width: none;
+}
+
+/* In a window of its own the list of results takes whatever room is left. */
+.find-window-panel .hall-results {
+  min-height: 14rem;
 }
 
 /* The advanced find window: wider than a panel, with its results in a fixed-width list so lines stand under lines. */

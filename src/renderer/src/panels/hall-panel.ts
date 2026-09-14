@@ -37,6 +37,9 @@ interface ResultRow {
   readonly line: number;
 }
 
+/** Where the panel is standing: in a dialog inside the program, or in a window of its own. */
+export type HallPanelPlace = 'in a dialog' | 'in its own window';
+
 export class HallPanel {
   private readonly form: HTMLFormElement;
   private readonly looked: HTMLInputElement;
@@ -53,7 +56,12 @@ export class HallPanel {
   private chosen: { path: string; looked: string; address: string; line: number } | undefined;
   private search: (asked: HallSearch) => Promise<HallFound> = async () => ({ hits: [], found: 0, looked: 0, problem: '' });
 
-  constructor(private readonly dialog: HTMLDialogElement) {
+  constructor(
+    private readonly dialog: HTMLDialogElement,
+    private readonly place: HallPanelPlace = 'in a dialog',
+    /** What Close does when the panel is a window of its own. */
+    private readonly closeWindow: () => void = () => undefined,
+  ) {
     const heading = element('h2');
     heading.textContent = 'Find in Files';
 
@@ -114,7 +122,7 @@ export class HallPanel {
       event.preventDefault();
       this.goTo();
     });
-    cancel.addEventListener('click', () => this.dialog.close());
+    cancel.addEventListener('click', () => this.close());
     this.results.addEventListener('dblclick', () => this.goTo());
   }
 
@@ -200,7 +208,30 @@ export class HallPanel {
     const row = this.rows[Number(this.results.value)];
     if (row === undefined) return;
     this.chosen = { path: row.path, looked: row.looked, address: row.address, line: row.line };
-    this.dialog.close();
+    // In a window of its own the results stay: the author goes to one, reads, and comes back for the next. A dialog
+    // must get out of the way, so it closes.
+    this.onChosen?.(this.chosen);
+    if (this.place === 'in a dialog') this.dialog.close();
+  }
+
+  /** Where a result is taken when the panel stands in a window of its own. */
+  private onChosen: ((chosen: { path: string; looked: string; address: string; line: number }) => void) | undefined;
+
+  /** Says where results are to be taken, for a panel standing in a window of its own. */
+  takeResultsTo(where: (chosen: { path: string; looked: string; address: string; line: number }) => void): void {
+    this.onChosen = where;
+  }
+
+  private close(): void {
+    if (this.place === 'in a dialog') this.dialog.close();
+    else this.closeWindow();
+  }
+
+  /** Shows the panel in a window of its own, where it simply stands rather than being opened and closed. */
+  standIn(search: (asked: HallSearch) => Promise<HallFound>): void {
+    this.search = search;
+    this.show([], 'Write what to look for.');
+    this.looked.focus();
   }
 
   /**

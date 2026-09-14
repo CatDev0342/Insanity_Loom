@@ -7,5 +7,15 @@ import { defineConfig } from 'electron-vite';
 export default defineConfig({
   main: {},
   preload: {},
-  renderer: {},
+  // Two pages: the program itself, and the Find in Files window that stands beside it (src/main/find-window.ts).
+  renderer: {
+    build: {
+      rollupOptions: {
+        input: {
+          index: 'src/renderer/index.html',
+          find: 'src/renderer/find.html',
+        },
+      },
+    },
+  },
 });

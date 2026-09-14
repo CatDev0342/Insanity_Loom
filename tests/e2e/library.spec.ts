@@ -94,9 +94,10 @@ test('says so plainly when no GreatHall is open', async () => {
 });
 
 test('Find in Files searches the hall it belongs to, library and all', async () => {
+  // A window of its own, which the author may leave open beside their writing.
   await page.keyboard.press('Control+Shift+g');
-  const window = page.getByRole('dialog', { name: 'Find in Files' });
-  await expect(window).toBeVisible();
+  const window = await application.waitForEvent('window');
+  await expect(window.locator('#find-in-files')).toBeVisible();
   await expect(window.getByLabel("Look in the GreatHall's library as well")).toBeChecked();
 
   await window.getByLabel('Find what:').fill('Links between whispers');
@@ -104,12 +105,12 @@ test('Find in Files searches the hall it belongs to, library and all', async () 
   await expect(window.getByRole('status')).toContainText('in 1 document');
   await expect(window.getByRole('listbox')).toContainText('library');
 
-  // A place in the library opens in the Library tab, at that place, live.
+  // Choosing a result takes the program's own window there; the find window stays, with its results.
   await window.getByRole('listbox').selectOption({ index: 1 });
   await window.getByRole('button', { name: 'Go To' }).click();
-  await expect(window).toBeHidden();
   await expect(page.locator('#library-pane textarea')).toHaveValue(/40\.6 — THE WIKI/);
   await expect(page.locator('#library-pane .library-pinned')).toContainText('40');
+  await expect(window.getByRole('listbox')).toContainText('library');
 });
 
 test('the editing shortcuts are one stop for the keyboard, with the arrows moving along them', async () => {

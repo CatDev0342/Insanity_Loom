@@ -60,6 +60,31 @@ export interface HallBridge {
   search(asked: HallSearch): Promise<HallFound>;
 }
 
+/** What the author chose in the Find in Files window, for the program's own window to go to. */
+export interface HallChosen {
+  readonly path: string;
+  readonly looked: string;
+  /** For a place in the library, the document's address and the line; '' and 0 for a whisper. */
+  readonly address: string;
+  readonly line: number;
+}
+
+/** The Find in Files window, which stands beside the program rather than inside it. */
+export interface FindWindowBridge {
+  /** Opens the window, or brings it forward when it is already open. */
+  open(): Promise<void>;
+  /** Closes it. */
+  close(): Promise<void>;
+  /** Takes the program's own window to what was chosen here. */
+  goTo(chosen: HallChosen): Promise<void>;
+  /** Listens, in the program's own window, for what was chosen in the other. */
+  onGoTo(listener: (chosen: HallChosen) => void): () => void;
+}
+
 export const HALL_CHANNELS = {
   search: 'insanity-loom:hall-search',
+  openWindow: 'insanity-loom:hall-open-window',
+  closeWindow: 'insanity-loom:hall-close-window',
+  goTo: 'insanity-loom:hall-go-to',
+  wentTo: 'insanity-loom:hall-went-to',
 } as const;

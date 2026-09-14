@@ -8,7 +8,7 @@ import type { InsanityLoomBridge } from '../shared/bridge';
 import { RUN_COMMAND_CHANNEL } from '../shared/commands';
 import { EDITING_CHANNELS, type ContextDetails } from '../shared/editing';
 import { GREATHALL_CHANNELS } from '../shared/greathall';
-import { HALL_CHANNELS } from '../shared/hall';
+import { HALL_CHANNELS, type HallChosen } from '../shared/hall';
 import { LAYOUT_CHANNELS } from '../shared/layout';
 import { LINK_CHANNELS } from '../shared/links';
 import { WHISPER_CHANNELS } from '../shared/whispers';
@@ -100,6 +100,25 @@ const bridge: InsanityLoomBridge = {
 
   hall: {
     search: (asked) => ipcRenderer.invoke(HALL_CHANNELS.search, asked),
+  },
+
+  findWindow: {
+    open: async () => {
+      await ipcRenderer.invoke(HALL_CHANNELS.openWindow);
+    },
+    close: async () => {
+      await ipcRenderer.invoke(HALL_CHANNELS.closeWindow);
+    },
+    goTo: async (chosen) => {
+      await ipcRenderer.invoke(HALL_CHANNELS.goTo, chosen);
+    },
+    onGoTo: (listener) => {
+      const relay = (_event: IpcRendererEvent, chosen: HallChosen): void => listener(chosen);
+      ipcRenderer.on(HALL_CHANNELS.wentTo, relay);
+      return () => {
+        ipcRenderer.removeListener(HALL_CHANNELS.wentTo, relay);
+      };
+    },
   },
 
   layout: {
