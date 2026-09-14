@@ -20,6 +20,7 @@ import {
   SectionRule,
   type ReplyState,
 } from './extensions';
+import { FINDING, FindInWhisper, FINDING_META, foundSoFar, placesFound, NOTHING_FOUND, type Finding } from './finding';
 import { applyFormat, formatStanding, type FormatCommandId, type FormatStanding } from './formatting';
 import { WhisperPaste } from './paste';
 import { readWhisperLink } from '../../../shared/whispers';
@@ -68,6 +69,7 @@ export class WhisperEditor {
         WhisperPaste,
         HeadingIdentities,
         MarkFoundHeading,
+        FindInWhisper,
         FollowLinks.configure({ onFollow: (address) => options.onFollowLink(address) }),
         Markdown,
       ],
@@ -290,6 +292,69 @@ export class WhisperEditor {
         transaction.addMark(change.from, change.to, linkType.create({ href: change.address }));
       }
     });
+  }
+
+  // ——— Finding writing in the whisper ———
+
+  /**
+   * Looks for writing in the whisper, marking every place it appears and taking the author to the first from where
+   * they are. Says which place they are at, of how many.
+   */
+  find(looked: string): { readonly at: number; readonly of: number } {
+    const places = placesFound(this.editor.state, looked);
+    if (places.length === 0) {
+      this.setFinding({ looked, at: -1 });
+      return { at: -1, of: 0 };
+    }
+    // From where the author is standing, as every editor does: the next place at or after the caret.
+    const caret = this.editor.state.selection.from;
+    const next = places.findIndex((place) => place.from >= caret);
+    return this.goToPlace(looked, next === -1 ? 0 : next, places.length);
+  }
+
+  /** The next place the writing appears, wrapping round to the first. */
+  findNext(): { readonly at: number; readonly of: number } {
+    return this.step(1);
+  }
+
+  /** The place before, wrapping round to the last. */
+  findPrevious(): { readonly at: number; readonly of: number } {
+    return this.step(-1);
+  }
+
+  private step(by: number): { readonly at: number; readonly of: number } {
+    const finding = this.findingNow;
+    const places = placesFound(this.editor.state, finding.looked);
+    if (places.length === 0) return { at: -1, of: 0 };
+    const next = (finding.at + by + places.length) % places.length;
+    return this.goToPlace(finding.looked, next, places.length);
+  }
+
+  private goToPlace(looked: string, at: number, of: number): { readonly at: number; readonly of: number } {
+    this.setFinding({ looked, at });
+    const place = placesFound(this.editor.state, looked)[at];
+    // The caret goes to what was found, so the author may carry on writing there, and the whisper scrolls to it.
+    if (place !== undefined) this.editor.chain().setTextSelection(place).scrollIntoView().run();
+    return { at, of };
+  }
+
+  /** Stops looking: the marks go, and the whisper is as it was. */
+  stopFinding(): void {
+    this.setFinding(NOTHING_FOUND);
+  }
+
+  /** What the author is being shown: which place they are at, of how many. */
+  get found(): { readonly at: number; readonly of: number } {
+    return foundSoFar(this.editor.state);
+  }
+
+  private get findingNow(): Finding {
+    return FINDING.getState(this.editor.state) ?? NOTHING_FOUND;
+  }
+
+  private setFinding(finding: Finding): void {
+    // Looking for writing changes nothing in the whisper: it neither saves nor enters the author's undo.
+    this.editor.view.dispatch(this.editor.state.tr.setMeta(FINDING_META, finding).setMeta('addToHistory', false));
   }
 
   /** The address of the link the caret is in, or '' when it is in none. */

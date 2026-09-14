@@ -149,6 +149,43 @@ body {
   border-top-color: var(--focus);
 }
 
+/* The bar for finding writing in the whisper: quiet, above the writing, out of the way. */
+.find-bar {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.3rem 0.8rem;
+  background: var(--bar);
+  border-bottom: 1px solid var(--menu-edge);
+}
+
+.find-bar input {
+  flex: 1;
+  max-width: 24rem;
+}
+
+.find-said {
+  min-width: 6rem;
+  color: var(--ink-quiet);
+}
+
+.find-said[data-found='none'] {
+  color: var(--attention);
+}
+
+.find-step {
+  min-width: 2rem;
+}
+
+/* Every place the writing appears, and the one the author is at. */
+.whisper-editor .is-found-too {
+  background: var(--menu-edge);
+}
+
+.whisper-editor .is-found-now {
+  background: var(--highlight);
+}
+
 /* The heading a link has just led to, marked for a moment so the author's eye finds it. */
 .whisper-editor .is-found {
   background: var(--highlight);

@@ -15,6 +15,14 @@
     <nav id="menubar" class="menubar"></nav>
     <main id="loom" class="loom">
       <div id="asks" class="asks" hidden></div>
+      <div id="find-bar" class="find-bar" role="search" aria-label="Find in this whisper" hidden>
+        <label for="find-looked">Find:</label>
+        <input id="find-looked" type="search" spellcheck="false" />
+        <span id="find-said" class="find-said" role="status"></span>
+        <button id="find-previous" class="find-step" type="button" aria-label="Find previous">▲</button>
+        <button id="find-next" class="find-step" type="button" aria-label="Find next">▼</button>
+        <button id="find-close" class="find-step" type="button" aria-label="Close find">✕</button>
+      </div>
       <div class="whisper-scroll">
         <div id="whisper" class="whisper-host"></div>
       </div>

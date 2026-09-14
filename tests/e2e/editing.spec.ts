@@ -76,3 +76,27 @@ test('Edit ▸ Preferences keeps the personal dictionary', async () => {
   await page.keyboard.press('Escape');
   await expect(panel).toBeHidden();
 });
+
+test('Ctrl+F finds writing in the whisper, F3 goes on, Esc puts it away', async () => {
+  const whisper = page.locator('.whisper-editor');
+  await whisper.click();
+  await page.keyboard.type('one loom, two loom, three looms');
+
+  await page.keyboard.press('Control+f');
+  const bar = page.getByRole('search', { name: 'Find in this whisper' });
+  await expect(bar).toBeVisible();
+  await page.keyboard.type('loom');
+  await expect(page.locator('#find-said')).toHaveText('1 of 3');
+  await expect(whisper.locator('.is-found-now')).toHaveCount(1);
+
+  await page.keyboard.press('F3');
+  await expect(page.locator('#find-said')).toHaveText('2 of 3');
+  await page.keyboard.press('Shift+F3');
+  await expect(page.locator('#find-said')).toHaveText('1 of 3');
+
+  await page.keyboard.press('Escape');
+  await expect(bar).toBeHidden();
+  await expect(whisper.locator('.is-found-now')).toHaveCount(0);
+  // The author is back in the whisper, writing where they were.
+  await expect(whisper).toBeFocused();
+});

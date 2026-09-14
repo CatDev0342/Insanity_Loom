@@ -32,6 +32,12 @@ const loom = new Loom(
     whisperName: required<HTMLElement>('#whisper-name'),
     modeLabel: required<HTMLElement>('#mode-label'),
     mode: required<HTMLSelectElement>('#mode'),
+    bar: required<HTMLElement>('#find-bar'),
+    looked: required<HTMLInputElement>('#find-looked'),
+    said: required<HTMLElement>('#find-said'),
+    previous: required<HTMLButtonElement>('#find-previous'),
+    next: required<HTMLButtonElement>('#find-next'),
+    close: required<HTMLButtonElement>('#find-close'),
     resumeDialog: required<HTMLDialogElement>('#resume-dialog'),
     connectionDialog: required<HTMLDialogElement>('#connection-dialog'),
   },
@@ -95,6 +101,9 @@ async function run(command: AnyCommandId): Promise<void> {
   if (isFormatCommand(command)) return runFormat(command);
   if (command === 'whisper.pointsHere') return showWhatPointsHere();
   if (command === 'whisper.search') return findInTheAlcove();
+  if (command === 'find.show') return loom.showFindBar();
+  if (command === 'find.next') return loom.stepFind('next');
+  if (command === 'find.previous') return loom.stepFind('previous');
   if (!isPageCommand(command)) return bridge.runCommand(command);
   if (command === 'app.preferences') return preferences.show();
   if (command === 'assistant.signIn') return signIn.show();

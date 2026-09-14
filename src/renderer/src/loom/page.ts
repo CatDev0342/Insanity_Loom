@@ -23,10 +23,11 @@ import { WhisperEditor } from '../document/whisper-editor';
 import { fromXhtml, toXhtml } from '../document/xhtml';
 import { ConnectionPanel } from '../panels/connection-panel';
 import { catchUpWith, describeCatchUp, type HistoryPiece } from './catch-up';
+import { FindBar, type FindBarElements } from './find-bar';
 import { Saving } from './saving';
 import { chooseConversation } from './resume';
 
-export interface LoomElements {
+export interface LoomElements extends FindBarElements {
   readonly whisper: HTMLElement;
   readonly asks: HTMLElement;
   readonly statusText: HTMLElement;
@@ -62,6 +63,7 @@ function endingState(reason: string): ReplyState {
 export class Loom {
   private editor: WhisperEditor | undefined;
   private readonly connectionPanel: ConnectionPanel;
+  private readonly findBar: FindBar;
   private readonly waiting: Waiting[] = [];
   private state: ConnectionState = 'disconnected';
   private conversationId = '';
@@ -100,6 +102,7 @@ export class Loom {
     private readonly links: LinksBridge,
     private readonly journal: JournalBridge,
   ) {
+    this.findBar = new FindBar(elements, () => this.editor);
     this.saving = new Saving({
       // Before the whisper is open there is nothing to write; the first save comes with the whisper itself.
       write: async (path) => (this.editor === undefined ? undefined : this.whispers.save(path, this.asXhtml())),
@@ -127,8 +130,16 @@ export class Loom {
     window.addEventListener(
       'keydown',
       (event) => {
-        if (event.key !== 'Escape' || this.writing === undefined) return;
+        if (event.key !== 'Escape') return;
         if (document.querySelector('dialog[open], :popover-open') !== null) return;
+        // Esc stops a reply being written; with none, it puts the find bar away.
+        if (this.writing === undefined) {
+          if (!this.findBar.isShowing) return;
+          event.preventDefault();
+          event.stopPropagation();
+          this.findBar.hide();
+          return;
+        }
         event.preventDefault();
         event.stopPropagation();
         void this.run('assistant.stop');
@@ -273,6 +284,18 @@ export class Loom {
     } catch (problem) {
       this.showProblem(problem instanceof Error ? problem.message : String(problem));
     }
+  }
+
+  // ——— Finding writing in the whisper ———
+
+  /** Edit ▸ Find: the bar above the whisper, with whatever is selected ready to be looked for. */
+  showFindBar(): void {
+    this.findBar.show();
+  }
+
+  /** Edit ▸ Find Next and Find Previous, which work whether the bar is showing or not. */
+  stepFind(which: 'next' | 'previous'): void {
+    this.findBar.step(which);
   }
 
   // ——— Formatting ———
