@@ -12,10 +12,27 @@ import { DEFAULT_CONNECTION } from '../../src/shared/connection';
 const FAKE_ASSISTANT = join(__dirname, '..', 'fixtures', 'fake-assistant.mjs');
 
 const running: { assistant: Assistant; folder: string }[] = [];
+
+/**
+ * Tidies a folder away, giving Windows time to let go of it. A host that has just been closed may still hold its
+ * working folder for a moment, and a test that cannot tidy up is not a test that has failed.
+ */
+function tidyAway(folder: string): void {
+  rmSync(folder, { recursive: true, force: true, maxRetries: TIDYING_TRIES, retryDelay: TIDYING_WAIT_MS });
+}
+
+/** How many times, and how long apart, tidying is tried before it is given up on. */
+const TIDYING_TRIES = 10;
+const TIDYING_WAIT_MS = 50;
+
 afterEach(async () => {
   for (const { assistant, folder } of running.splice(0)) {
     await assistant.close();
-    rmSync(folder, { recursive: true, force: true });
+    try {
+      tidyAway(folder);
+    } catch {
+      // A folder the machine will not let go of is the machine's business, not this test's.
+    }
   }
 });
 
@@ -131,7 +148,7 @@ describe('the assistant connection', () => {
     // Signed in, it connects again and the conversation begins.
     await expect.poll(() => events.some((event) => event.type === 'conversation')).toBe(true);
     await expect.poll(() => events.find((event) => event.type === 'account' && event.label === 'Fake Plan')).toBeDefined();
-    rmSync(authFolder, { recursive: true, force: true });
+    tidyAway(authFolder);
   });
 
   it('reports a sign-in that fails', async () => {
@@ -144,7 +161,7 @@ describe('the assistant connection', () => {
     await expect.poll(() => events.find((event) => event.type === 'signIn' && event.stage === 'failed')).toBeDefined();
     const failed = events.find((event) => event.type === 'signIn' && event.stage === 'failed');
     expect(failed?.type === 'signIn' && failed.message).toMatch(/did not complete[\s\S]*Invalid code/);
-    rmSync(authFolder, { recursive: true, force: true });
+    tidyAway(authFolder);
   });
 
   it('refuses to type anything but a single-line code into the sign-in', () => {

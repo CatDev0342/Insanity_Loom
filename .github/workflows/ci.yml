@@ -6,8 +6,10 @@ on:
   push:
   pull_request:
 
+# The build of the newest green change is published as a release, so it can be fetched without signing in — the
+# author should never have to visit a web page to get the program they just asked for.
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   check:
@@ -79,3 +81,25 @@ jobs:
             dist/win-unpacked/**
             dist/*.AppImage
           if-no-files-found: error
+
+      # The Windows package, as one zip, for the release below. GitHub's own artifact downloads need signing in;
+      # a release asset does not, so whoever wants the newest build — the author, or the assistant fetching it for
+      # them — can simply take it.
+      - name: Gather the Windows package for release
+        if: runner.os == 'Windows' && github.ref == 'refs/heads/main'
+        shell: pwsh
+        run: Compress-Archive -Path dist/win-unpacked/* -DestinationPath dist/Insanity_Loom-Windows.zip -Force
+
+      - name: Publish the newest build
+        if: github.ref == 'refs/heads/main'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: newest
+          name: The newest build
+          body: |
+            Built from ${{ github.sha }}, which passed every check on Windows and on Linux.
+            This release is replaced by each newer green build; older builds are the runs' own downloads.
+          prerelease: true
+          files: |
+            dist/Insanity_Loom-Windows.zip
+            dist/*.AppImage

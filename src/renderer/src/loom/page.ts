@@ -899,6 +899,7 @@ export class Loom {
     const editor = this.requireEditor();
     this.abandonWriting('stopped');
     this.waiting.length = 0;
+    await this.keepACopyFirst('before a new whisper');
     // Nothing is saved until the new whisper has a file of its own: emptying the document while the whisper being
     // left is still the one open would write the emptiness over it.
     await this.saving.stop();
