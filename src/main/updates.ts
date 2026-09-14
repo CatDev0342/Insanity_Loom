@@ -135,61 +135,47 @@ export interface HelperOrders {
  * again. Everything it does is written down as it happens: if it cannot do it, the program must be able to say so
  * afterwards rather than start up looking unchanged and saying nothing.
  *
- * It is written in **JavaScript, and run by the program's own executable** as a plain Node program
- * (`ELECTRON_RUN_AS_NODE`), rather than as a PowerShell script. A script file is the one thing a locked-down Windows
- * will refuse to run without a word — execution policy, or a signature it does not have — and refusing without a
- * word is exactly what happened (the designer, 2026-Sep-14). The executable it runs is the one already trusted
- * enough to be running, and the part being put in place holds no executable, so nothing it needs is replaced
- * underneath it.
+ * Two ways of running it have already failed, and both failures are worth keeping:
+ *
+ * A **PowerShell script file** is refused without a word by a Windows whose execution policy will not run an
+ * unsigned one. Nothing is thrown, nothing is logged, nothing can be caught. A command passed straight to PowerShell
+ * is not a script file and is not governed by that policy, which is why `Expand-Archive` has worked here all along
+ * while a `.ps1` beside it silently did not.
+ *
+ * The **program's own executable run as Node** (`ELECTRON_RUN_AS_NODE`) is switched off by our own `runAsNode` fuse,
+ * which exists so that nobody can turn this program into a general-purpose interpreter — including us.
+ *
+ * So the helper is PowerShell, handed over as an encoded command: no file to be refused, no fuse to fall foul of,
+ * and no quoting to get wrong, since the whole of it travels as one piece of base64.
  */
 export function helperScript(orders: HelperOrders): string {
-  const said = (value: string): string => JSON.stringify(value);
-  return `// Put an Insanity_Loom update in place, once the program holding those files has gone.
-const { cpSync, appendFileSync, writeFileSync } = require('node:fs');
-const { spawn } = require('node:child_process');
+  const asLiteral = (path: string): string => `'${path.replace(/'/g, "''")}'`;
+  return [
+    `$log = ${asLiteral(orders.log)}`,
+    // Said before anything else: the program waits to see this before it agrees to quit for the helper.
+    "Set-Content -LiteralPath $log -Value 'Started.' -Encoding utf8",
+    "$say = { param($what) Add-Content -LiteralPath $log -Value $what -Encoding utf8 }",
+    'try {',
+    `  Wait-Process -Id ${String(orders.pid)} -Timeout ${String(SECONDS_TO_WAIT_FOR_THE_PROGRAM)} -ErrorAction Stop`,
+    "  & $say 'The program has closed.'",
+    '} catch {',
+    "  & $say 'The program did not close in time; going ahead anyway.'",
+    '}',
+    // Even once the process is gone, Windows can hold its files for a moment longer.
+    `Start-Sleep -Milliseconds ${String(SETTLING_MILLISECONDS)}`,
+    'try {',
+    `  Copy-Item -LiteralPath (Join-Path ${asLiteral(orders.opened)} '*') -Destination ${asLiteral(orders.programFolder)} -Recurse -Force -ErrorAction Stop`,
+    "  & $say 'Put in place.'",
+    '} catch {',
+    '  & $say ("The update could not be put in place: " + $_.Exception.Message)',
+    '}',
+    `Start-Process -FilePath ${asLiteral(orders.exe)}`,
+  ].join('\n');
+}
 
-const log = ${said(orders.log)};
-const say = (what) => {
-  try {
-    appendFileSync(log, what + '\\n', 'utf8');
-  } catch {
-    // A helper that cannot write its log still has an update to put in place.
-  }
-};
-writeFileSync(log, 'Started.\\n', 'utf8');
-
-const gone = (pid) => {
-  try {
-    process.kill(pid, 0);
-    return false;
-  } catch {
-    return true;
-  }
-};
-
-const waitFor = async (pid) => {
-  const until = Date.now() + ${String(SECONDS_TO_WAIT_FOR_THE_PROGRAM)} * 1000;
-  while (Date.now() < until) {
-    if (gone(pid)) return true;
-    await new Promise((settle) => setTimeout(settle, 200));
-  }
-  return false;
-};
-
-void (async () => {
-  if (await waitFor(${String(orders.pid)})) say('The program has closed.');
-  else say('The program did not close in time; the update is not being put in place.');
-  // Even once the process is gone, Windows can hold its files for a moment longer.
-  await new Promise((settle) => setTimeout(settle, ${String(SETTLING_MILLISECONDS)}));
-  try {
-    cpSync(${said(orders.opened)}, ${said(orders.programFolder)}, { recursive: true, force: true });
-    say('Put in place.');
-  } catch (cause) {
-    say('The update could not be put in place: ' + (cause && cause.message ? cause.message : String(cause)));
-  }
-  spawn(${said(orders.exe)}, [], { detached: true, stdio: 'ignore' }).unref();
-})();
-`;
+/** A PowerShell command as PowerShell takes it encoded: UTF-16, little-endian, in base64. */
+export function asEncodedCommand(script: string): string {
+  return Buffer.from(script, 'utf16le').toString('base64');
 }
 
 /** Waits for the helper to say it has started. */
@@ -216,7 +202,7 @@ const SETTLING_MILLISECONDS = 500;
 export async function handOverToTheHelper(
   here: UpdateSurroundings,
   unzip: (packagePath: string, into: string) => void,
-  setGoing: (scriptPath: string) => void,
+  setGoing: (script: string) => void,
   exe: string,
 ): Promise<UpdateStanding> {
   const waiting = updateWaiting(here.dataFolder);
@@ -227,15 +213,9 @@ export async function handOverToTheHelper(
     rmSync(opened, { recursive: true, force: true });
     mkdirSync(opened, { recursive: true });
     unzip(waiting.package, opened);
-    const scriptPath = join(folder, 'put-in-place.ps1');
-    writeFileSync(
-      scriptPath,
-      helperScript({ pid: process.pid, opened, programFolder: here.programFolder, exe, log: join(folder, HELPER_LOG) }),
-      'utf8',
-    );
     const log = join(folder, HELPER_LOG);
     rmSync(log, { force: true });
-    setGoing(scriptPath);
+    setGoing(helperScript({ pid: process.pid, opened, programFolder: here.programFolder, exe, log }));
     // The helper says it has started before this program agrees to quit for it. Quitting for a helper that never
     // ran leaves the author with a closed program, an update that did not happen, and nothing said about either —
     // which is what happened (the designer, 2026-Sep-14).
@@ -300,17 +280,15 @@ export function updateSurroundings(): UpdateSurroundings {
 }
 
 /**
- * Sets the helper going, detached and outliving this program — which is the point of it. It is run by the program's
- * own executable as a plain Node program, so nothing stands between it and running: no shell, no script host, no
- * execution policy, no signature.
+ * Sets the helper going, detached and outliving this program — which is the point of it. It is handed to PowerShell
+ * as a command rather than as a file, so there is no script for an execution policy to refuse.
  */
-export function setTheHelperGoing(scriptPath: string): void {
-  const helper = spawn(process.execPath, [scriptPath], {
-    env: { ...process.env, ELECTRON_RUN_AS_NODE: '1' },
-    detached: true,
-    stdio: 'ignore',
-    windowsHide: true,
-  });
+export function setTheHelperGoing(script: string): void {
+  const helper = spawn(
+    'powershell',
+    ['-NoProfile', '-NonInteractive', '-WindowStyle', 'Hidden', '-EncodedCommand', asEncodedCommand(script)],
+    { detached: true, stdio: 'ignore', windowsHide: true },
+  );
   helper.unref();
 }
 
