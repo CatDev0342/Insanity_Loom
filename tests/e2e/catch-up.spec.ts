@@ -1,7 +1,9 @@
 // Catching a whisper up with its conversation: what was said while Insanity_Loom was not open is brought in when it
 // opens again, and nothing already in the whisper is written twice.
 import { expect, test, type ElectronApplication, type Page } from '@playwright/test';
-import { launch, prepareData } from './helpers';
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
+import { ALCOVE, launch, prepareData } from './helpers';
 
 let application: ElectronApplication | undefined;
 
@@ -51,4 +53,28 @@ test('brings in what was said while the whisper was not open, exactly once', asy
     );
     expect(count, text).toBe(1);
   }
+});
+
+test('a whisper holding writing is never emptied for a conversation it does not record', async () => {
+  const page = await open(1, false);
+  const whisper = page.locator('.whisper-editor');
+  await whisper.click();
+  await page.keyboard.press('Control+End');
+  await page.keyboard.type('Writing of my own, in a whisper of my own.');
+  const mine = (await page.locator('#whisper-name').textContent()) ?? '';
+
+  // Resuming another conversation while this whisper holds writing.
+  await page.keyboard.press('Alt+A');
+  await page.keyboard.press('c');
+  const resume = page.getByRole('dialog', { name: 'Resume a conversation' });
+  await expect(resume).toBeVisible();
+  await resume.getByRole('button', { name: /An earlier conversation/ }).click();
+
+  // It is brought into a whisper of its own; the author's writing is not touched.
+  await expect(page.locator('#asks')).toContainText('whisper of its own');
+  await expect(page.locator('#whisper-name')).not.toHaveText(mine);
+  await expect(whisper).not.toContainText('Writing of my own');
+
+  // And what they wrote is still there, in the whisper they were in.
+  expect(readFileSync(join(ALCOVE, mine), 'utf8')).toContain('Writing of my own, in a whisper of my own.');
 });

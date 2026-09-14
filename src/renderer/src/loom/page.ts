@@ -121,8 +121,15 @@ export class Loom {
    * brought in (catch-up.ts).
    */
   private replay:
-    | { fill: true; author: string; reply: string; lastSection: string | null }
-    | { fill: false; author: string; reply: string; history: HistoryPiece[] }
+    /** The whisper is blank: the history is written straight into it. */
+    | { way: 'fill'; author: string; reply: string; lastSection: string | null }
+    /** The whisper records this conversation: only what it is missing is brought in (catch-up.ts). */
+    | { way: 'catchUp'; author: string; reply: string; history: HistoryPiece[] }
+    /**
+     * The whisper holds writing of its own, and this is another conversation. Nothing of the whisper is touched: the
+     * history is gathered and written into a whisper of its own when it has all arrived.
+     */
+    | { way: 'intoANewWhisper'; author: string; reply: string; history: HistoryPiece[]; id: string }
     | undefined;
 
   /**
@@ -729,16 +736,20 @@ export class Loom {
   private onConversation(id: string, replaying: boolean): void {
     const editor = this.requireEditor();
     if (replaying) {
-      const alreadyRecorded = id === this.conversationId && !editor.isBlank;
-      if (alreadyRecorded) {
+      if (id === this.conversationId && !editor.isBlank) {
         // The whisper records this conversation: gather the history and bring in only what the whisper is missing.
-        this.replay = { fill: false, author: '', reply: '', history: [] };
-      } else {
-        this.replay = { fill: true, author: '', reply: '', lastSection: null };
+        this.replay = { way: 'catchUp', author: '', reply: '', history: [] };
+      } else if (editor.isBlank) {
+        // Nothing to lose: the history is written straight into the whisper.
+        this.replay = { way: 'fill', author: '', reply: '', lastSection: null };
         this.abandonWriting('stopped');
         this.waiting.length = 0;
-        editor.clear();
         this.title = 'Resumed conversation';
+      } else {
+        // The whisper holds writing of its own and this is another conversation. **It is not ours to empty.** The
+        // history is gathered and given a whisper of its own; what the author wrote stays exactly where it is.
+        this.replay = { way: 'intoANewWhisper', author: '', reply: '', history: [], id };
+        return;
       }
     }
     this.conversationId = id;
@@ -752,7 +763,7 @@ export class Loom {
     const replay = this.replay;
     if (replay === undefined) return;
     const editor = this.requireEditor();
-    if (replay.fill) {
+    if (replay.way === 'fill') {
       if (replay.author !== '') {
         // Only what the author themselves wrote goes into the whisper; the machinery's own words are left out.
         const written = theAuthorsOwn(replay.author);
@@ -783,7 +794,11 @@ export class Loom {
   private finishReplay(): void {
     const replay = this.replay;
     this.replay = undefined;
-    if (replay === undefined || replay.fill) return;
+    if (replay === undefined || replay.way === 'fill') return;
+    if (replay.way === 'intoANewWhisper') {
+      void this.fillANewWhisper(replay.id, replay.history);
+      return;
+    }
 
     const editor = this.requireEditor();
     const catchUp = catchUpWith(editor.record, replay.history);
@@ -797,6 +812,32 @@ export class Loom {
     }
     const said = describeCatchUp(catchUp);
     if (said !== '') this.showNotice(said);
+  }
+
+  /**
+   * Gives a resumed conversation a whisper of its own, because the one open holds writing that is not its own.
+   *
+   * The whisper the author was in is saved and left exactly as it is; the new one is made beside it and filled with
+   * what the assistant remembers. The author is told which whisper they are now in, and how to go back.
+   */
+  private async fillANewWhisper(id: string, history: readonly HistoryPiece[]): Promise<void> {
+    const leaving = this.whisperName;
+    try {
+      await this.newWhisper();
+      this.conversationId = id;
+      this.title = 'Resumed conversation';
+      const editor = this.requireEditor();
+      let lastSection: string | null = null;
+      for (const piece of history) {
+        if (piece.kind === 'author') lastSection = editor.appendAuthorSection(piece.markdown);
+        else editor.appendReply(piece.markdown, lastSection);
+      }
+      this.showTitle();
+      this.saveNow();
+      this.showNotice(`That conversation was brought into a whisper of its own. "${leaving}" is untouched, and File ▸ Open Whisper goes back to it.`);
+    } catch (problem) {
+      this.showProblem(problem instanceof Error ? problem.message : String(problem));
+    }
   }
 
   /** The conversation's own title, which also names its whisper's file (keeping the date it began). */
