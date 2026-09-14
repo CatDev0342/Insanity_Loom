@@ -45,3 +45,39 @@ test('nothing the program has put away is on the page when it starts', async () 
     await application.close();
   }
 });
+
+test('the running program keeps Chromium to itself and grants the page nothing', async () => {
+  prepareData('fake assistant');
+  const { application, page } = await launch();
+  try {
+    // The switches that stop a browser talking to its maker are given before Chromium starts.
+    const switches = await application.evaluate(({ app }) => ({
+      backgroundNetworking: app.commandLine.hasSwitch('disable-background-networking'),
+      sync: app.commandLine.hasSwitch('disable-sync'),
+      metrics: app.commandLine.hasSwitch('metrics-recording-only'),
+      breakpad: app.commandLine.hasSwitch('disable-breakpad'),
+    }));
+    expect(switches).toEqual({ backgroundNetworking: true, sync: true, metrics: true, breakpad: true });
+
+    // No browser permission is ever granted, whatever asks.
+    const asked = await page.evaluate(async () => {
+      try {
+        const answer = await navigator.permissions.query({ name: 'geolocation' as PermissionName });
+        return answer.state;
+      } catch {
+        return 'refused';
+      }
+    });
+    expect(asked).not.toBe('granted');
+
+    // The page is sandboxed and cannot reach Node.js or Electron.
+    const reach = await page.evaluate(() => ({
+      node: typeof (globalThis as { require?: unknown }).require,
+      process: typeof (globalThis as { process?: unknown }).process,
+      electron: typeof (globalThis as { electron?: unknown }).electron,
+    }));
+    expect(reach).toEqual({ node: 'undefined', process: 'undefined', electron: 'undefined' });
+  } finally {
+    await application.close();
+  }
+});

@@ -47,6 +47,11 @@ jobs:
       - name: Licenses
         run: npm run licenses
 
+      # What we ship is only as sound as what it is built from: every run asks whether anything in it is known to be
+      # vulnerable. High or worse stops the build.
+      - name: Known vulnerabilities
+        run: npm run audit
+
       - name: Build
         run: npm run build
 

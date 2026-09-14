@@ -8,6 +8,7 @@ import { startEditingServices } from './editing';
 import { Journal } from './journal';
 import { PreferenceStore } from './preference-store';
 import { dataFoldersIn, findProgramFolder, prepareDataFolders, type DataFolders } from './portable';
+import { keepChromiumToItself } from './privacy';
 import { PAGE_PREFERENCES, restrictEveryPage } from './security';
 
 // The window's opening size, in screen points, and the smallest it may be made. The minimum keeps the page usable,
@@ -73,6 +74,9 @@ function openMainWindow(): void {
 }
 
 function start(): void {
+  // Before anything else: Chromium is told to keep itself to itself. Its switches are read only as it starts.
+  keepChromiumToItself(app);
+
   let folders: DataFolders;
   try {
     folders = keepEverythingBesideTheProgram();

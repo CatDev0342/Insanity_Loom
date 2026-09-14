@@ -24,6 +24,7 @@
     "test": "vitest run",
     "test:e2e": "playwright test",
     "licenses": "node scripts/check-licenses.mjs",
+    "audit": "npm audit --audit-level=high",
     "dist": "npm run licenses && npm run build && electron-builder --publish never",
     "check": "npm run typecheck && npm run lint && npm run test && npm run licenses"
   },
