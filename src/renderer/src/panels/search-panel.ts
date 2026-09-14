@@ -81,8 +81,8 @@ export class SearchPanel {
       return;
     }
     const found = await this.search(looked);
-    const whispers = found.length === 1 ? 'whisper' : 'whispers';
-    this.show(found, found.length === 0 ? `No whisper holds "${looked}".` : `${found.length} ${whispers} hold "${looked}".`);
+    const many = found.length === 1 ? "1 whisper holds" : `${found.length} whispers hold`;
+    this.show(found, found.length === 0 ? `No whisper holds "${looked}".` : `${many} "${looked}".`);
     if (found.length > 0) this.found.focus();
   }
 
