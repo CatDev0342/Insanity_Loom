@@ -7,7 +7,16 @@ import { Markdown } from '@tiptap/markdown';
 import { DOMParser as HtmlParser, type NodeType, type Node as ProseMirrorNode } from '@tiptap/pm/model';
 import type { Transaction } from '@tiptap/pm/state';
 import StarterKit from '@tiptap/starter-kit';
-import { ASSISTANT_META, newIdentity, ProtectBusyReplies, Reply, SectionKeys, SectionRule, type ReplyState } from './extensions';
+import {
+  ASSISTANT_META,
+  FollowLinks,
+  newIdentity,
+  ProtectBusyReplies,
+  Reply,
+  SectionKeys,
+  SectionRule,
+  type ReplyState,
+} from './extensions';
 import { applyFormat, formatStanding, type FormatCommandId, type FormatStanding } from './formatting';
 import { WhisperPaste } from './paste';
 import type { WhisperRecord } from '../loom/catch-up';
@@ -24,6 +33,8 @@ export interface WhisperEditorOptions {
   readonly onSectionFinished: (sectionId: string, markdown: string) => void;
   /** Called after every change to the document, by the author or the assistant. */
   readonly onChange: () => void;
+  /** Called when the author Ctrl+clicks a link, with the address it carries. */
+  readonly onFollowLink: (address: string) => void;
 }
 
 export class WhisperEditor {
@@ -45,6 +56,7 @@ export class WhisperEditor {
         ProtectBusyReplies,
         SectionKeys.configure({ onSectionFinished: (sectionId) => this.sectionFinished(sectionId, options.onSectionFinished) }),
         WhisperPaste,
+        FollowLinks.configure({ onFollow: (address) => options.onFollowLink(address) }),
         Markdown,
       ],
       editorProps: {

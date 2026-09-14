@@ -76,3 +76,22 @@ describe('the alcove', () => {
     expect(Alcove.isWhisper('/alcove/notes.txt')).toBe(false);
   });
 });
+
+describe('links between whispers', () => {
+  it('finds a whisper in the alcove by the name a link carries, and nothing outside it', () => {
+    const held = alcove();
+    const path = held.create('A named conversation', '<whisper />', WHEN);
+    const name = basename(path);
+
+    expect(held.find(name)).toBe(path);
+    // A link carries the name as a browser writes it, with its spaces spelled out.
+    expect(held.find(encodeURIComponent(name))).toBe(path);
+    expect(held.list().map((whisper) => whisper.name)).toContain(name);
+
+    // Nothing that reaches out of the alcove, and nothing that is not a whisper.
+    expect(held.find('../secret.xhtml')).toBeUndefined();
+    expect(held.find('/etc/passwd')).toBeUndefined();
+    expect(held.find('notes.txt')).toBeUndefined();
+    expect(held.find('no such whisper.xhtml')).toBeUndefined();
+  });
+});

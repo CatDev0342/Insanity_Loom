@@ -18,6 +18,8 @@ import { DEFAULT_CONNECTION, type ConnectionSettings } from '../shared/connectio
 import { Assistant, HOST_LOG_FILE_NAME } from './assistant';
 import type { Journal } from './journal';
 import type { PreferenceStore } from './preference-store';
+import { LINK_CHANNELS } from '../shared/links';
+import { openAddress } from './links';
 import { WHISPER_CHANNELS } from '../shared/whispers';
 import { Whispers } from './whispers';
 import { loadSettings, readConnection, saveSettings, settingsWith } from './settings';
@@ -167,6 +169,11 @@ export function startServices(dataFolder: string, logsFolder: string, journal: J
     whispers.rename(whisperPath(path), text(title, 'whisper title', MAXIMUM_IDENTIFIER_LENGTH)),
   );
   ipcMain.handle(WHISPER_CHANNELS.showAlcove, () => whispers.showAlcove());
+  ipcMain.handle(WHISPER_CHANNELS.list, () => whispers.list());
+  ipcMain.handle(WHISPER_CHANNELS.openNamed, (_event, name: unknown) =>
+    whispers.openNamed(text(name, 'whisper name', MAXIMUM_PATH_LENGTH)),
+  );
+  ipcMain.handle(LINK_CHANNELS.open, (_event, address: unknown) => openAddress(text(address, 'address', MAXIMUM_ADDRESS_LENGTH)));
 
   return assistant;
 }

@@ -82,3 +82,32 @@ test('a Format key does nothing in a dialog, where there is nothing to shape', a
   await page.keyboard.press('Escape');
   await expect(page.locator('.whisper-editor strong')).toHaveCount(0);
 });
+
+test('a link to another whisper opens it, and a web link is left to the browser', async () => {
+  const whisper = page.locator('.whisper-editor');
+  await whisper.click();
+  await page.keyboard.type('the first whisper');
+  const first = await page.locator('#whisper-name').textContent();
+
+  // A second whisper, with a link back to the first chosen from the alcove.
+  await page.keyboard.press('Control+n');
+  await expect(page.locator('#whisper-name')).not.toHaveText(first ?? '');
+  await whisper.click();
+  await page.keyboard.type('back to where I was');
+  await page.keyboard.press('Control+a');
+  await page.keyboard.press('Control+k');
+
+  const dialog = page.getByRole('dialog', { name: 'Link' });
+  await expect(dialog).toBeVisible();
+  await dialog.getByLabel('Or a whisper:').selectOption({ label: (first ?? '').replace(/\.xhtml$/, '') });
+  await dialog.getByRole('button', { name: 'OK' }).click();
+  await expect(dialog).toBeHidden();
+
+  // Ctrl+click follows it; a plain click would only put the caret in the writing.
+  const link = whisper.locator('a');
+  await link.click();
+  await expect(page.locator('#whisper-name')).not.toHaveText(first ?? '');
+  await link.click({ modifiers: ['Control'] });
+  await expect(page.locator('#whisper-name')).toHaveText(first ?? '');
+  await expect(whisper).toContainText('the first whisper');
+});

@@ -36,6 +36,7 @@ const loom = new Loom(
   bridge.assistant,
   bridge.connection,
   bridge.whispers,
+  bridge.links,
   bridge.journal,
 );
 
@@ -50,7 +51,7 @@ async function runFormat(command: FormatCommandId): Promise<void> {
     loom.runFormatCommand(command);
     return;
   }
-  const chosen = await link.show(loom.linkAddress);
+  const chosen = await link.show(loom.linkAddress, await bridge.whispers.list());
   if (chosen.kind === 'set') loom.setLink(chosen.address);
   else if (chosen.kind === 'remove') loom.runFormatCommand('format.removeLink');
   loom.focusWhisper();

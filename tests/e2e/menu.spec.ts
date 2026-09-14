@@ -30,12 +30,14 @@ test('Alt+E opens Edit; arrows move; Esc steps back, then leaves', async () => {
   const edit = page.getByRole('menuitem', { name: 'Edit' });
   await expect(edit).toHaveAttribute('aria-expanded', 'true');
 
+  // Right moves to the next menu along, which is Format.
   await page.keyboard.press('ArrowRight');
-  await expect(page.getByRole('menuitem', { name: 'View' })).toHaveAttribute('aria-expanded', 'true');
+  const format = page.getByRole('menuitem', { name: 'Format' });
+  await expect(format).toHaveAttribute('aria-expanded', 'true');
 
   await page.keyboard.press('Escape');
-  await expect(page.getByRole('menuitem', { name: 'View' })).toHaveAttribute('aria-expanded', 'false');
-  await expect(page.getByRole('menuitem', { name: 'View' })).toBeFocused();
+  await expect(format).toHaveAttribute('aria-expanded', 'false');
+  await expect(format).toBeFocused();
 
   await page.keyboard.press('Escape');
   await expect(page.locator('#menubar')).not.toHaveClass(/is-in-use/);

@@ -22,6 +22,7 @@ function whisper(html: string): { whisper: WhisperEditor; sections: { sectionId:
     html,
     onSectionFinished: (sectionId, markdown) => sections.push({ sectionId, markdown }),
     onChange: () => undefined,
+    onFollowLink: () => undefined,
   });
   open.push(made);
   return { whisper: made, sections };

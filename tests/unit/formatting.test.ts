@@ -6,20 +6,25 @@ import { DOMParser as HtmlParser, Slice } from '@tiptap/pm/model';
 import { WhisperEditor } from '../../src/renderer/src/document/whisper-editor';
 import { pasteWithoutRecord } from '../../src/renderer/src/document/paste';
 import { readAddress } from '../../src/renderer/src/panels/link-panel';
+import { isWhisperAddress } from '../../src/shared/whispers';
 import { MenuBar } from '../../src/renderer/src/menu/menubar';
 import { MENUS } from '../../src/renderer/src/menu/model';
 import type { AnyCommandId } from '../../src/renderer/src/commands';
 
 const open: WhisperEditor[] = [];
+/** The addresses the whisper has been asked to follow, in order.  */
+let followed: string[] = [];
 
 function whisper(html: string): WhisperEditor {
   const element = document.createElement('div');
   document.body.append(element);
+  followed = [];
   const made = new WhisperEditor({
     element,
     html,
     onSectionFinished: () => undefined,
     onChange: () => undefined,
+    onFollowLink: (address) => followed.push(address),
   });
   open.push(made);
   return made;
@@ -108,6 +113,40 @@ describe('links', () => {
     expect(readAddress('mailto:someone@example.com')).toEqual({ address: 'mailto:someone@example.com' });
     expect(readAddress('   ')).toEqual({ problem: 'Give an address for the link.' });
     expect(readAddress('https://')).toHaveProperty('problem');
+  });
+
+  it("take a whisper's file name as a link to it, written as a browser reads addresses", () => {
+    expect(readAddress('2026-09-14 1532 A named conversation.xhtml')).toEqual({
+      address: '2026-09-14%201532%20A%20named%20conversation.xhtml',
+    });
+    expect(isWhisperAddress('2026-09-14 1532 A named conversation.xhtml')).toBe(true);
+    // Only a plain name in the alcove: nothing that reaches out of it, and nothing with a scheme of its own.
+    expect(isWhisperAddress('../elsewhere/secret.xhtml')).toBe(false);
+    expect(isWhisperAddress('https://example.com/page.xhtml')).toBe(false);
+    expect(isWhisperAddress('notes.txt')).toBe(false);
+  });
+});
+
+describe('following a link', () => {
+  /** Clicks in the whisper the way the editor sees it, with or without Ctrl held. */
+  function clicks(target: WhisperEditor, position: number, withCtrl: boolean): boolean {
+    const view = target.editor.view;
+    const event = new MouseEvent('click', { ctrlKey: withCtrl, bubbles: true, cancelable: true });
+    return view.someProp('handleClick', (handle) => handle(view, position, event)) === true;
+  }
+
+  it('is Ctrl+click; a plain click only puts the caret in the writing', () => {
+    const w = whisper('<p><a href="https://example.com/loom">the loom</a></p>');
+    expect(clicks(w, 3, false)).toBe(false);
+    expect(followed).toEqual([]);
+    expect(clicks(w, 3, true)).toBe(true);
+    expect(followed).toEqual(['https://example.com/loom']);
+  });
+
+  it('leaves Ctrl+click on ordinary writing alone', () => {
+    const w = whisper('<p>no link here</p>');
+    expect(clicks(w, 3, true)).toBe(false);
+    expect(followed).toEqual([]);
   });
 });
 

@@ -10,6 +10,20 @@ export interface OpenWhisper {
   readonly xhtml: string;
 }
 
+/** A whisper in the alcove, as the Link panel lists it. */
+export interface WhisperInAlcove {
+  readonly path: string;
+  /** Its file name, which is also the address a link to it carries. */
+  readonly name: string;
+  /** Its name as the author reads it: the file name without the suffix. */
+  readonly title: string;
+}
+
+/** Whether an address is a link to another whisper — a plain file name in the alcove, with no scheme of its own. */
+export function isWhisperAddress(address: string): boolean {
+  return /^[^/\\:?#]+\.xhtml$/i.test(address);
+}
+
 export interface WhispersBridge {
   /** The folder the author's whispers live in. */
   alcoveFolder(): Promise<string>;
@@ -21,6 +35,10 @@ export interface WhispersBridge {
   create(title: string, xhtml: string): Promise<OpenWhisper>;
   /** Saves the whisper open, at the path it was read from. */
   save(path: string, xhtml: string): Promise<void>;
+  /** Every whisper in the alcove, newest first. */
+  list(): Promise<readonly WhisperInAlcove[]>;
+  /** Opens the whisper a link points at, by its file name in the alcove. */
+  openNamed(name: string): Promise<OpenWhisper>;
   /** Asks the author for a whisper to open. Undefined when they choose none. */
   choose(): Promise<OpenWhisper | undefined>;
   /** Names the whisper's file after the conversation's title, keeping the date it began; returns where it now is. */
@@ -36,6 +54,8 @@ export const WHISPER_CHANNELS = {
   create: 'insanity-loom:whisper-create',
   save: 'insanity-loom:whisper-save',
   choose: 'insanity-loom:whisper-choose',
+  list: 'insanity-loom:whisper-list',
+  openNamed: 'insanity-loom:whisper-open-named',
   rename: 'insanity-loom:whisper-rename',
   showAlcove: 'insanity-loom:alcove-show',
 } as const;

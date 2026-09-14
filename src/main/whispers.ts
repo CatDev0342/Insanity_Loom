@@ -4,7 +4,7 @@
 import { BrowserWindow, dialog, shell } from 'electron';
 import { existsSync } from 'node:fs';
 import { basename, dirname, join } from 'node:path';
-import type { OpenWhisper } from '../shared/whispers';
+import type { OpenWhisper, WhisperInAlcove } from '../shared/whispers';
 import { Alcove, DEFAULT_ALCOVE_NAME } from './alcove';
 import type { Journal } from './journal';
 import type { PreferenceStore } from './preference-store';
@@ -36,6 +36,23 @@ export class Whispers {
     const path = this.alcove.create(title, xhtml);
     this.journal.whisperPath = path;
     return { path, name: basename(path), xhtml };
+  }
+
+  /** Every whisper in the alcove, for choosing one to link to. */
+  list(): readonly WhisperInAlcove[] {
+    return this.alcove.list().map(({ name, path }) => ({ name, path, title: Whispers.titleFromName(name) }));
+  }
+
+  /** Opens the whisper a link points at, by its file name in the alcove. */
+  openNamed(name: string): OpenWhisper {
+    const path = this.alcove.find(name);
+    if (path === undefined) throw new Error(`The whisper "${decodeURIComponent(name)}" is not in your alcove.`);
+    return this.open(path);
+  }
+
+  /** A whisper's name as the author reads it: its file name without the suffix. */
+  private static titleFromName(name: string): string {
+    return name.replace(/\.xhtml$/i, '');
   }
 
   save(path: string, xhtml: string): void {

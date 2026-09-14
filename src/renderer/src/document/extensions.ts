@@ -150,6 +150,44 @@ export const ProtectBusyReplies = Extension.create({
   },
 });
 
+export interface FollowLinksOptions {
+  /** Called when the author asks to follow a link, with the address it carries. */
+  onFollow: (address: string) => void;
+}
+
+/**
+ * Following a link from inside the whisper. A plain click puts the caret in the writing, as it must in an editor, so
+ * following is Ctrl+click — the same as in a word processor. Where the link goes is the loom's business
+ * (src/renderer/src/loom/page.ts): another whisper opens in Insanity_Loom, and anything else is handed to the
+ * system's browser.
+ */
+export const FollowLinks = Extension.create<FollowLinksOptions>({
+  name: 'followLinks',
+
+  addOptions() {
+    return { onFollow: () => undefined };
+  },
+
+  addProseMirrorPlugins() {
+    const { onFollow } = this.options;
+    return [
+      new Plugin({
+        key: new PluginKey('followLinks'),
+        props: {
+          handleClick: (view, position, event) => {
+            if (!event.ctrlKey && !event.metaKey) return false;
+            const link = view.state.doc.resolve(position).marks().find((mark) => mark.type.name === 'link');
+            const address = link?.attrs['href'];
+            if (typeof address !== 'string' || address === '') return false;
+            onFollow(address);
+            return true;
+          },
+        },
+      }),
+    ];
+  },
+});
+
 export interface SectionKeysOptions {
   /** Called when the author finishes a section, with the identity of the rule that finished it. */
   onSectionFinished: (sectionId: string) => void;

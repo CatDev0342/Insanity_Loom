@@ -4,7 +4,7 @@
 // The alcove sits beside the program by default, so an Insanity_Loom carried on a USB stick carries its whispers with
 // it; the author may put it anywhere (Edit > Preferences). Whispers are written crash-safely, as everything is.
 
-import { existsSync, mkdirSync, readFileSync, renameSync } from 'node:fs';
+import { existsSync, mkdirSync, readdirSync, readFileSync, renameSync } from 'node:fs';
 import { basename, join } from 'node:path';
 import { writeFileSafely } from './files';
 
@@ -74,6 +74,25 @@ export class Alcove {
     const path = join(this.folder, this.freeName(title, when));
     writeFileSafely(path, xhtml);
     return path;
+  }
+
+  /** Every whisper in the alcove, newest first — which is also newest by name, since a name begins with its date. */
+  list(): readonly { readonly name: string; readonly path: string }[] {
+    return readdirSync(this.folder)
+      .filter((name) => Alcove.isWhisper(name))
+      .sort((left, right) => right.localeCompare(left))
+      .map((name) => ({ name, path: join(this.folder, name) }));
+  }
+
+  /**
+   * The whisper of this name in the alcove — how a link from one whisper to another is followed. The name must be a
+   * plain file name in the alcove itself: a link may not reach out of it into the rest of the computer.
+   */
+  find(name: string): string | undefined {
+    const decoded = decodeURIComponent(name);
+    if (decoded !== basename(decoded) || !Alcove.isWhisper(decoded)) return undefined;
+    const path = join(this.folder, decoded);
+    return existsSync(path) ? path : undefined;
   }
 
   read(path: string): string {

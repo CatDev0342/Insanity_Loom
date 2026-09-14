@@ -14,7 +14,8 @@ import type {
   JournalBridge,
   SessionMode,
 } from '../../../shared/assistant';
-import type { WhispersBridge } from '../../../shared/whispers';
+import type { LinksBridge } from '../../../shared/links';
+import { isWhisperAddress, type OpenWhisper, type WhispersBridge } from '../../../shared/whispers';
 import type { AssistantCommandId } from '../commands';
 import type { ReplyState } from '../document/extensions';
 import type { FormatCommandId, FormatStanding } from '../document/formatting';
@@ -98,6 +99,7 @@ export class Loom {
     private readonly assistant: AssistantBridge,
     private readonly connection: ConnectionBridge,
     private readonly whispers: WhispersBridge,
+    private readonly links: LinksBridge,
     private readonly journal: JournalBridge,
   ) {
     // Saving new connection settings reconnects with them at once.
@@ -185,6 +187,7 @@ export class Loom {
       html,
       onSectionFinished: (sectionId, markdown) => this.sectionFinished(sectionId, markdown),
       onChange: () => this.saveNow(),
+      onFollowLink: (address) => void this.follow(address),
     });
     if (open === undefined) await this.makeWhisperFile();
     this.showTitle();
@@ -545,7 +548,28 @@ export class Loom {
   private async openAnotherWhisper(): Promise<void> {
     const chosen = await this.whispers.choose();
     if (chosen === undefined) return;
-    const whisper = fromXhtml(chosen.xhtml);
+    await this.showWhisper(chosen);
+  }
+
+  /**
+   * Follows a link the author Ctrl+clicked. A link to another whisper — a file name in the alcove — opens it here;
+   * anything else is the wider world's, and goes to the system's own browser (src/main/links.ts decides what may).
+   */
+  private async follow(address: string): Promise<void> {
+    try {
+      if (isWhisperAddress(decodeURIComponent(address))) {
+        await this.showWhisper(await this.whispers.openNamed(address));
+        return;
+      }
+      await this.links.open(address);
+    } catch (problem) {
+      this.showProblem(problem instanceof Error ? problem.message : String(problem));
+    }
+  }
+
+  /** Puts a whisper from the alcove in the window, and takes up the conversation it records. */
+  private async showWhisper(opened: OpenWhisper): Promise<void> {
+    const whisper = fromXhtml(opened.xhtml);
     const editor = this.requireEditor();
     this.abandonWriting('stopped');
     this.waiting.length = 0;
@@ -553,8 +577,8 @@ export class Loom {
     // what it holds.
     this.whisperPath = '';
     editor.replaceAll(whisper.bodyHtml);
-    this.whisperPath = chosen.path;
-    this.whisperName = chosen.name;
+    this.whisperPath = opened.path;
+    this.whisperName = opened.name;
     this.conversationId = whisper.conversationId;
     this.title = whisper.title === '' ? UNTITLED : whisper.title;
     this.showTitle();

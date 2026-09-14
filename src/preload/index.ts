@@ -7,6 +7,7 @@ import { ASSISTANT_CHANNELS, CONNECTION_CHANNELS, JOURNAL_CHANNELS, type Assista
 import type { InsanityLoomBridge } from '../shared/bridge';
 import { RUN_COMMAND_CHANNEL } from '../shared/commands';
 import { EDITING_CHANNELS, type ContextDetails } from '../shared/editing';
+import { LINK_CHANNELS } from '../shared/links';
 import { WHISPER_CHANNELS } from '../shared/whispers';
 
 const bridge: InsanityLoomBridge = {
@@ -75,8 +76,14 @@ const bridge: InsanityLoomBridge = {
     create: (title, xhtml) => ipcRenderer.invoke(WHISPER_CHANNELS.create, title, xhtml),
     save: (path, xhtml) => ipcRenderer.invoke(WHISPER_CHANNELS.save, path, xhtml),
     choose: () => ipcRenderer.invoke(WHISPER_CHANNELS.choose),
+    list: () => ipcRenderer.invoke(WHISPER_CHANNELS.list),
+    openNamed: (name) => ipcRenderer.invoke(WHISPER_CHANNELS.openNamed, name),
     rename: (path, title) => ipcRenderer.invoke(WHISPER_CHANNELS.rename, path, title),
     showAlcove: () => ipcRenderer.invoke(WHISPER_CHANNELS.showAlcove),
+  },
+
+  links: {
+    open: (address) => ipcRenderer.invoke(LINK_CHANNELS.open, address),
   },
 
   journal: {
