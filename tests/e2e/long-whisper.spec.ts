@@ -125,14 +125,16 @@ test('finding something far down a long whisper takes the author to it', async (
   const scroll = page.locator('.whisper-scroll');
   await page.locator('.whisper-editor').click();
   await page.keyboard.press('Control+Home');
-  expect(await scroll.evaluate((element) => element.scrollTop)).toBe(0);
+  // At the top of the whisper: the editor keeps a little room above the caret, so this is not exactly nothing.
+  const atTheTop = await scroll.evaluate((element) => element.scrollTop);
 
   await page.keyboard.press('Control+f');
   await page.keyboard.type('Section 399');
   await expect(page.locator('#find-said')).toHaveText('1 of 1');
 
-  // The whisper moved to what was found, and what was found is on the screen.
-  expect(await scroll.evaluate((element) => element.scrollTop)).toBeGreaterThan(0);
+  // The whisper moved a long way to what was found, and what was found is on the screen.
+  const atTheWord = await scroll.evaluate((element) => element.scrollTop);
+  expect(atTheWord).toBeGreaterThan(atTheTop + 1000);
   const inView = await page.evaluate(() => {
     const found = document.querySelector('.whisper-editor .is-found-now');
     const scroller = document.querySelector('.whisper-scroll');
