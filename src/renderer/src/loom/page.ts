@@ -23,6 +23,7 @@ import { WhisperEditor } from '../document/whisper-editor';
 import { fromXhtml, toXhtml } from '../document/xhtml';
 import { ConnectionPanel } from '../panels/connection-panel';
 import { catchUpWith, describeCatchUp, type HistoryPiece } from './catch-up';
+import { Saving } from './saving';
 import { chooseConversation } from './resume';
 
 export interface LoomElements {
@@ -65,8 +66,9 @@ export class Loom {
   private state: ConnectionState = 'disconnected';
   private conversationId = '';
   private title = UNTITLED;
-  /** Where the whisper open now is kept, and what its file is called. */
-  private whisperPath = '';
+  /** When the whisper is written to its file (saving.ts); it holds the file the whisper is kept in. */
+  private readonly saving: Saving;
+  /** What the whisper's file is called. */
   private whisperName = '';
 
   /** The reply being written, and its Markdown so far. */
@@ -83,10 +85,6 @@ export class Loom {
     | { fill: false; author: string; reply: string; history: HistoryPiece[] }
     | undefined;
 
-  /** The save being written, while one is; changes made meanwhile set `unsaved` and are written as soon as it is done. */
-  private saving: Promise<void> | undefined;
-  private unsaved = false;
-
   /**
    * True while the whisper is where the author is working. The menu bar and the dialogs take focus to carry out what
    * they are asked, so neither counts as leaving the whisper: Format ▸ Bold acts on the writing the author left, and
@@ -102,6 +100,12 @@ export class Loom {
     private readonly links: LinksBridge,
     private readonly journal: JournalBridge,
   ) {
+    this.saving = new Saving({
+      // Before the whisper is open there is nothing to write; the first save comes with the whisper itself.
+      write: async (path) => (this.editor === undefined ? undefined : this.whispers.save(path, this.asXhtml())),
+      onProblem: (message) => this.showProblem(message),
+    });
+
     // Saving new connection settings reconnects with them at once.
     this.connectionPanel = new ConnectionPanel(elements.connectionDialog, connection, () => void this.run('assistant.reconnect'));
     elements.connectionSettings.addEventListener('click', () => void this.run('assistant.connectionSettings'));
@@ -165,7 +169,7 @@ export class Loom {
         html = whisper.bodyHtml;
         this.conversationId = whisper.conversationId;
         this.title = whisper.title === '' ? UNTITLED : whisper.title;
-        this.whisperPath = open.path;
+        this.saving.useFile(open.path);
         this.whisperName = open.name;
       } catch (problem) {
         this.showProblem(
@@ -196,7 +200,7 @@ export class Loom {
   /** Makes the file this whisper lives in, in the alcove. */
   private async makeWhisperFile(): Promise<void> {
     const made = await this.whispers.create(this.title, this.asXhtml());
-    this.whisperPath = made.path;
+    this.saving.useFile(made.path);
     this.whisperName = made.name;
   }
 
@@ -216,39 +220,9 @@ export class Loom {
 
   // ——— Saving ———
 
-  /**
-   * Writes the whisper to its file at once, on every change. Changes that arrive while a save is being written — fast
-   * typing, a streaming reply — are gathered into the next save, so saving never falls behind and the file on disk is
-   * never more than one save old.
-   */
+  /** Says the whisper has changed; when it reaches its file is saving.ts's business. */
   private saveNow(): void {
-    this.unsaved = true;
-    if (this.saving !== undefined) return;
-    this.saving = (async () => {
-      try {
-        while (this.unsaved) {
-          this.unsaved = false;
-          if (this.editor === undefined || this.whisperPath === '') return;
-          await this.whispers.save(this.whisperPath, this.asXhtml());
-        }
-      } catch (problem) {
-        this.showProblem(`The whisper could not be saved: ${problem instanceof Error ? problem.message : String(problem)}`);
-      } finally {
-        this.saving = undefined;
-      }
-    })();
-  }
-
-  /**
-   * Lets a save that is already being written finish, having first taken the whisper's file away so that no further
-   * save begins. Anything that moves the file or swaps the document waits for this: a save that lands after the file
-   * has moved would write the whisper back at the name it moved away from, leaving two of it.
-   */
-  private async stopSaving(): Promise<string> {
-    const path = this.whisperPath;
-    this.whisperPath = '';
-    await this.saving;
-    return path;
+    this.saving.changed();
   }
 
   // ——— Commands ———
@@ -556,7 +530,7 @@ export class Loom {
     this.waiting.length = 0;
     // Nothing is saved until the new whisper has a file of its own: emptying the document while the whisper being
     // left is still the one open would write the emptiness over it.
-    await this.stopSaving();
+    await this.saving.stop();
     editor.clear();
     this.title = UNTITLED;
     this.conversationId = '';
@@ -607,9 +581,9 @@ export class Loom {
     this.waiting.length = 0;
     // As with a new whisper: nothing is saved while the document is being swapped, so the whisper being left keeps
     // what it holds.
-    await this.stopSaving();
+    await this.saving.stop();
     editor.replaceAll(whisper.bodyHtml);
-    this.whisperPath = opened.path;
+    this.saving.useFile(opened.path);
     this.whisperName = opened.name;
     this.conversationId = whisper.conversationId;
     this.title = whisper.title === '' ? UNTITLED : whisper.title;
@@ -622,19 +596,19 @@ export class Loom {
     if (title === this.title) return;
     this.title = title;
     this.saveNow();
-    if (this.whisperPath !== '') {
+    if (this.saving.file !== '') {
       const left = this.whisperName;
-      const path = await this.stopSaving();
+      const path = await this.saving.stop();
       try {
         const moved = await this.whispers.rename(path, title);
-        this.whisperPath = moved.path;
+        this.saving.useFile(moved.path);
         this.whisperName = moved.name;
         // Whispers that pointed here have been put right on disk; this one's own links are put right in the window,
         // where the whisper is held, or the next save would write the old name back over them.
         this.editor?.renameLinks(left, moved.name);
       } catch (problem) {
         // The whisper stays where it was, under the name it had, and goes on being saved there.
-        this.whisperPath = path;
+        this.saving.useFile(path);
         this.showProblem(`The whisper's file could not be named after the conversation: ${problem instanceof Error ? problem.message : String(problem)}`);
       }
       this.saveNow();
