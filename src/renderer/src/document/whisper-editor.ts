@@ -8,6 +8,7 @@ import type { NodeType, Node as ProseMirrorNode } from '@tiptap/pm/model';
 import type { Transaction } from '@tiptap/pm/state';
 import StarterKit from '@tiptap/starter-kit';
 import { ASSISTANT_META, newIdentity, ProtectBusyReplies, Reply, SectionKeys, SectionRule, type ReplyState } from './extensions';
+import type { WhisperRecord } from '../loom/catch-up';
 import { afterRule, findReply, isBlank, sectionContent } from './sections';
 
 // How many of the author's changes Ctrl+Z can take back.
@@ -155,6 +156,19 @@ export class WhisperEditor {
     this.asAssistant((transaction) => {
       transaction.replaceWith(0, transaction.doc.content.size, this.nodeType('paragraph').create());
     });
+  }
+
+  /** What the whisper already holds of its conversation: finished sections, and the last reply's state. */
+  get record(): WhisperRecord {
+    let sections = 0;
+    let lastReply: WhisperRecord['lastReply'];
+    this.doc.forEach((node) => {
+      if (node.type.name === 'horizontalRule' && typeof node.attrs['sectionId'] === 'string') sections += 1;
+      if (node.type.name === 'reply') {
+        lastReply = { replyId: node.attrs['replyId'] as string, finished: node.attrs['state'] === 'finished' };
+      }
+    });
+    return lastReply === undefined ? { sections } : { sections, lastReply };
   }
 
   get isBlank(): boolean {

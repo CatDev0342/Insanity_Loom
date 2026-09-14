@@ -611,3 +611,9 @@ button:disabled {
 .panel-control input[readonly] {
   color: var(--ink-quiet);
 }
+
+/* A quiet word about something Insanity_Loom did by itself, such as catching a whisper up with its conversation. */
+.ask-notice {
+  border-color: var(--menu-edge);
+  color: var(--ink-quiet);
+}

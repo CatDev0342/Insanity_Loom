@@ -12,6 +12,7 @@ import type { ReplyState } from '../document/extensions';
 import { WhisperEditor } from '../document/whisper-editor';
 import { fromXhtml, toXhtml } from '../document/xhtml';
 import { ConnectionPanel } from '../panels/connection-panel';
+import { catchUpWith, describeCatchUp, type HistoryPiece } from './catch-up';
 import { chooseConversation } from './resume';
 
 export interface LoomElements {
@@ -56,8 +57,15 @@ export class Loom {
   private writing: { replyId: string; markdown: string } | undefined;
   private renderScheduled = false;
 
-  /** While a resumed conversation's history is replayed: `ignore` is true when the whisper already records it. */
-  private replay: { ignore: boolean; author: string; reply: string; lastSection: string | null } | undefined;
+  /**
+   * While a resumed conversation's history is replayed. `fill` writes it straight into a whisper that does not record
+   * it; otherwise the history is gathered and compared with what the whisper holds, so that only what is missing is
+   * brought in (catch-up.ts).
+   */
+  private replay:
+    | { fill: true; author: string; reply: string; lastSection: string | null }
+    | { fill: false; author: string; reply: string; history: HistoryPiece[] }
+    | undefined;
 
   /** True while a save is being written; changes made meanwhile set `unsaved`, and are written as soon as it is done. */
   private saving = false;
@@ -295,19 +303,18 @@ export class Loom {
         return;
       case 'replayFinished':
         this.flushReplay();
-        this.replay = undefined;
+        this.finishReplay();
         this.saveNow();
         this.sendNext();
         return;
       case 'authorText':
-        if (this.replay !== undefined && !this.replay.ignore) {
+        if (this.replay !== undefined) {
           if (this.replay.reply !== '') this.flushReplay();
           this.replay.author += event.text;
         }
         return;
       case 'replyText':
         if (this.replay !== undefined) {
-          if (this.replay.ignore) return;
           if (this.replay.author !== '') this.flushReplay();
           this.replay.reply += event.text;
           return;
@@ -353,8 +360,11 @@ export class Loom {
     const editor = this.requireEditor();
     if (replaying) {
       const alreadyRecorded = id === this.conversationId && !editor.isBlank;
-      this.replay = { ignore: alreadyRecorded, author: '', reply: '', lastSection: null };
-      if (!alreadyRecorded) {
+      if (alreadyRecorded) {
+        // The whisper records this conversation: gather the history and bring in only what the whisper is missing.
+        this.replay = { fill: false, author: '', reply: '', history: [] };
+      } else {
+        this.replay = { fill: true, author: '', reply: '', lastSection: null };
         this.abandonWriting('stopped');
         this.waiting.length = 0;
         editor.clear();
@@ -367,19 +377,53 @@ export class Loom {
     if (!replaying) this.sendNext();
   }
 
-  /** Writes whatever part of a replayed history has been gathered: an author's section, or a reply. */
+  /** Sets aside whatever part of a replayed history has been gathered: an author's section, or a reply. */
   private flushReplay(): void {
     const replay = this.replay;
-    if (replay === undefined || replay.ignore) return;
+    if (replay === undefined) return;
     const editor = this.requireEditor();
+    if (replay.fill) {
+      if (replay.author !== '') {
+        replay.lastSection = editor.appendAuthorSection(replay.author);
+        replay.author = '';
+      }
+      if (replay.reply !== '') {
+        editor.appendReply(replay.reply, replay.lastSection);
+        replay.reply = '';
+      }
+      return;
+    }
     if (replay.author !== '') {
-      replay.lastSection = editor.appendAuthorSection(replay.author);
+      replay.history.push({ kind: 'author', markdown: replay.author });
       replay.author = '';
     }
     if (replay.reply !== '') {
-      editor.appendReply(replay.reply, replay.lastSection);
+      replay.history.push({ kind: 'reply', markdown: replay.reply });
       replay.reply = '';
     }
+  }
+
+  /**
+   * The history has all arrived. A whisper that already records this conversation is caught up with whatever was
+   * said while it was not open — nothing it already holds is written twice — and the author is told what came in.
+   */
+  private finishReplay(): void {
+    const replay = this.replay;
+    this.replay = undefined;
+    if (replay === undefined || replay.fill) return;
+
+    const editor = this.requireEditor();
+    const catchUp = catchUpWith(editor.record, replay.history);
+    if (catchUp.fillLastReply !== undefined) {
+      editor.setReply(catchUp.fillLastReply.replyId, catchUp.fillLastReply.markdown, 'finished');
+    }
+    let lastSection: string | null = null;
+    for (const piece of catchUp.append) {
+      if (piece.kind === 'author') lastSection = editor.appendAuthorSection(piece.markdown);
+      else editor.appendReply(piece.markdown, lastSection);
+    }
+    const said = describeCatchUp(catchUp);
+    if (said !== '') this.showNotice(said);
   }
 
   // ——— Permission questions and problems, shown above the whisper ———
@@ -416,10 +460,19 @@ export class Loom {
     this.elements.asks.hidden = this.elements.asks.childElementCount === 0;
   }
 
+  /** A quiet word to the author about something Insanity_Loom did, dismissable, above the whisper. */
+  private showNotice(message: string): void {
+    this.showCard(message, 'ask ask-notice', 'status');
+  }
+
   private showProblem(message: string): void {
+    this.showCard(message, 'ask ask-problem', 'alert');
+  }
+
+  private showCard(message: string, className: string, role: string): void {
     const note = document.createElement('div');
-    note.className = 'ask ask-problem';
-    note.setAttribute('role', 'alert');
+    note.className = className;
+    note.setAttribute('role', role);
     const text = document.createElement('p');
     text.textContent = message;
     const dismiss = document.createElement('button');

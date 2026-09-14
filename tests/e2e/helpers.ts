@@ -27,13 +27,18 @@ export const FAKE_CONNECTION = {
  * Clears what earlier tests left in Data — settings and journal — and, unless this is to be a first start, saves
  * settings that reach the stand-in assistant.
  */
-export function prepareData(start: 'first start' | 'fake assistant' | 'fake assistant, signed out'): void {
+export function prepareData(
+  start: 'first start' | 'fake assistant' | 'fake assistant, signed out',
+  options: { readonly history?: number; readonly keepJournal?: boolean } = {},
+): void {
   mkdirSync(DATA, { recursive: true });
   rmSync(join(DATA, 'settings.json'), { force: true });
-  rmSync(join(DATA, 'Journal'), { recursive: true, force: true });
+  if (options.keepJournal !== true) rmSync(join(DATA, 'Journal'), { recursive: true, force: true });
   rmSync(FAKE_AUTH_FILE, { force: true });
   if (start === 'fake assistant') {
-    writeFileSync(join(DATA, 'settings.json'), JSON.stringify({ version: 2, connection: FAKE_CONNECTION }));
+    const history = options.history ?? 1;
+    const connection = { ...FAKE_CONNECTION, hostArguments: [FAKE_ASSISTANT, '--history', String(history)] };
+    writeFileSync(join(DATA, 'settings.json'), JSON.stringify({ version: 2, connection }));
   }
   if (start === 'fake assistant, signed out') {
     const connection = { ...FAKE_CONNECTION, hostArguments: [FAKE_ASSISTANT, '--auth-file', FAKE_AUTH_FILE] };

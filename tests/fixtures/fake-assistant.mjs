@@ -22,6 +22,9 @@ const argumentAfter = (flag) => {
   return index === -1 ? undefined : process.argv[index + 1];
 };
 const authFile = argumentAfter('--auth-file');
+// How many exchanges a resumed conversation replays: one by default. More of them stand for things said while
+// Insanity_Loom was not open, which it should catch up with.
+const historyExchanges = Number(argumentAfter('--history') ?? 1);
 const signedIn = () => authFile === undefined || (existsSync(authFile) && readFileSync(authFile, 'utf8') === SIGNED_IN);
 
 if (process.argv.includes('--login')) {
@@ -95,11 +98,15 @@ function startAgent() {
         }),
         loadSession: async ({ sessionId }) => {
           mustSignIn();
-          await client.sessionUpdate({
-            sessionId,
-            update: { sessionUpdate: 'user_message_chunk', content: { type: 'text', text: 'An earlier question' } },
-          });
-          await say(sessionId, 'An earlier answer');
+          for (let exchange = 1; exchange <= historyExchanges; exchange++) {
+            const question = exchange === 1 ? 'An earlier question' : `Question ${exchange}`;
+            const answer = exchange === 1 ? 'An earlier answer' : `Answer ${exchange}`;
+            await client.sessionUpdate({
+              sessionId,
+              update: { sessionUpdate: 'user_message_chunk', content: { type: 'text', text: question } },
+            });
+            await say(sessionId, answer);
+          }
           return {};
         },
         cancel: ({ sessionId }) => {
