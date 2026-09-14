@@ -78,7 +78,8 @@ test('a long whisper is written in, saved and searched without the author waitin
   // Finding something across the whole of it.
   await page.keyboard.press('Control+f');
   const startedFinding = Date.now();
-  await page.keyboard.type('number 399');
+  // The heading of the last section, which is written once in the whole whisper.
+  await page.keyboard.type('Section 399');
   await expect(page.locator('#find-said')).toHaveText('1 of 1', { timeout: FOUND_WITHIN_MS });
   const foundIn = Date.now() - startedFinding;
 
