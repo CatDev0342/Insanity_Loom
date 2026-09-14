@@ -31,6 +31,8 @@ import { Saving } from './saving';
 import { chooseConversation } from './resume';
 
 export interface LoomElements extends FindBarElements, ContextElements, ThoughtsElements, NavigationElements {
+  /** The word in the status bar saying that section isolation is on. */
+  readonly isolation: HTMLElement;
   readonly whisper: HTMLElement;
   /** What scrolls when the whisper is longer than the window. */
   readonly scroll: HTMLElement;
@@ -343,6 +345,28 @@ export class Loom {
 
   // ——— Finding writing in the whisper ———
 
+  /**
+   * Edit ▸ Section Isolation: whether Select All and the keys that reach for the ends of the whisper stay inside the
+   * section the author is working in (isolation.ts). Said in the status bar, because it changes what a key does.
+   */
+  isolateSections(): void {
+    const editor = this.requireEditor();
+    const isolating = !editor.isolatingSections;
+    editor.isolateSections(isolating);
+    this.elements.isolation.hidden = !isolating;
+    this.showNotice(
+      isolating
+        ? 'Section isolation is on: Select All takes the section you are in.'
+        : 'Section isolation is off: Select All takes the whole whisper.',
+    );
+    editor.focus();
+  }
+
+  /** Whether section isolation is on, for the menu's tick. */
+  get isolatingSections(): boolean {
+    return this.editor?.isolatingSections ?? false;
+  }
+
   /** Whatever must follow the caret — the editing shortcuts along the top — is told so here. */
   followTheCaret(follower: () => void): void {
     this.caretMoved = follower;
@@ -559,7 +583,9 @@ export class Loom {
         if (event.summary !== '') this.thoughts.add(`${event.summary}\n`);
         return;
       case 'tool':
-        if (this.writing !== undefined && event.title !== '') this.elements.activity.textContent = `${event.title} — ${event.status}`;
+        // Commands are shown beside the whisper, never in the status bar: a line beneath the writing cannot hold one,
+        // and a long one used to push the bar up into the writing itself.
+        this.thoughts.command(event.id, event.title, event.status);
         return;
       case 'permission':
         this.ask(event.requestId, event.title, event.choices);

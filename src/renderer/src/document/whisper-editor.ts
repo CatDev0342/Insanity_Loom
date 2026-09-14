@@ -33,6 +33,7 @@ import {
   NOTHING_FOUND,
   type Finding,
 } from './finding';
+import { SectionIsolation } from './isolation';
 import { applyFormat, formatStanding, type FormatCommandId, type FormatStanding } from './formatting';
 import { WhisperPaste } from './paste';
 import { readWhisperLink } from '../../../shared/whispers';
@@ -65,6 +66,9 @@ export class WhisperEditor {
   /** When the heading a link led to stops being marked. */
   private unmarkAt = 0;
 
+  /** Whether Select All and the reaching keys stay inside the section the author is in (isolation.ts). */
+  private isolating = false;
+
   constructor(options: WhisperEditorOptions) {
     this.editor = new Editor({
       element: options.element,
@@ -84,6 +88,7 @@ export class WhisperEditor {
         HeadingIdentities,
         MarkFoundHeading,
         FindInWhisper,
+        SectionIsolation.configure({ isolating: () => this.isolating }),
         FollowLinks.configure({ onFollow: (address) => options.onFollowLink(address) }),
         Markdown,
       ],
@@ -264,6 +269,15 @@ export class WhisperEditor {
 
   focus(): void {
     this.editor.commands.focus('end');
+  }
+
+  /** Turns section isolation on or off. */
+  isolateSections(isolating: boolean): void {
+    this.isolating = isolating;
+  }
+
+  get isolatingSections(): boolean {
+    return this.isolating;
   }
 
   /** Carries out a Format command where the caret is (src/renderer/src/document/formatting.ts). */

@@ -178,3 +178,35 @@ test("the assistant's thinking is shown beside the whisper, not in it", async ()
   // What was thought is not in the whisper: the whisper is the author's prose.
   await expect(whisper).not.toContainText('Thinking about');
 });
+
+test('Section Isolation keeps Select All inside the turn the author is in', async () => {
+  const whisper = page.locator('.whisper-editor');
+  await whisper.click();
+  await page.keyboard.type('The first question.');
+  await page.keyboard.press('Control+Enter');
+  await expect(page.locator('.reply')).toHaveCount(1);
+  await page.keyboard.type('What I am writing now.');
+
+  const selected = (): Promise<string> => page.evaluate(() => String(globalThis.getSelection() ?? ''));
+
+  // Off, as it has always been: Select All takes the whole whisper.
+  await page.keyboard.press('Control+a');
+  expect(await selected()).toContain('The first question.');
+
+  // On: it takes the turn the author is in, and nothing before it.
+  await page.keyboard.press('Control+Shift+i');
+  await expect(page.locator('#isolation')).toBeVisible();
+  await whisper.click();
+  await page.keyboard.press('Control+End');
+  await page.keyboard.press('Control+a');
+  const inside = await selected();
+  expect(inside).toContain('What I am writing now.');
+  expect(inside).not.toContain('The first question.');
+
+  // Off again, and the whole whisper once more.
+  await page.keyboard.press('Control+Shift+i');
+  await expect(page.locator('#isolation')).toBeHidden();
+  await whisper.click();
+  await page.keyboard.press('Control+a');
+  expect(await selected()).toContain('The first question.');
+});

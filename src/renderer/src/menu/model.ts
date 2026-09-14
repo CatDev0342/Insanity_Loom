@@ -84,6 +84,8 @@ export const MENUS: readonly TopMenu[] = [
       command('Find Pre&vious', 'find.previous', ['Shift+F3']),
       command('Rep&lace…', 'find.replace', ['Ctrl+H']),
       SEPARATOR,
+      toggle('&Section Isolation', 'edit.isolateSections', ['Ctrl+Shift+I']),
+      SEPARATOR,
       command('Pr&eferences…', 'app.preferences'),
     ],
   },

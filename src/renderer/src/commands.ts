@@ -13,6 +13,7 @@ export const PAGE_COMMANDS = [
   'whisper.searchHall',
   'find.show',
   'find.replace',
+  'edit.isolateSections',
   'find.next',
   'find.previous',
   'assistant.reconnect',
@@ -38,6 +39,7 @@ export type AssistantCommandId = Exclude<
   | 'find.replace'
   | 'find.next'
   | 'find.previous'
+  | 'edit.isolateSections'
 >;
 
 /** Any command a menu entry may name. */

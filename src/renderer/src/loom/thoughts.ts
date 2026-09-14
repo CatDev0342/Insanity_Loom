@@ -6,6 +6,10 @@
 // thousands of tokens of reasoning folded into it (95.31).
 //
 // The companion is Markdown, headed by the turn it belongs to, so it can be read, indexed and searched on its own.
+//
+// The commands the assistant runs are shown here too, and kept with the thinking. They used to be said in the status
+// bar, where a long one pushed the bar up into the writing (the designer's screenshot, 2026-Sep-14): a line beneath
+// the whisper cannot hold a command, and should never try.
 
 import type { WhispersBridge } from '../../../shared/whispers';
 
@@ -28,6 +32,8 @@ export class Thoughts {
   private turn = { number: 0, shown: '' };
   /** The whisper the thinking belongs to; '' while there is none. */
   private whisperPath = '';
+  /** The commands being followed, by the name the assistant gave them, so each is shown once. */
+  private readonly commands = new Map<string, HTMLElement>();
 
   constructor(
     private readonly elements: ThoughtsElements,
@@ -40,6 +46,7 @@ export class Thoughts {
     this.flush();
     this.whisperPath = whisperPath;
     this.headed = false;
+    this.commands.clear();
     this.elements.thoughtsStream.replaceChildren();
     this.elements.thoughtsSaid.textContent = '';
   }
@@ -55,6 +62,7 @@ export class Thoughts {
   /** A turn was taken: what the assistant thinks from here belongs to it. */
   beginTurn(number: number, shown: string): void {
     this.flush();
+    this.commands.clear();
     this.turn = { number, shown };
     this.headed = false;
     const heading = document.createElement('p');
@@ -62,6 +70,32 @@ export class Thoughts {
     heading.textContent = `Turn ${number} · ${shown}`;
     this.elements.thoughtsStream.append(heading);
     this.goToTheEnd();
+  }
+
+  /**
+   * A command the assistant is running, and how it is getting on. The same command is shown once and then followed:
+   * a line that changes as it goes, rather than a new line each time something happens to it.
+   */
+  command(id: string, title: string, status: string): void {
+    const shown = title.trim();
+    if (shown === '') return;
+    const already = this.commands.get(id);
+    if (already !== undefined) {
+      already.dataset['status'] = status;
+      already.title = `${shown} — ${status}`;
+      return;
+    }
+    const line = document.createElement('p');
+    line.className = 'thought-command';
+    line.textContent = shown;
+    line.title = `${shown} — ${status}`;
+    line.dataset['status'] = status;
+    this.commands.set(id, line);
+    this.elements.thoughtsStream.append(line);
+    this.goToTheEnd();
+    // Kept with the thinking, in the companion: what was run is part of the record of the turn.
+    this.unwritten += `\n\n\u0060${shown.replace(/\s+/g, ' ')}\u0060\n`;
+    this.writeSoon();
   }
 
   /** A piece of thinking, as it is written. */

@@ -4,6 +4,7 @@ import { isFormatCommand, isPageCommand, type AnyCommandId, type FormatCommandId
 import { Loom } from './loom/page';
 import { ContextMenu } from './menu/context-menu';
 import { MenuBar } from './menu/menubar';
+import { PanelTabs } from './loom/panel-tabs';
 import { Toolbar } from './menu/toolbar';
 import { MENUS } from './menu/model';
 import { LinkPanel, type WhisperHeading } from './panels/link-panel';
@@ -45,6 +46,7 @@ const loom = new Loom(
     replacement: required<HTMLInputElement>('#find-replacement'),
     replace: required<HTMLButtonElement>('#find-replace'),
     replaceAll: required<HTMLButtonElement>('#find-replace-all'),
+    isolation: required<HTMLElement>('#isolation'),
     contextHolder: required<HTMLElement>('#context'),
     contextSaid: required<HTMLElement>('#context-said'),
     contextFull: required<HTMLElement>('#context-full'),
@@ -135,6 +137,7 @@ async function run(command: AnyCommandId): Promise<void> {
   if (command === 'whisper.search') return findInTheAlcove();
   if (command === 'whisper.searchHall') return findInFiles();
   if (command === 'find.show') return loom.showFindBar();
+  if (command === 'edit.isolateSections') return loom.isolateSections();
   if (command === 'find.replace') return loom.showReplaceBar();
   if (command === 'find.next') return loom.stepFind('next');
   if (command === 'find.previous') return loom.stepFind('previous');
@@ -146,10 +149,24 @@ async function run(command: AnyCommandId): Promise<void> {
 
 // The menus and their keys ask the whisper how each Format command stands, every time they are used; everything else
 // is always ready.
-const standingOf = (command: AnyCommandId): { enabled: boolean; checked: boolean } =>
-  isFormatCommand(command) ? loom.formatStanding(command) : { enabled: true, checked: false };
+const standingOf = (command: AnyCommandId): { enabled: boolean; checked: boolean } => {
+  if (isFormatCommand(command)) return loom.formatStanding(command);
+  // The one other command that is either on or off: the menu shows a tick beside it.
+  if (command === 'edit.isolateSections') return { enabled: true, checked: loom.isolatingSections };
+  return { enabled: true, checked: false };
+};
 
 new MenuBar(required<HTMLElement>('#menubar'), MENUS, run, standingOf);
+
+// The tabs at the top of each side panel. The left panel holds one thing for now; the right holds the assistant's
+// thinking and the library it is citing.
+new PanelTabs(required<HTMLElement>('#navigation-tabs'), [
+  { id: 'navigation', name: 'Navigation', pane: required<HTMLElement>('#navigation-pane') },
+]);
+new PanelTabs(required<HTMLElement>('#thoughts-tabs'), [
+  { id: 'thinking', name: 'Thinking', pane: required<HTMLElement>('#thoughts-pane') },
+  { id: 'library', name: 'Library', pane: required<HTMLElement>('#library-pane') },
+]);
 
 // The editing shortcuts along the top, saying the same about each command as the Format menu does.
 const toolbar = new Toolbar(required<HTMLElement>('#toolbar'), run, standingOf);

@@ -54,10 +54,49 @@ body {
 
 .side-panel {
   flex: none;
-  width: 17rem;
-  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  width: 19rem;
+  min-height: 0;
   background: var(--bar);
   font-size: 0.9rem;
+}
+
+/* What a tab shows: its own scroll, so moving between tabs keeps each where it was left. */
+.side-panel-pane {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+/* The tabs at the top of a panel: square, quiet, the one in use lit. */
+.panel-tabs {
+  flex: none;
+  display: flex;
+  gap: 1px;
+  padding: 0.2rem 0.3rem 0;
+  border-bottom: 1px solid var(--menu-edge);
+}
+
+.panel-tab {
+  padding: 0.25rem 0.6rem;
+  background: none;
+  border: 1px solid transparent;
+  border-bottom: 0;
+  color: var(--ink-quiet);
+  font: inherit;
+  font-size: 0.8rem;
+  cursor: default;
+}
+
+.panel-tab:hover {
+  color: var(--ink);
+}
+
+.panel-tab[aria-selected='true'] {
+  background: var(--menu);
+  border-color: var(--menu-edge);
+  color: var(--ink);
 }
 
 .side-panel-left {
@@ -149,6 +188,36 @@ body {
 .thought {
   margin: 0;
   line-height: 1.45;
+}
+
+/* A command the assistant is running: shown as it is written, cut to one line, with how it is getting on beside it. */
+.thought-command {
+  margin: 0;
+  padding-left: 1.1rem;
+  overflow: hidden;
+  color: var(--ink);
+  font-family: ui-monospace, Consolas, 'DejaVu Sans Mono', monospace;
+  font-size: 0.8rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  position: relative;
+}
+
+.thought-command::before {
+  content: '▸';
+  position: absolute;
+  left: 0;
+  color: var(--ink-quiet);
+}
+
+.thought-command[data-status='completed']::before {
+  content: '✓';
+  color: var(--focus);
+}
+
+.thought-command[data-status='failed']::before {
+  content: '✗';
+  color: var(--problem);
 }
 
 .thought-turn {
@@ -317,6 +386,13 @@ body {
 
 .whisper-editor hr.ProseMirror-selectednode {
   border-top-color: var(--focus);
+}
+
+/* Said in the status bar while section isolation is on, because it changes what a key does. */
+.status-isolation {
+  padding: 0 0.35rem;
+  border: 1px solid var(--menu-edge);
+  color: var(--focus);
 }
 
 /* How much of the assistant's context window is in use: said in words, and drawn as a bar beside them. */
@@ -493,20 +569,36 @@ button:focus-visible {
 }
 
 
+/* The status bar is one line, always, and never grows. Whatever it is given — a connection's complaint, a command the
+   assistant is running — it says as much as fits and no more: it sits beneath the writing, and it must never push the
+   writing about. What is too long to say here is said in the panel beside the whisper. */
 .status {
   flex: none;
   display: flex;
   align-items: center;
   gap: 0.75rem;
+  height: 1.7rem;
   padding: 0.2rem 0.75rem;
+  overflow: hidden;
   background: var(--bar);
   border-top: 1px solid var(--menu-edge);
   color: var(--ink-quiet);
   font-size: 0.8rem;
+  white-space: nowrap;
 }
 
-.status-text {
-  white-space: pre-wrap;
+.status > * {
+  flex: none;
+}
+
+/* The two that may be long give way first, and are cut with an ellipsis rather than wrapping. */
+.status-text,
+.status-activity {
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .status-activity {

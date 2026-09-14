@@ -16,7 +16,10 @@
     <div id="toolbar" class="toolbar" role="toolbar" aria-label="Editing"></div>
     <main id="loom" class="loom">
       <aside id="navigation" class="side-panel side-panel-left" aria-label="Navigation">
-        <div id="navigation-inside" class="side-panel-inside"></div>
+        <div id="navigation-tabs" class="panel-tabs" aria-label="Navigation"></div>
+        <div id="navigation-pane" class="side-panel-pane">
+          <div id="navigation-inside" class="side-panel-inside"></div>
+        </div>
       </aside>
       <div class="middle">
         <div id="asks" class="asks" hidden></div>
@@ -41,10 +44,17 @@
         </div>
       </div>
       <aside id="thoughts" class="side-panel side-panel-right" aria-label="The assistant's thinking">
-        <div class="side-panel-inside">
-          <h2 class="side-panel-title">Thinking</h2>
-          <p id="thoughts-said" class="side-panel-note" role="status"></p>
-          <div id="thoughts-stream" class="thoughts-stream"></div>
+        <div id="thoughts-tabs" class="panel-tabs" aria-label="Beside the whisper"></div>
+        <div id="thoughts-pane" class="side-panel-pane">
+          <div class="side-panel-inside">
+            <p id="thoughts-said" class="side-panel-note" role="status"></p>
+            <div id="thoughts-stream" class="thoughts-stream"></div>
+          </div>
+        </div>
+        <div id="library-pane" class="side-panel-pane" hidden>
+          <div id="library-inside" class="side-panel-inside">
+            <p id="library-said" class="side-panel-note" role="status"></p>
+          </div>
         </div>
       </aside>
     </main>
@@ -57,6 +67,7 @@
         Mode:
         <select id="mode" class="status-mode-choice"></select>
       </label>
+      <span id="isolation" class="status-isolation" hidden>Section isolation</span>
       <span id="context" class="status-context" role="status" hidden>
         <span id="context-said" class="status-context-said"></span>
         <span id="context-bar" class="status-context-bar"><span id="context-full" class="status-context-full"></span></span>
