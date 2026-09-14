@@ -599,9 +599,13 @@ export class Loom {
     this.saveNow();
     if (this.whisperPath !== '') {
       try {
+        const left = this.whisperName;
         const moved = await this.whispers.rename(this.whisperPath, title);
         this.whisperPath = moved.path;
         this.whisperName = moved.name;
+        // Whispers that pointed here have been put right on disk; this one's own links are put right in the window,
+        // where the whisper is held, or the next save would write the old name back over them.
+        this.editor?.renameLinks(left, moved.name);
       } catch (problem) {
         this.showProblem(`The whisper's file could not be named after the conversation: ${problem instanceof Error ? problem.message : String(problem)}`);
       }

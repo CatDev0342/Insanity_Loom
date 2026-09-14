@@ -95,3 +95,40 @@ describe('links between whispers', () => {
     expect(held.find('no such whisper.xhtml')).toBeUndefined();
   });
 });
+
+describe('renaming a whisper', () => {
+  it('points the links that named it at where it now is', () => {
+    const held = alcove();
+    const pointedAt = held.create('First conversation', '<p>the one linked to</p>', WHEN);
+    const oldName = basename(pointedAt);
+    const pointing = held.create(
+      'Second conversation',
+      `<p><a href="${encodeURIComponent(oldName)}">there</a> and <a href="${encodeURIComponent(oldName)}#a-heading">into it</a></p>`,
+      WHEN,
+    );
+
+    const moved = held.rename(pointedAt, 'First conversation, named at last');
+    const newName = basename(moved);
+    expect(newName).not.toBe(oldName);
+    expect(held.relink(oldName, newName)).toBe(1);
+
+    const after = readFileSync(pointing, 'utf8');
+    expect(after).toContain(`href="${encodeURIComponent(newName)}"`);
+    // The heading a link pointed into is kept: only the whisper's name changed.
+    expect(after).toContain(`href="${encodeURIComponent(newName)}#a-heading"`);
+    expect(after).not.toContain(encodeURIComponent(oldName));
+  });
+
+  it('leaves links to other whispers, and addresses that are not whispers, alone', () => {
+    const held = alcove();
+    const pointing = held.create(
+      'A conversation',
+      '<p><a href="https://example.com/page">out there</a><a href="Another whisper.xhtml">elsewhere</a></p>',
+      WHEN,
+    );
+    expect(held.relink('2026-09-14 1532 Gone.xhtml', '2026-09-14 1532 Renamed.xhtml')).toBe(0);
+    const after = readFileSync(pointing, 'utf8');
+    expect(after).toContain('https://example.com/page');
+    expect(after).toContain('Another whisper.xhtml');
+  });
+});

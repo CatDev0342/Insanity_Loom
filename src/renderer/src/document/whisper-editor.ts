@@ -22,6 +22,7 @@ import {
 } from './extensions';
 import { applyFormat, formatStanding, type FormatCommandId, type FormatStanding } from './formatting';
 import { WhisperPaste } from './paste';
+import { readWhisperLink } from '../../../shared/whispers';
 import type { WhisperRecord } from '../loom/catch-up';
 import { afterRule, findReply, isBlank, sectionContent } from './sections';
 
@@ -260,6 +261,35 @@ export class WhisperEditor {
   private markHeading(identity: string): void {
     // Marking nothing changes the document, so it neither saves nor enters the author's undo.
     this.editor.view.dispatch(this.editor.state.tr.setMeta(FOUND_HEADING_META, identity).setMeta('addToHistory', false));
+  }
+
+  /**
+   * Points every link in this whisper that named one file at another — what a rename means for the whisper being
+   * renamed itself, which may link to its own sections or back to itself. The whispers that are not open are put
+   * right on disk (src/main/alcove.ts).
+   */
+  renameLinks(from: string, to: string): void {
+    if (from === to) return;
+    const linkType = this.editor.schema.marks['link'];
+    if (linkType === undefined) return;
+    const changes: { readonly from: number; readonly to: number; readonly address: string }[] = [];
+    this.doc.descendants((node, position) => {
+      if (!node.isText) return true;
+      const link = node.marks.find((mark) => mark.type === linkType);
+      const address = link?.attrs['href'];
+      if (typeof address !== 'string') return true;
+      const pointed = readWhisperLink(address);
+      if (pointed === undefined || pointed.name !== from) return true;
+      const heading = pointed.heading === '' ? '' : `#${encodeURIComponent(pointed.heading)}`;
+      changes.push({ from: position, to: position + node.nodeSize, address: `${encodeURIComponent(to)}${heading}` });
+      return true;
+    });
+    if (changes.length === 0) return;
+    this.asAssistant((transaction) => {
+      for (const change of changes) {
+        transaction.addMark(change.from, change.to, linkType.create({ href: change.address }));
+      }
+    });
   }
 
   /** The address of the link the caret is in, or '' when it is in none. */

@@ -76,7 +76,11 @@ export class Whispers {
 
   rename(path: string, title: string): OpenWhisper {
     const moved = this.alcove.rename(path, title);
-    if (moved !== path) this.journal.whisperPath = moved;
+    if (moved !== path) {
+      this.journal.whisperPath = moved;
+      // The whispers that pointed at this one are put right, so a rename never breaks a link (40.6).
+      this.alcove.relink(basename(path), basename(moved));
+    }
     return { path: moved, name: basename(moved), xhtml: this.alcove.read(moved) };
   }
 

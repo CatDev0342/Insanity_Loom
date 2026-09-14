@@ -169,6 +169,23 @@ describe('a heading\'s identity', () => {
   });
 });
 
+describe('a whisper being renamed', () => {
+  it('points its own links at where it now is, and leaves every other link alone', () => {
+    const old = encodeURIComponent('2026-09-14 1532 Untitled whisper.xhtml');
+    const w = whisper(
+      `<p><a href="${old}">itself</a> <a href="${old}#a-section">into itself</a>` +
+        '<a href="Another whisper.xhtml">elsewhere</a><a href="https://example.com/">out there</a></p>',
+    );
+    w.renameLinks('2026-09-14 1532 Untitled whisper.xhtml', '2026-09-14 1532 Named at last.xhtml');
+    const now = encodeURIComponent('2026-09-14 1532 Named at last.xhtml');
+    expect(w.html).toContain(`href="${now}"`);
+    expect(w.html).toContain(`href="${now}#a-section"`);
+    expect(w.html).toContain('href="Another whisper.xhtml"');
+    expect(w.html).toContain('href="https://example.com/"');
+    expect(w.html).not.toContain(old);
+  });
+});
+
 describe('the heading a link leads to', () => {
   it('is marked, and stays marked while the whisper is redrawn around it', () => {
     const w = whisper('<h2 id="first">First</h2><p>words</p><h2 id="second">Second</h2><p>more</p>');

@@ -24,6 +24,26 @@ const LONGEST_TITLE_IN_NAME = 60;
 // eslint-disable-next-line no-control-regex
 const FORBIDDEN_IN_NAME = new RegExp('[<>:"/\\|?*\u0000-\u001f]', 'g');
 
+/** A link's address as it stands in a whisper's file. */
+const LINK_ADDRESS = /href="([^"]*)"/g;
+
+/** The whisper a link names, as it is written on disk, or '' when the link names no whisper. */
+function readLinkName(address: string): string {
+  const written = address.replace(/&amp;/g, '&');
+  const name = written.split('#')[0] ?? '';
+  try {
+    return decodeURIComponent(name);
+  } catch {
+    return '';
+  }
+}
+
+/** Whatever follows the whisper's name in a link: the heading it points at, with its '#', or nothing. */
+function addressAfterName(address: string): string {
+  const hash = address.indexOf('#');
+  return hash === -1 ? '' : address.slice(hash);
+}
+
 /** When a name is already taken, the next free one is tried up to this many times before giving up. */
 const MOST_NAME_TRIES = 999;
 
@@ -116,6 +136,30 @@ export class Alcove {
     if (existsSync(taken)) return path;
     renameSync(path, taken);
     return taken;
+  }
+
+  /**
+   * Points every link in the alcove that named `from` at `to` instead — what a rename means for the whispers that
+   * pointed at the one renamed. A link carries a file name, so without this a whisper being named after its
+   * conversation would break every link to it.
+   *
+   * A link is written as a browser writes addresses, and read back the same way, so `A whisper.xhtml` and
+   * `A%20whisper.xhtml` are the same link and both are put right. Returns how many whispers were changed.
+   */
+  relink(from: string, to: string): number {
+    if (from === to) return 0;
+    let changed = 0;
+    for (const { path } of this.list()) {
+      const before = readFileSync(path, 'utf8');
+      const after = before.replace(LINK_ADDRESS, (whole, address: string) => {
+        const pointed = readLinkName(address);
+        return pointed === from ? whole.replace(address, encodeURIComponent(to) + addressAfterName(address)) : whole;
+      });
+      if (after === before) continue;
+      writeFileSafely(path, after);
+      changed += 1;
+    }
+    return changed;
   }
 
   static isWhisper(path: string): boolean {
