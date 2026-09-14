@@ -1,6 +1,6 @@
 // The Library tab and the bar between the panels: what the assistant cited, opened where it stands.
 import { expect, test, type ElectronApplication, type Page } from '@playwright/test';
-import { launch, prepareData } from './helpers';
+import { launch, prepareData, waitUntilConnected } from './helpers';
 
 let application: ElectronApplication;
 let page: Page;
@@ -8,7 +8,7 @@ let page: Page;
 test.beforeEach(async () => {
   prepareData('fake assistant', { greatHall: true });
   ({ application, page } = await launch());
-  await expect(page.locator('#status-text')).toHaveText(/Connected to Fake Assistant/);
+  await waitUntilConnected(page);
   // The panel must be there to be used: a smaller window narrows it, and only a tiny one puts it away.
   await expect(page.locator('#thoughts')).toBeVisible();
 });

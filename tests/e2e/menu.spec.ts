@@ -1,6 +1,6 @@
 // The menu bar, used the way a desktop user's hands use one.
 import { expect, test, type ElectronApplication, type Page } from '@playwright/test';
-import { launch, prepareData } from './helpers';
+import { launch, prepareData, waitUntilConnected } from './helpers';
 
 let application: ElectronApplication;
 let page: Page;
@@ -8,7 +8,7 @@ let page: Page;
 test.beforeEach(async () => {
   prepareData('fake assistant');
   ({ application, page } = await launch());
-  await expect(page.locator('#status-text')).toHaveText(/Connected to Fake Assistant/);
+  await waitUntilConnected(page);
 });
 
 test.afterEach(async () => {

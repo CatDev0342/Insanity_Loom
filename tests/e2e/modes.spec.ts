@@ -1,7 +1,7 @@
 // The assistant's way of working, chosen in the status bar: whether it asks the author to approve each step, or
 // decides by itself. The choice is remembered for later conversations and later runs.
 import { expect, test, type ElectronApplication, type Page } from '@playwright/test';
-import { launch, prepareData } from './helpers';
+import { launch, prepareData, waitUntilConnected } from './helpers';
 
 let application: ElectronApplication | undefined;
 
@@ -15,7 +15,7 @@ async function open(keepJournal: boolean): Promise<Page> {
   prepareData('fake assistant', { keepJournal });
   const started = await launch();
   application = started.application;
-  await expect(started.page.locator('#status-text')).toHaveText(/Connected to Fake Assistant/);
+  await waitUntilConnected(started.page);
   return started.page;
 }
 

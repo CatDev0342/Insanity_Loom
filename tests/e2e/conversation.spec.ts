@@ -4,14 +4,14 @@
 import { expect, test, type ElectronApplication, type Page } from '@playwright/test';
 import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { ALCOVE, launch, prepareData } from './helpers';
+import { ALCOVE, launch, prepareData, waitUntilConnected } from './helpers';
 
 let application: ElectronApplication;
 let page: Page;
 
 async function start(): Promise<void> {
   ({ application, page } = await launch());
-  await expect(page.locator('#status-text')).toHaveText(/Connected to Fake Assistant/);
+  await waitUntilConnected(page);
 }
 
 const whisper = (): ReturnType<Page['locator']> => page.locator('.whisper-editor');
@@ -186,7 +186,7 @@ test('a turn closed while the assistant is away is kept, and goes when it return
   await application.close();
   prepareData('fake assistant', { keepJournal: true });
   ({ application, page } = await launch());
-  await expect(page.locator('#status-text')).toHaveText(/Connected to Fake Assistant/);
+  await waitUntilConnected(page);
   await expect(page.locator('#asks')).toContainText('closed here without an answer');
   await page.locator('#asks').getByRole('button', { name: /Send it/ }).click();
   await expect(replies().last()).toContainText('You wrote: The thing I said while you were away.');

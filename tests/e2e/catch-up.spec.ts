@@ -3,7 +3,7 @@
 import { expect, test, type ElectronApplication, type Page } from '@playwright/test';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { ALCOVE, launch, prepareData } from './helpers';
+import { ALCOVE, launch, prepareData, waitUntilConnected } from './helpers';
 
 let application: ElectronApplication | undefined;
 
@@ -17,7 +17,7 @@ async function open(history: number, keepJournal: boolean): Promise<Page> {
   prepareData('fake assistant', { history, keepJournal });
   const started = await launch();
   application = started.application;
-  await expect(started.page.locator('#status-text')).toHaveText(/Connected to Fake Assistant/);
+  await waitUntilConnected(started.page);
   return started.page;
 }
 

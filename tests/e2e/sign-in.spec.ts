@@ -1,6 +1,6 @@
 // Signing the assistant in from Insanity_Loom: only ever at the author's request, never by itself.
 import { expect, test, type ElectronApplication, type Page } from '@playwright/test';
-import { launch, prepareData } from './helpers';
+import { launch, prepareData, waitUntilConnected } from './helpers';
 
 let application: ElectronApplication;
 let page: Page;
@@ -37,6 +37,7 @@ test('signing in with the code from the sign-in page connects', async () => {
   await expect(panel.getByRole('status')).toContainText('Signed in.');
   await panel.getByRole('button', { name: 'Close' }).click();
 
+  await waitUntilConnected(page);
   await expect(page.locator('#status-text')).toHaveText('Connected to Fake Assistant on this computer.');
   await expect(page.locator('#account')).toHaveText('Fake Plan · author@example.com');
 });

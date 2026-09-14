@@ -3,7 +3,7 @@
 import { expect, test, type ElectronApplication, type Page } from '@playwright/test';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { DATA, FAKE_ASSISTANT, FAKE_CONNECTION, launch, prepareData, REPOSITORY } from './helpers';
+import { DATA, FAKE_ASSISTANT, FAKE_CONNECTION, launch, prepareData, REPOSITORY, waitUntilConnected } from './helpers';
 
 let application: ElectronApplication;
 let page: Page;
@@ -38,6 +38,7 @@ test('opens by itself on the first start, and connects once filled in', async ()
 
   await panel.getByRole('button', { name: 'OK' }).click();
   await expect(panel).toBeHidden();
+  await waitUntilConnected(page);
   await expect(page.locator('#status-text')).toHaveText('Connected to Fake Assistant on this computer.');
 
   const saved = JSON.parse(readFileSync(join(DATA, 'settings.json'), 'utf8')) as { connection: { hostArguments: string[] } };
@@ -47,7 +48,7 @@ test('opens by itself on the first start, and connects once filled in', async ()
 test('shows the saved settings, and the Docker command they would run', async () => {
   prepareData('fake assistant');
   ({ application, page } = await launch());
-  await expect(page.locator('#status-text')).toHaveText(/Connected to Fake Assistant/);
+  await waitUntilConnected(page);
 
   await page.keyboard.press('Alt+A');
   await page.keyboard.press('o');

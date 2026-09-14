@@ -1,6 +1,6 @@
 // What every end-to-end test starts from: the repository's development Data folder, prepared, and the application
 // started against it. A development run keeps its Data folder in the repository (src/main/portable.ts).
-import { _electron as electron, type ElectronApplication, type Page } from '@playwright/test';
+import { expect, _electron as electron, type ElectronApplication, type Page } from '@playwright/test';
 import { mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 
@@ -77,4 +77,19 @@ export async function launch(): Promise<{ application: ElectronApplication; page
   const application = await electron.launch({ args: [REPOSITORY] });
   const page = await application.firstWindow();
   return { application, page };
+}
+
+/**
+ * How long connecting may take before a test calls it a failure.
+ *
+ * Connecting is not a moment: the program starts, opens its whisper, reads its settings, starts a host process, and
+ * shakes hands with it. On a cold machine with a cold disk that is seconds of real work, and five — the default for
+ * an assertion, chosen for a page that is already there — is not a measure of anything. A test that fails on a slow
+ * machine tells you about the machine.
+ */
+const CONNECTING_MS = 30_000;
+
+/** Waits until the assistant is connected, which is where nearly every test begins. */
+export async function waitUntilConnected(page: Page): Promise<void> {
+  await expect(page.locator('#status-text')).toHaveText(/Connected to Fake Assistant/, { timeout: CONNECTING_MS });
 }

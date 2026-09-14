@@ -2,7 +2,7 @@
 import { expect, test, type ElectronApplication, type Page } from '@playwright/test';
 import { existsSync, readdirSync, readFileSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
-import { ALCOVE, DATA, launch, prepareData } from './helpers';
+import { ALCOVE, DATA, launch, prepareData, waitUntilConnected } from './helpers';
 
 let application: ElectronApplication | undefined;
 let page: Page;
@@ -12,7 +12,7 @@ test.beforeEach(async () => {
   const started = await launch();
   application = started.application;
   page = started.page;
-  await expect(page.locator('#status-text')).toHaveText(/Connected to Fake Assistant/);
+  await waitUntilConnected(page);
 });
 
 test.afterEach(async () => {
