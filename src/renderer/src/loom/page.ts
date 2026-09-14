@@ -185,6 +185,8 @@ export class Loom {
    * Insanity_Loom — the Connection Settings panel opens first, by itself.
    */
   async start(): Promise<void> {
+    // An empty panel looks broken; it says what it is waiting for.
+    this.thoughts.say('What the assistant thinks while it answers will appear here, and be kept beside the whisper.');
     await this.openWhisper();
     const state = await this.connection.load();
     if (!state.saved || state.problem !== '') {
