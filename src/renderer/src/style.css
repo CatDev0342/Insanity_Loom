@@ -52,11 +52,13 @@ body {
   min-width: 0;
 }
 
+/* The panels give up width before they give up their place: a smaller window narrows them, and only a window too
+   small to hold writing at all puts them away. A build machine's screen is 1024 points wide; an author's may be. */
 .side-panel {
-  flex: none;
+  flex: 0 1 19rem;
   display: flex;
   flex-direction: column;
-  width: 19rem;
+  min-width: 11rem;
   min-height: 0;
   background: var(--bar);
   font-size: 0.9rem;
@@ -125,14 +127,15 @@ body {
   color: var(--ink-quiet);
 }
 
-/* A narrow window has no room for three: the sides step aside before the writing does. */
-@media (max-width: 70rem) {
-  .side-panel-right {
+/* A window too small for three: the sides step aside before the writing does, the thinking first. */
+@media (max-width: 46rem) {
+  .side-panel-right,
+  .reference-bar {
     display: none;
   }
 }
 
-@media (max-width: 55rem) {
+@media (max-width: 34rem) {
   .side-panel-left {
     display: none;
   }

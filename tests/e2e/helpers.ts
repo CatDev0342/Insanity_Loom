@@ -42,8 +42,9 @@ export function prepareData(
     rmSync(ALCOVE, { recursive: true, force: true });
   }
   rmSync(FAKE_AUTH_FILE, { force: true });
-  // A GreatHall opened before is opened again on the next start; a test that wants one says so here.
-  rmSync(join(DATA, 'preferences.json'), { force: true });
+  // Preferences are what the program remembers of the author — the way of working, the alcove, the GreatHall — so
+  // they are cleared only for a fresh start, never for a restart that is meant to find things as they were left.
+  if (options.keepJournal !== true) rmSync(join(DATA, 'preferences.json'), { force: true });
   if (options.greatHall === true) {
     writeFileSync(
       join(DATA, 'preferences.json'),

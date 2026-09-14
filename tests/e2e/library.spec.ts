@@ -9,6 +9,8 @@ test.beforeEach(async () => {
   prepareData('fake assistant', { greatHall: true });
   ({ application, page } = await launch());
   await expect(page.locator('#status-text')).toHaveText(/Connected to Fake Assistant/);
+  // The panel must be there to be used: a smaller window narrows it, and only a tiny one puts it away.
+  await expect(page.locator('#thoughts')).toBeVisible();
 });
 
 test.afterEach(async () => {
