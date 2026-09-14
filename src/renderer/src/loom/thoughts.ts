@@ -35,13 +35,21 @@ export class Thoughts {
     private readonly onProblem: (message: string) => void,
   ) {}
 
-  /** The whisper being written in changed: what follows belongs beside that one. */
+  /** Another whisper is open: what follows belongs beside that one, and the panel starts afresh. */
   keepBeside(whisperPath: string): void {
     this.flush();
     this.whisperPath = whisperPath;
     this.headed = false;
     this.elements.thoughtsStream.replaceChildren();
     this.elements.thoughtsSaid.textContent = '';
+  }
+
+  /**
+   * The same whisper, under a new name: its file moved when the conversation was given a title, and the companion
+   * moved with it. Nothing is forgotten — the thinking on the page belongs to this same conversation.
+   */
+  movedTo(whisperPath: string): void {
+    this.whisperPath = whisperPath;
   }
 
   /** A turn was taken: what the assistant thinks from here belongs to it. */

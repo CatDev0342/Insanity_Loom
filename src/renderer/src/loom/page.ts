@@ -756,7 +756,7 @@ export class Loom {
       try {
         const moved = await this.whispers.rename(path, title);
         this.saving.useFile(moved.path);
-        this.thoughts.keepBeside(moved.path);
+        this.thoughts.movedTo(moved.path);
         this.whisperName = moved.name;
         // Whispers that pointed here have been put right on disk; this one's own links are put right in the window,
         // where the whisper is held, or the next save would write the old name back over them.

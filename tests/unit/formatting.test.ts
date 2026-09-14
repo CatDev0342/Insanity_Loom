@@ -91,6 +91,31 @@ describe('the Format commands', () => {
   });
 });
 
+describe('what the menu and the shortcuts say about the writing', () => {
+  it('says a heading is a heading even when the whole of it is selected', () => {
+    const w = whisper('<p>a line to shape</p>');
+    w.editor.commands.focus('end');
+    w.editor.commands.selectAll();
+    w.format('format.heading2');
+    // The caret sits inside no block when everything is selected; what matters is what the writing is.
+    expect(w.formatStanding('format.heading2').checked).toBe(true);
+    expect(w.formatStanding('format.paragraph').checked).toBe(false);
+  });
+
+  it('says nothing is on when the writing selected is of two kinds', () => {
+    const w = whisper('<h2 id="a">A heading</h2><p>and a paragraph</p>');
+    w.editor.commands.selectAll();
+    expect(w.formatStanding('format.heading2').checked).toBe(false);
+    expect(w.formatStanding('format.paragraph').checked).toBe(false);
+  });
+
+  it('says a list is a list when the whole of it is selected', () => {
+    const w = whisper('<ul><li><p>one</p></li><li><p>two</p></li></ul>');
+    w.editor.commands.selectAll();
+    expect(w.formatStanding('format.bulletList').checked).toBe(true);
+  });
+});
+
 describe('links', () => {
   it('link the selected writing, and take the link off again', () => {
     const w = whisper('<p>the loom</p>');

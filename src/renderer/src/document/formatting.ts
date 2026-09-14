@@ -7,6 +7,7 @@
 // doing nothing when chosen.
 
 import type { Editor } from '@tiptap/core';
+import type { Node as ProseMirrorNode } from '@tiptap/pm/model';
 import type { EditorState } from '@tiptap/pm/state';
 import { replyIsBusy } from './extensions';
 
@@ -67,9 +68,52 @@ function mark(name: string): FormatAction {
 function heading(level: HeadingLevel): FormatAction {
   return {
     apply: (editor) => void editor.chain().focus().toggleHeading({ level }).run(),
-    isOn: (editor) => editor.isActive('heading', { level }),
+    isOn: (editor) => everyBlockIs(editor, 'heading', { level }),
     can: (editor) => editor.can().toggleHeading({ level }),
   };
+}
+
+/**
+ * Whether every block of writing the author has selected is of this kind.
+ *
+ * The editor's own `isActive` answers for where the caret *sits*, and a selection that takes in whole blocks — Ctrl+A,
+ * or dragging across paragraphs — sits inside none of them, so it would answer "no" however the writing is shaped. The
+ * menu and the toolbar would then say a heading is not a heading the moment the author selected all of it.
+ *
+ * A selection that takes in writing of two kinds is not of either, which is what a word processor shows. Empty lines
+ * are passed over: they are not writing of any kind.
+ */
+function everyBlockIs(editor: Editor, name: string, attributes: Record<string, unknown> = {}): boolean {
+  const { state } = editor;
+  const { from, to } = state.selection;
+  if (from === to) return editor.isActive(name, attributes);
+  let blocks = 0;
+  let all = true;
+  state.doc.nodesBetween(from, to, (node, position) => {
+    if (!node.isTextblock) return true;
+    // An empty line has no say in what the writing is. Selecting everything takes in the blank line the whisper keeps
+    // at its end, and that must not make a heading stop looking like a heading.
+    if (node.content.size === 0) return false;
+    blocks += 1;
+    // The block itself, and then everything it stands inside: a paragraph in a list item is in a list.
+    all = all && (matches(node, name, attributes) || standsWithin(state, position + 1, name, attributes));
+    return false;
+  });
+  return blocks > 0 && all;
+}
+
+function matches(node: ProseMirrorNode, name: string, attributes: Record<string, unknown>): boolean {
+  if (node.type.name !== name) return false;
+  return Object.entries(attributes).every(([key, value]) => node.attrs[key] === value);
+}
+
+/** Whether the writing at this position stands inside something of that kind — a list, a quotation. */
+function standsWithin(state: EditorState, inside: number, name: string, attributes: Record<string, unknown>): boolean {
+  const at = state.doc.resolve(Math.min(inside, state.doc.content.size));
+  for (let depth = at.depth; depth >= 0; depth--) {
+    if (matches(at.node(depth), name, attributes)) return true;
+  }
+  return false;
 }
 
 const ACTIONS: Readonly<Record<FormatCommandId, FormatAction>> = {
@@ -87,7 +131,7 @@ const ACTIONS: Readonly<Record<FormatCommandId, FormatAction>> = {
   },
   'format.paragraph': {
     apply: (editor) => void editor.chain().focus().setParagraph().run(),
-    isOn: (editor) => editor.isActive('paragraph'),
+    isOn: (editor) => everyBlockIs(editor, 'paragraph'),
     can: (editor) => editor.can().setParagraph(),
   },
   'format.heading1': heading(1),
@@ -95,22 +139,22 @@ const ACTIONS: Readonly<Record<FormatCommandId, FormatAction>> = {
   'format.heading3': heading(3),
   'format.bulletList': {
     apply: (editor) => void editor.chain().focus().toggleBulletList().run(),
-    isOn: (editor) => editor.isActive('bulletList'),
+    isOn: (editor) => everyBlockIs(editor, 'bulletList'),
     can: (editor) => editor.can().toggleBulletList(),
   },
   'format.orderedList': {
     apply: (editor) => void editor.chain().focus().toggleOrderedList().run(),
-    isOn: (editor) => editor.isActive('orderedList'),
+    isOn: (editor) => everyBlockIs(editor, 'orderedList'),
     can: (editor) => editor.can().toggleOrderedList(),
   },
   'format.blockquote': {
     apply: (editor) => void editor.chain().focus().toggleBlockquote().run(),
-    isOn: (editor) => editor.isActive('blockquote'),
+    isOn: (editor) => everyBlockIs(editor, 'blockquote'),
     can: (editor) => editor.can().toggleBlockquote(),
   },
   'format.codeBlock': {
     apply: (editor) => void editor.chain().focus().toggleCodeBlock().run(),
-    isOn: (editor) => editor.isActive('codeBlock'),
+    isOn: (editor) => everyBlockIs(editor, 'codeBlock'),
     can: (editor) => editor.can().toggleCodeBlock(),
   },
   // Indenting is what Tab does in a list, and the only place either can act: a list item moves in under the item
