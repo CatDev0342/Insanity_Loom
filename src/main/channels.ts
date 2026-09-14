@@ -211,6 +211,9 @@ export function startServices(dataFolder: string, logsFolder: string, journal: J
   ipcMain.handle(WHISPER_CHANNELS.addThought, (_event, path: unknown, written: unknown) =>
     whispers.addThought(whisperPath(path), whisper(written)),
   );
+  ipcMain.handle(WHISPER_CHANNELS.keepCopy, (_event, path: unknown, why: unknown) =>
+    whispers.keepCopy(whisperPath(path), text(why, 'reason', MAXIMUM_IDENTIFIER_LENGTH)),
+  );
   ipcMain.handle(WHISPER_CHANNELS.choose, (event) => whispers.choose(windowOf(event)));
   ipcMain.handle(WHISPER_CHANNELS.rename, (_event, path: unknown, title: unknown) =>
     whispers.rename(whisperPath(path), text(title, 'whisper title', MAXIMUM_IDENTIFIER_LENGTH)),

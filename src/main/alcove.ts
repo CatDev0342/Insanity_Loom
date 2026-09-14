@@ -264,6 +264,20 @@ export class Alcove {
     renameSync(was, Alcove.thoughtsOf(to));
   }
 
+  /**
+   * Keeps a copy of a whisper exactly as it stands on disk, under a name saying when it was kept and why. Nothing is
+   * ever cleaned up by the program: a safety copy the program deletes is not a safety copy.
+   */
+  keepCopy(path: string, why: string, keptFolder: string): string {
+    if (!existsSync(path)) return '';
+    mkdirSync(keptFolder, { recursive: true });
+    const when = new Date();
+    const stamp = `${nameDate(when)}${String(when.getSeconds()).padStart(2, '0')}`;
+    const kept = join(keptFolder, `${basename(path, WHISPER_SUFFIX)} — ${stamp} — ${nameFromTitle(why)}${WHISPER_SUFFIX}`);
+    writeFileSafely(kept, readFileSync(path, 'utf8'));
+    return kept;
+  }
+
   static isWhisper(path: string): boolean {
     return path.toLowerCase().endsWith(WHISPER_SUFFIX);
   }

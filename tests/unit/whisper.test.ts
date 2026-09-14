@@ -220,3 +220,14 @@ describe('turns that were never answered', () => {
     expect(w.unansweredTurns()).toHaveLength(1);
   });
 });
+
+describe('pictures', () => {
+  it('survive being opened and saved, with what they point at and what they were called', () => {
+    const { whisper: w } = whisper('<p>before</p><p><img src="a.png" alt="a picture" title="what it is" /></p><p>after</p>');
+    expect(w.html).toContain('<img src="a.png" alt="a picture" title="what it is">');
+    // And through the file, which is what a whisper really is.
+    const file = toXhtml({ title: 'With a picture', conversationId: '', bodyHtml: w.html });
+    const { whisper: reopened } = whisper(fromXhtml(file).bodyHtml);
+    expect(reopened.html).toContain('src="a.png"');
+  });
+});

@@ -17,6 +17,8 @@ export class Whispers {
     programFolder: string,
     private readonly journal: Journal,
     private readonly preferences: PreferenceStore,
+    /** Where copies kept for safety go: beside the program's own data, never in the alcove. */
+    private readonly keptFolder: string = join(programFolder, 'Data', 'Kept'),
   ) {
     const chosen = preferences.alcoveFolder;
     this.alcove = new Alcove(chosen === '' ? join(programFolder, DEFAULT_ALCOVE_NAME) : chosen);
@@ -93,6 +95,16 @@ export class Whispers {
 
   save(path: string, xhtml: string): void {
     this.alcove.write(path, xhtml);
+  }
+
+  /**
+   * Keeps a copy of a whisper's file as it stands, before anything is done that might lose what is in it.
+   *
+   * A whisper is the author's writing, and the program's one promise is not to lose it. Where a copy is kept is
+   * beside the program's own data, not in the alcove: it is a safety line, not another whisper.
+   */
+  keepCopy(path: string, why: string): string {
+    return this.alcove.keepCopy(path, why, this.keptFolder);
   }
 
   /** Adds to the companion document of the whisper open: the assistant's thinking, kept beside its prose. */

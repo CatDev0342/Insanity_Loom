@@ -323,6 +323,48 @@ export const MarkFoundHeading = Extension.create({
   },
 });
 
+/**
+ * A picture in a whisper.
+ *
+ * The editor keeps only what it knows, and what it does not know it drops — so a whisper holding a picture lost it the
+ * moment it was opened, and the loss was written back to the file at the next save. A picture the author put there is
+ * the author's; it is kept, with whatever it points at and whatever it was called, and written back as it came.
+ */
+export const Picture = Node.create({
+  name: 'picture',
+  group: 'inline',
+  inline: true,
+  draggable: true,
+
+  addAttributes() {
+    return {
+      src: {
+        default: '',
+        parseHTML: (element) => element.getAttribute('src'),
+        renderHTML: (attributes: { src?: string | null }) => (attributes.src ? { src: attributes.src } : {}),
+      },
+      alt: {
+        default: null,
+        parseHTML: (element) => element.getAttribute('alt'),
+        renderHTML: (attributes: { alt?: string | null }) => (attributes.alt ? { alt: attributes.alt } : {}),
+      },
+      title: {
+        default: null,
+        parseHTML: (element) => element.getAttribute('title'),
+        renderHTML: (attributes: { title?: string | null }) => (attributes.title ? { title: attributes.title } : {}),
+      },
+    };
+  },
+
+  parseHTML() {
+    return [{ tag: 'img[src]' }];
+  },
+
+  renderHTML({ HTMLAttributes }) {
+    return ['img', mergeAttributes(HTMLAttributes)];
+  },
+});
+
 export interface FollowLinksOptions {
   /** Called when the author asks to follow a link, with the address it carries. */
   onFollow: (address: string) => void;

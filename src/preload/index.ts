@@ -80,6 +80,7 @@ const bridge: InsanityLoomBridge = {
     create: (title, xhtml) => ipcRenderer.invoke(WHISPER_CHANNELS.create, title, xhtml),
     save: (path, xhtml) => ipcRenderer.invoke(WHISPER_CHANNELS.save, path, xhtml),
     addThought: (path, written) => ipcRenderer.invoke(WHISPER_CHANNELS.addThought, path, written),
+    keepCopy: (path, why) => ipcRenderer.invoke(WHISPER_CHANNELS.keepCopy, path, why),
     choose: () => ipcRenderer.invoke(WHISPER_CHANNELS.choose),
     list: () => ipcRenderer.invoke(WHISPER_CHANNELS.list),
     openNamed: (name) => ipcRenderer.invoke(WHISPER_CHANNELS.openNamed, name),

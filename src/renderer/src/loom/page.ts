@@ -32,6 +32,7 @@ import { ReferenceBar, type ReferenceBarElements } from './reference-bar';
 import { Thoughts, type ThoughtsElements } from './thoughts';
 import { Saving } from './saving';
 import { theAuthorsOwn } from './the-authors-own';
+import { whatWasLost } from './nothing-lost';
 import { chooseConversation } from './resume';
 
 export interface LoomElements
@@ -281,6 +282,7 @@ export class Loom {
       onCaretMoved: () => this.caretMoved(),
     });
     if (open === undefined) await this.makeWhisperFile();
+    else this.checkNothingWasLost(open.path, html);
     this.showTitle();
   }
 
@@ -340,6 +342,28 @@ export class Loom {
       .pointingHere(name)
       .then((pointing) => this.navigation.showPointingHere(pointing))
       .catch(() => this.navigation.showPointingHere([]));
+  }
+
+  /**
+   * Weighs what the file said against what the whisper now holds. Anything the editor could not read would be written
+   * back over the file at the next save, so the file is kept aside first and the author is told where it is.
+   */
+  private checkNothingWasLost(path: string, fromTheFile: string): void {
+    const editor = this.editor;
+    if (editor === undefined) return;
+    const lost = whatWasLost(fromTheFile, editor.html);
+    if (!lost.lost) return;
+    void this.whispers
+      .keepCopy(path, 'as it was on opening')
+      .then((kept) => {
+        this.showProblem(
+          `Some of this whisper could not be read, so it is not all here: about ${String(Math.round(lost.share * 100))}% of the writing. ` +
+            `The file as it stood has been kept at "${kept}", and nothing has been written over it yet.`,
+        );
+      })
+      .catch((problem: unknown) => {
+        this.showProblem(`Some of this whisper could not be read, and a copy could not be kept: ${problem instanceof Error ? problem.message : String(problem)}`);
+      });
   }
 
   /** Makes the file this whisper lives in, in the alcove. */

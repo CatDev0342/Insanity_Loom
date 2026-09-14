@@ -83,6 +83,8 @@ export interface WhispersBridge {
   save(path: string, xhtml: string): Promise<void>;
   /** Adds to the companion document beside a whisper, where the assistant's thinking is kept. */
   addThought(path: string, written: string): Promise<void>;
+  /** Keeps a copy of a whisper as it stands, before anything that might lose what is in it. Returns where it went. */
+  keepCopy(path: string, why: string): Promise<string>;
   /** Every whisper in the alcove, newest first. */
   list(): Promise<readonly WhisperInAlcove[]>;
   /** Opens the whisper a link points at, by its file name in the alcove. */
@@ -115,6 +117,7 @@ export const WHISPER_CHANNELS = {
   create: 'insanity-loom:whisper-create',
   save: 'insanity-loom:whisper-save',
   addThought: 'insanity-loom:whisper-add-thought',
+  keepCopy: 'insanity-loom:whisper-keep-copy',
   choose: 'insanity-loom:whisper-choose',
   list: 'insanity-loom:whisper-list',
   openNamed: 'insanity-loom:whisper-open-named',
