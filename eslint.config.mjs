@@ -9,6 +9,8 @@ export default tseslint.config(
   {
     // Plain Node.js scripts: the build's own tools, and the stand-in assistant the tests talk to.
     files: ['scripts/**/*.mjs', 'tests/fixtures/**/*.mjs'],
-    languageOptions: { globals: { process: 'readonly', console: 'readonly', setTimeout: 'readonly' } },
+    languageOptions: {
+      globals: { process: 'readonly', console: 'readonly', setTimeout: 'readonly', fetch: 'readonly', URL: 'readonly' },
+    },
   },
 );
