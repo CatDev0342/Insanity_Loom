@@ -161,5 +161,5 @@ test('the status bar says how full the assistant is, and offers to make room', a
   await compact.click();
   await expect(context).toContainText('5% of context · 10k of 200k');
   await expect(replies()).toHaveCount(2);
-  await expect(page.getByLabel("The assistant's thinking")).toContainText('Kept what mattered.');
+  await expect(page.getByLabel("The assistant's thinking", { exact: true })).toContainText('Kept what mattered.');
 });

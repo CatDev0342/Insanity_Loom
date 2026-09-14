@@ -172,7 +172,7 @@ test("the assistant's thinking is shown beside the whisper, not in it", async ()
   await page.keyboard.press('Control+Enter');
   await expect(page.locator('.reply')).toHaveCount(1);
 
-  const thinking = page.getByLabel("The assistant's thinking");
+  const thinking = page.getByLabel("The assistant's thinking", { exact: true });
   await expect(thinking).toContainText('Turn 1');
   await expect(thinking.locator('.thought')).toContainText('Thinking about');
   // What was thought is not in the whisper: the whisper is the author's prose.
