@@ -83,8 +83,10 @@ test('a long whisper is written in, saved and searched without the author waitin
   await expect(page.locator('#find-said')).toHaveText('1 of 1', { timeout: FOUND_WITHIN_MS });
   const foundIn = Date.now() - startedFinding;
 
-  // Written into the run, so the numbers can be watched as the program grows.
-  test.info().annotations.push({ type: 'long whisper', description: `saved in ${savedIn}ms, found in ${foundIn}ms` });
+  // Written onto the run itself, so the numbers can be read without its logs and watched as the program grows.
+  const measured = `${SECTIONS} sections: saved in ${savedIn}ms, found in ${foundIn}ms`;
+  test.info().annotations.push({ type: 'long whisper', description: measured });
+  if (process.env['GITHUB_ACTIONS'] === 'true') console.log(`::notice title=Long whisper::${measured}`);
   expect(savedIn).toBeLessThan(SAVED_WITHIN_MS);
   expect(foundIn).toBeLessThan(FOUND_WITHIN_MS);
 });
