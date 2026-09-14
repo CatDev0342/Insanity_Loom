@@ -29,6 +29,8 @@ import { chooseConversation } from './resume';
 
 export interface LoomElements extends FindBarElements {
   readonly whisper: HTMLElement;
+  /** What scrolls when the whisper is longer than the window. */
+  readonly scroll: HTMLElement;
   readonly asks: HTMLElement;
   readonly statusText: HTMLElement;
   readonly activity: HTMLElement;
@@ -45,6 +47,14 @@ export interface LoomElements extends FindBarElements {
 
 const PAGE_TITLE = 'Insanity_Loom';
 const UNTITLED = 'Untitled whisper';
+
+/**
+ * How close to the end of the whisper the author must be for a reply being written to carry them along with it, in
+ * pixels. Near the end, the reply writes itself under their eyes; further up — reading something, or writing in the
+ * middle — they are left where they are, because being yanked away from what you are reading is worse than having to
+ * scroll down.
+ */
+const FOLLOWING_WITHIN_PX = 80;
 
 
 /** A finished section, with its reply already in place, waiting to be sent. */
@@ -363,7 +373,9 @@ export class Loom {
   // ——— Sections and replies ———
 
   private sectionFinished(sectionId: string, markdown: string): void {
+    const following = this.isNearTheEnd();
     const replyId = this.requireEditor().placeReply(sectionId);
+    if (following) this.goToTheEnd();
     this.waiting.push({ replyId, markdown });
     this.saveNow();
     this.sendNext();
@@ -389,19 +401,34 @@ export class Loom {
     requestAnimationFrame(() => {
       this.renderScheduled = false;
       const writing = this.writing;
-      if (writing !== undefined) this.requireEditor().setReply(writing.replyId, writing.markdown, 'writing');
+      if (writing === undefined) return;
+      const following = this.isNearTheEnd();
+      this.requireEditor().setReply(writing.replyId, writing.markdown, 'writing');
+      if (following) this.goToTheEnd();
     });
+  }
+
+  /** Whether the author is close enough to the end of the whisper to be carried along by what is written there. */
+  private isNearTheEnd(): boolean {
+    const scroll = this.elements.scroll;
+    return scroll.scrollHeight - scroll.scrollTop - scroll.clientHeight <= FOLLOWING_WITHIN_PX;
+  }
+
+  private goToTheEnd(): void {
+    this.elements.scroll.scrollTop = this.elements.scroll.scrollHeight;
   }
 
   private finishWriting(state: ReplyState): void {
     const writing = this.writing;
     if (writing === undefined) return;
     this.writing = undefined;
+    const following = this.isNearTheEnd();
     const editor = this.requireEditor();
     if (writing.markdown === '') editor.setReplyState(writing.replyId, state);
     else editor.setReply(writing.replyId, writing.markdown, state);
     this.elements.activity.textContent = '';
     this.hideAsks();
+    if (following) this.goToTheEnd();
     this.saveNow();
     this.sendNext();
   }

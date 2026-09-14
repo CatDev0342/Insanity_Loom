@@ -22,6 +22,7 @@ const bridge = window.insanityLoom;
 const loom = new Loom(
   {
     whisper: required<HTMLElement>('#whisper'),
+    scroll: required<HTMLElement>('.whisper-scroll'),
     asks: required<HTMLElement>('#asks'),
     statusText: required<HTMLElement>('#status-text'),
     activity: required<HTMLElement>('#activity'),

@@ -90,3 +90,25 @@ test('a long whisper is written in, saved and searched without the author waitin
   expect(savedIn).toBeLessThan(SAVED_WITHIN_MS);
   expect(foundIn).toBeLessThan(FOUND_WITHIN_MS);
 });
+
+test('a reply written at the end of a long whisper carries the author along, unless they are reading elsewhere', async () => {
+  const scroll = page.locator('.whisper-scroll');
+  const atTheEnd = (): Promise<boolean> =>
+    scroll.evaluate((element) => element.scrollHeight - element.scrollTop - element.clientHeight <= 80);
+
+  // Writing at the end, where the author is.
+  await page.locator('.whisper-editor p').last().click();
+  await page.keyboard.press('Control+End');
+  await page.keyboard.type('A question at the end of a long day.');
+  await page.keyboard.press('Control+Enter');
+  await expect(page.locator('.reply').last()).toContainText('You wrote: A question at the end of a long day.');
+  expect(await atTheEnd()).toBe(true);
+
+  // Reading something further up while the next reply is written: the author is left where they are.
+  await page.keyboard.type('Another question.');
+  await page.keyboard.press('Control+Enter');
+  await scroll.evaluate((element) => element.scrollTo({ top: 0 }));
+  const whereTheyWere = await scroll.evaluate((element) => element.scrollTop);
+  await expect(page.locator('.reply').last()).toContainText('You wrote: Another question.');
+  expect(await scroll.evaluate((element) => element.scrollTop)).toBe(whereTheyWere);
+});
