@@ -73,7 +73,10 @@ export async function whatIsNewest(): Promise<NewestBuild & { readonly packages:
 export function howToUpdate(newest: NewestBuild, here: UpdateSurroundings, partExists: boolean): UpdateStanding {
   if (!isNewer(newest.version, here.version)) return { kind: 'the newest', version: here.version };
   // The program's own part only fits the runtime it was built against; anything else must be fetched whole.
-  if (newest.electron !== here.electron || !partExists) return { kind: 'whole program needed', version: newest.version };
+  // Which reason it is matters: they are told apart because they are different facts, and saying the wrong one is
+  // saying something untrue about the program.
+  if (newest.electron !== here.electron) return { kind: 'whole program needed', version: newest.version, why: 'a newer runtime' };
+  if (!partExists) return { kind: 'whole program needed', version: newest.version, why: 'no part published' };
   return { kind: 'ready to fetch', version: newest.version, megabytes: 0 };
 }
 
@@ -81,7 +84,7 @@ export function howToUpdate(newest: NewestBuild, here: UpdateSurroundings, partE
 export async function fetchTheNewest(here: UpdateSurroundings): Promise<UpdateStanding> {
   const newest = await whatIsNewest();
   const name = OUR_PART[process.platform];
-  if (name === undefined) return { kind: 'whole program needed', version: newest.version };
+  if (name === undefined) return { kind: 'whole program needed', version: newest.version, why: 'no part published' };
   const said = newest.packages[name];
   const standing = howToUpdate(newest, here, said !== undefined);
   if (standing.kind !== 'ready to fetch' || said === undefined) return standing;

@@ -581,8 +581,11 @@ export class Loom {
         return;
       case 'whole program needed':
         this.showNotice(
-          `Insanity_Loom ${standing.version} is out, but it runs on something newer than this copy does, so it cannot be ` +
-            'fetched in part. Take the whole program instead.',
+          standing.why === 'a newer runtime'
+            ? `Insanity_Loom ${standing.version} is out, but it runs on something newer than this copy does, so it cannot ` +
+                'be fetched in part. Take the whole program instead.'
+            : `Insanity_Loom ${standing.version} is out. This copy cannot fetch it: the program's own part is sealed to ` +
+                'its executable, so updating means taking the whole program.',
         );
         return;
       case 'went wrong':

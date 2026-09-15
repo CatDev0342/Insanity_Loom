@@ -32,11 +32,18 @@ describe('whether a copy can update itself', () => {
     expect(howToUpdate({ version: '0.0.84', electron: '45.0.0' }, HERE, true)).toEqual({
       kind: 'whole program needed',
       version: '0.0.84',
+      why: 'a newer runtime',
     });
   });
 
-  it('asks for the whole program when the build published no part for this system', () => {
-    expect(howToUpdate({ version: '0.0.84', electron: '44.3.0' }, HERE, false).kind).toBe('whole program needed');
+  it('asks for the whole program when the build published no part for this system, and says which reason it is', () => {
+    // Two different facts, and the author is told the true one. No part is published at all while app.asar is sealed
+    // to the executable, and saying "it runs on something newer" instead would be saying something untrue.
+    expect(howToUpdate({ version: '0.0.84', electron: '44.3.0' }, HERE, false)).toEqual({
+      kind: 'whole program needed',
+      version: '0.0.84',
+      why: 'no part published',
+    });
   });
 });
 

@@ -18,7 +18,11 @@ export type UpdateStanding =
   | { readonly kind: 'looking' }
   | { readonly kind: 'the newest'; readonly version: string }
   | { readonly kind: 'ready to fetch'; readonly version: string; readonly megabytes: number }
-  | { readonly kind: 'whole program needed'; readonly version: string }
+  /**
+   * A newer build is out, and this copy cannot become it by itself. `why` says which of the two reasons it is, so
+   * that the author is told the truth rather than the likelier-sounding of them.
+   */
+  | { readonly kind: 'whole program needed'; readonly version: string; readonly why: 'no part published' | 'a newer runtime' }
   | { readonly kind: 'fetching'; readonly version: string }
   | { readonly kind: 'waiting for a restart'; readonly version: string }
   | { readonly kind: 'went wrong'; readonly why: string };
