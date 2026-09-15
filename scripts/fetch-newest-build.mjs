@@ -17,8 +17,13 @@ import { Readable } from 'node:stream';
 
 const REPOSITORY = 'CatDev0342/Insanity_Loom';
 const RELEASE = 'newest';
-/** What is fetched, in the order it is wanted. Anything the build did not publish is passed over without complaint. */
-const WANTED = ['Insanity_Loom-Windows.zip', 'Insanity_Loom-Windows-app.zip'];
+/**
+ * What is fetched. Only the whole program: there is no package of the program's own part, and there must not be
+ * (electron-builder.yml). This list once held one, and because a release keeps an asset until something replaces it,
+ * every fetch put a stale and unusable package back in the shared folder after the author had deleted it — twice
+ * (2026-Sep-15). What is asked for here is what lands there, so it asks for nothing it does not want.
+ */
+const WANTED = ['Insanity_Loom-Windows.zip'];
 const SHARED_FOLDER = process.argv[2] ?? '/staging';
 
 const release = await fetch(`https://api.github.com/repos/${REPOSITORY}/releases/tags/${RELEASE}`, {
