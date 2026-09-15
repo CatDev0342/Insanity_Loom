@@ -25,7 +25,17 @@ import { isNewer, type NewestBuild, type UpdateStanding } from '../shared/update
 const NEWEST = 'https://github.com/CatDev0342/Insanity_Loom/releases/download/newest/newest.json';
 const PACKAGE_FROM = 'https://github.com/CatDev0342/Insanity_Loom/releases/download/newest/';
 
-/** What the program's own part is called, per system. */
+/**
+ * What the program's own part would be called, per system.
+ *
+ * **No build publishes one today, deliberately.** `app.asar` is sealed to the executable by a fingerprint built into
+ * it (`enableEmbeddedAsarIntegrityValidation`), which the author has kept on: one window closed is one more closed.
+ * A package that replaced app.asar alone would leave a program that will not start. So the manifest lists no part,
+ * `howToUpdate` finds none, and the author is told to take the whole program — which is the truth, and needs no
+ * special case to say it.
+ *
+ * This stays because it is not wrong, only unused: sign the executable, or seal nothing to it, and it is true again.
+ */
 const OUR_PART: Readonly<Record<string, string>> = {
   win32: 'Insanity_Loom-Windows-app.zip',
   linux: 'Insanity_Loom-Linux-app.zip',
