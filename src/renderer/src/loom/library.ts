@@ -79,10 +79,14 @@ export class Library {
       this.elements.librarySaid.textContent = 'No GreatHall is open. File ▸ Open GreatHall… opens one.';
       return;
     }
+    // What the hall says is there and is not: said once, at the top, where the author will see it before wondering
+    // why a citation came back empty.
+    const trouble = this.hall.trouble.length === 0 ? '' : ` · ${this.hall.trouble.join(' ')}`;
     this.elements.librarySaid.textContent =
-      this.cited.length === 0
+      (this.cited.length === 0
         ? `${this.hall.libraryName}: what the assistant cites will be listed here.`
-        : `${this.hall.libraryName} · ${this.cited.length} cited`;
+        : `${this.hall.libraryName} · ${this.cited.length} cited`) + trouble;
+    this.elements.librarySaid.classList.toggle('is-trouble', this.hall.trouble.length > 0);
   }
 
   /** Which turns cited something, and what each cited: what the bar between the panels is drawn from. */
@@ -125,8 +129,22 @@ export class Library {
         address.textContent = section.address;
         const text = document.createElement('span');
         text.className = 'library-text';
-        text.textContent = section.text === '' ? `(not in ${section.title})` : section.text;
+        // Nothing at an address has two quite different reasons, and the author is told which. The library may simply
+        // not carry that place; or the hall may point at a document that has moved, which once looked the same.
+        text.textContent = section.trouble ?? (section.text === '' ? `(not in ${section.title})` : section.text);
+        if (section.trouble !== undefined) entry.classList.add('is-trouble');
         entry.append(address, text);
+        // A library should number each place once. When it does not, the first is shown and the rest are counted,
+        // rather than one being chosen in silence.
+        if (section.alsoAt.length > 0) {
+          const twice = document.createElement('span');
+          twice.className = 'library-note';
+          twice.textContent =
+            section.alsoAt.length === 1
+              ? `Also written at line ${String(section.alsoAt[0])}`
+              : `Also written at lines ${section.alsoAt.join(', ')}`;
+          entry.append(twice);
+        }
         entry.title = `${section.address} — ${section.title}`;
         entry.addEventListener('mousedown', (event) => event.preventDefault());
         entry.addEventListener('click', () => void this.choose(section));
@@ -142,7 +160,7 @@ export class Library {
     try {
       const read = await this.greatHall.document(address);
       const title = this.hall.documents.find((document) => document.address === documentOf(address))?.title ?? address;
-      this.showDocument({ address, document: documentOf(address), line, text: '', title }, read.markdown, read.stamp);
+      this.showDocument({ address, document: documentOf(address), line, text: '', title, alsoAt: [] }, read.markdown, read.stamp);
     } catch (problem) {
       this.onProblem(problem instanceof Error ? problem.message : String(problem));
     }

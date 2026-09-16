@@ -12,6 +12,30 @@ afterEach(() => {
   for (const folder of made.splice(0)) rmSync(folder, { recursive: true, force: true });
 });
 
+/** A hall written as one is written now: TOML, with the library's documents as a run of blocks. */
+function tomlHall(): string {
+  return [
+    `format = "${GREATHALL_FORMAT}"`,
+    'name = "CoreGame"',
+    'alcove = "Alcove"',
+    '',
+    '[library]',
+    'name = "Master Design Library"',
+    'folder = "Library"',
+    '',
+    '# The library\'s own documents, each addressed as it is cited.',
+    '[[library.documents]]',
+    'address = "40"',
+    'file = "40_DOCUMENT.md"',
+    'title = "The document"',
+    '',
+    '[[library.documents]]',
+    'address = "PKG_mapgen"',
+    'file = "PKG_mapgen.md"',
+    '',
+  ].join('\n');
+}
+
 /** A hall like the designer's own: whispers beside it, a library of numbered documents in a folder of its own. */
 function hall(): { readonly folder: string; readonly file: string } {
   const folder = mkdtempSync(join(tmpdir(), 'insanity-loom-hall-'));
@@ -24,22 +48,7 @@ function hall(): { readonly folder: string; readonly file: string } {
   );
   writeFileSync(join(library, 'PKG_mapgen.md'), ['# PKG_mapgen', '', '**PKG_mapgen.3.2** — The bake formula.', ''].join('\n'));
   const file = join(folder, 'CoreGame.greathall');
-  writeFileSync(
-    file,
-    JSON.stringify({
-      format: GREATHALL_FORMAT,
-      name: 'CoreGame',
-      alcove: 'Alcove',
-      library: {
-        name: 'Master Design Library',
-        folder: 'Library',
-        documents: [
-          { address: '40', file: '40_DOCUMENT.md', title: 'The document' },
-          { address: 'PKG_mapgen', file: 'PKG_mapgen.md' },
-        ],
-      },
-    }),
-  );
+  writeFileSync(file, tomlHall());
   return { folder, file };
 }
 
@@ -112,11 +121,12 @@ describe('where a reference stands in the library', () => {
     expect(placeOf('**PKG_mapgen.3.2** — The bake formula.', 'PKG_mapgen.3.2')).toEqual({
       line: 1,
       text: 'PKG_mapgen.3.2 — The bake formula.',
+      alsoAt: [],
     });
   });
 
   it('says a place is not there rather than finding the wrong one', () => {
-    expect(placeOf('## 40.6 — THE WIKI', '40.60')).toEqual({ line: 0, text: '' });
+    expect(placeOf('## 40.6 — THE WIKI', '40.60')).toEqual({ line: 0, text: '', alsoAt: [] });
   });
 });
 
@@ -178,5 +188,176 @@ describe('the library is not the author\'s alone', () => {
     const after = halls.document('40');
     expect(after.markdown).toContain('The author wrote this.');
     expect(after.stamp).not.toBe(read.stamp);
+  });
+});
+
+describe('a hall is written by hand, so it is read strictly and said plainly', () => {
+  /** Writes a hall file with these lines, in the folder of a hall already made. */
+  function halSaying(folder: string, lines: readonly string[]): string {
+    const file = join(folder, 'Written.greathall');
+    writeFileSync(file, lines.join('\n'));
+    return file;
+  }
+
+  it('is written in TOML, and says so', () => {
+    const { file } = hall();
+    expect(readGreatHall(file).form).toBe('TOML');
+  });
+
+  it('still reads a hall written in JSON, the form it first took', () => {
+    const { folder } = hall();
+    const file = join(folder, 'Older.greathall');
+    writeFileSync(
+      file,
+      JSON.stringify({
+        format: GREATHALL_FORMAT,
+        name: 'CoreGame',
+        alcove: 'Alcove',
+        library: { folder: 'Library', documents: [{ address: '40', file: '40_DOCUMENT.md' }] },
+      }),
+    );
+    const read = readGreatHall(file);
+    expect(read.form).toBe('JSON');
+    expect(read.documents.map((one) => one.address)).toEqual(['40']);
+  });
+
+  it('refuses a hall that does not say where its whispers are kept', () => {
+    const { folder } = hall();
+    const file = halSaying(folder, [
+      `format = "${GREATHALL_FORMAT}"`,
+      '[library]',
+      'folder = "Library"',
+      '[[library.documents]]',
+      'address = "40"',
+      'file = "40_DOCUMENT.md"',
+    ]);
+    // Before, this quietly made the hall's own folder the alcove, and new whispers were written beside the hall file.
+    expect(() => readGreatHall(file)).toThrow(/does not say where its whispers are kept/);
+  });
+
+  it('refuses a hall that addresses two documents the same', () => {
+    const { folder } = hall();
+    const file = halSaying(folder, [
+      `format = "${GREATHALL_FORMAT}"`,
+      'alcove = "Alcove"',
+      '[library]',
+      'folder = "Library"',
+      '[[library.documents]]',
+      'address = "40"',
+      'file = "40_DOCUMENT.md"',
+      '[[library.documents]]',
+      'address = "40"',
+      'file = "PKG_mapgen.md"',
+    ]);
+    expect(() => readGreatHall(file)).toThrow(/addresses two documents "40"/);
+  });
+
+  it('refuses a document listed with no address or no file, saying which one', () => {
+    const { folder } = hall();
+    const noAddress = halSaying(folder, [
+      `format = "${GREATHALL_FORMAT}"`,
+      'alcove = "Alcove"',
+      '[library]',
+      'folder = "Library"',
+      '[[library.documents]]',
+      'file = "40_DOCUMENT.md"',
+    ]);
+    expect(() => readGreatHall(noAddress)).toThrow(/gives no address for document 1/);
+    const noFile = halSaying(folder, [
+      `format = "${GREATHALL_FORMAT}"`,
+      'alcove = "Alcove"',
+      '[library]',
+      'folder = "Library"',
+      '[[library.documents]]',
+      'address = "40"',
+      'file = "40_DOCUMENT.md"',
+      '[[library.documents]]',
+      'address = "PKG_mapgen"',
+    ]);
+    // Before, a document listed with nothing to find it by was passed over in silence.
+    expect(() => readGreatHall(noFile)).toThrow(/gives no file for document 2 .*PKG_mapgen/);
+  });
+
+  it('opens a hall whose library has moved, and carries what is missing as trouble', () => {
+    const { folder } = hall();
+    const file = halSaying(folder, [
+      `format = "${GREATHALL_FORMAT}"`,
+      'alcove = "Alcove"',
+      '[library]',
+      'folder = "Library"',
+      '[[library.documents]]',
+      'address = "40"',
+      'file = "40_DOCUMENT.md"',
+      '[[library.documents]]',
+      'address = "99"',
+      'file = "99_GONE.md"',
+    ]);
+    const read = readGreatHall(file);
+    expect(read.trouble).toEqual(['"99_GONE.md" (99) is not in the library folder.']);
+    // A hall whose whole library folder is elsewhere says that once, rather than once per document.
+    const elsewhere = halSaying(folder, [
+      `format = "${GREATHALL_FORMAT}"`,
+      'alcove = "Alcove"',
+      '[library]',
+      'folder = "Nowhere"',
+      '[[library.documents]]',
+      'address = "40"',
+      'file = "40_DOCUMENT.md"',
+    ]);
+    expect(readGreatHall(elsewhere).trouble).toHaveLength(1);
+    expect(readGreatHall(elsewhere).trouble[0]).toMatch(/library folder .* is not there/);
+  });
+});
+
+describe('nothing found is told apart from nothing readable', () => {
+  it('says why an address could not be read, and says nothing when the library simply holds no such place', () => {
+    const { file } = hall();
+    const halls = new GreatHalls();
+    halls.open(file);
+    const [missing, unheld, notListed] = halls.sections(['40.9.9', '40.6.2', '99.1']);
+    // A place the library does not carry: nothing there, and nothing wrong.
+    expect(missing).toMatchObject({ line: 0, text: '' });
+    expect(missing?.trouble).toBeUndefined();
+    expect(unheld?.line).toBeGreaterThan(0);
+    // A document the hall does not list at all is a fault of the hall, and is said to be one.
+    expect(notListed?.trouble).toMatch(/holds no document addressed "99"/);
+  });
+
+  it('says a document that has moved has moved, instead of looking like an empty library', () => {
+    const { folder, file } = hall();
+    const halls = new GreatHalls();
+    halls.open(file);
+    rmSync(join(folder, 'Library', '40_DOCUMENT.md'));
+    const [section] = halls.sections(['40.6.2']);
+    expect(section?.trouble).toMatch(/is not where this GreatHall says it is/);
+  });
+
+  it('answers with the first of an address written twice, and counts the others', () => {
+    const twice = [
+      '# 40 Document',
+      '',
+      '## 40.14 The whisper records what is said unasked',
+      '',
+      'Said once.',
+      '',
+      '## 40.14 The whisper records what is said unasked',
+      '',
+      'Said twice, by mistake.',
+      '',
+    ].join('\n');
+    const place = placeOf(twice, '40.14');
+    expect(place.line).toBe(3);
+    expect(place.alsoAt).toEqual([7]);
+  });
+});
+
+describe('a document that was never read is never written over', () => {
+  it('refuses a write carrying no stamp', () => {
+    const { file } = hall();
+    const halls = new GreatHalls();
+    halls.open(file);
+    // Emptiness once meant "write anyway", which let a document deleted and made again be written over in silence.
+    expect(() => halls.saveDocument('40', '# Written blind\n', '')).toThrow(/was not read before it was written/);
+    expect(halls.document('40').markdown).toContain('THE WIKI');
   });
 });

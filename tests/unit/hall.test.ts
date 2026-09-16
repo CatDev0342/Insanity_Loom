@@ -144,6 +144,8 @@ describe("searching the hall's library as well", () => {
     writeFileSync(join(library, '40_DOCUMENT.md'), '# 40 Document\n\n## 40.6 — THE WIKI\n\nLinks between whispers.\n');
     return {
       name: 'A hall',
+      form: 'TOML',
+      trouble: [],
       path: join(folder, 'A hall.greathall'),
       alcoves: [folder],
       library,

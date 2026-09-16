@@ -1,10 +1,13 @@
-{
-  "format": "insanity-loom/greathall",
-  "name": "A hall for testing",
-  "alcove": "Alcove",
-  "library": {
-    "name": "Test Library",
-    "folder": "Library",
-    "documents": [{ "address": "40", "file": "40_DOCUMENT.md", "title": "The document" }]
-  }
-}
+# A GreatHall for the end-to-end tests: one alcove beside it, a library of one document.
+format = "insanity-loom/greathall"
+name = "A hall for testing"
+alcove = "Alcove"
+
+[library]
+name = "Test Library"
+folder = "Library"
+
+[[library.documents]]
+address = "40"
+file = "40_DOCUMENT.md"
+title = "The document"

@@ -1,8 +1,9 @@
 // A GreatHall: the file that says what belongs together, and how what is written in one document points into
 // another. It is to Insanity_Loom what a solution file is to a development tool (95.37).
 //
-// The file is JSON, and says three things: where the whispers of this hall are kept, which documents make up its
-// library, and what each of those documents is addressed by. Everything else is worked out from those.
+// The file is TOML, and says three things: where the whispers of this hall are kept, which documents make up its
+// library, and what each of those documents is addressed by. Everything else is worked out from those. Halls written
+// in JSON, the form the file first took, are still read.
 //
 // Addresses are how a library is cited. The Master_Design_Library numbers every document, section, subsection and
 // item — `31.2.4.2` is file 31, section 2, subsection 4, item 2 — and addresses packages by name, `PKG_mapgen.3.2`.
@@ -19,9 +20,20 @@ export interface HallDocument {
   readonly title: string;
 }
 
+/** How a hall's file was written. TOML is the form; JSON is the form it first took, and is still read. */
+export type HallForm = 'TOML' | 'JSON';
+
 /** A GreatHall, as its file says it is. */
 export interface GreatHall {
   readonly name: string;
+  /** How its file was written. */
+  readonly form: HallForm;
+  /**
+   * What is wrong with the hall that did not stop it opening: a library folder that is not there, a document that
+   * has moved. A hall is the author's own file, written by hand, and telling them what it misses is worth more than
+   * refusing to open it. Empty when nothing is wrong.
+   */
+  readonly trouble: readonly string[];
   /** Where this hall's file is, in full, so everything else can be found from it. */
   readonly path: string;
   /**
@@ -47,6 +59,18 @@ export interface HallSection {
   readonly text: string;
   /** What the document is called. */
   readonly title: string;
+  /**
+   * Other lines of the same document carrying the same address, counting from one. A library should number each
+   * place once; when it does not, the panel shows the first and says how many others there are, rather than
+   * choosing one in silence.
+   */
+  readonly alsoAt: readonly number[];
+  /**
+   * Why nothing could be read, when that is the reason there is nothing: a document the hall does not list, a file
+   * that is not where the hall says it is, a file that could not be read. Undefined when the library was read and
+   * simply holds no such place.
+   */
+  readonly trouble?: string;
 }
 
 export const GREATHALL_SUFFIX = '.greathall';

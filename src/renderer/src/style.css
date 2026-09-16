@@ -273,6 +273,17 @@ body {
   font-size: 0.8rem;
 }
 
+.library-entry.is-trouble .library-text,
+#library-said.is-trouble {
+  color: var(--problem);
+}
+
+.library-note {
+  display: block;
+  color: var(--attention);
+  font-size: 0.75rem;
+}
+
 .library-text {
   display: -webkit-box;
   overflow: hidden;
