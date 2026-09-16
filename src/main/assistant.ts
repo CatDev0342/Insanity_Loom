@@ -97,6 +97,38 @@ function isSignInRequired(cause: unknown): boolean {
   return typeof cause === 'object' && cause !== null && (cause as { code?: unknown }).code === SIGN_IN_REQUIRED_CODE;
 }
 
+/** Fields a tool is given that say what it is working on, in the order they are worth reading. */
+const WORKED_ON = ['file_path', 'path', 'notebook_path', 'pattern', 'command', 'url', 'prompt', 'query'] as const;
+
+/** How much of what a command was given is worth carrying; a prompt to a sub-assistant can be pages long. */
+const LONGEST_DETAIL = 400;
+
+/**
+ * What a command is working on: the file it reads, the pattern it looks for, the address it fetches.
+ *
+ * A command reports a title like "Read File", which says what kind of work it is and nothing about which work — a
+ * panel of them reads as the same line over and over, and two that look alike are not (the designer, 2026-Sep-16).
+ * The places a command names come first, since they are already meant for showing; what it was given comes second.
+ */
+function whatItIsWorkingOn(update: { locations?: unknown; rawInput?: unknown }): string {
+  const locations = Array.isArray(update.locations) ? update.locations : [];
+  const named = locations
+    .map((one) => (typeof one === 'object' && one !== null ? (one as { path?: unknown }).path : undefined))
+    .filter((path): path is string => typeof path === 'string' && path !== '');
+  if (named.length > 0) return shorten(named.join(', '));
+  const given = typeof update.rawInput === 'object' && update.rawInput !== null ? (update.rawInput as Record<string, unknown>) : {};
+  for (const field of WORKED_ON) {
+    const value = given[field];
+    if (typeof value === 'string' && value.trim() !== '') return shorten(value);
+  }
+  return '';
+}
+
+function shorten(detail: string): string {
+  const oneLine = detail.replace(/\s+/g, ' ').trim();
+  return oneLine.length <= LONGEST_DETAIL ? oneLine : `${oneLine.slice(0, LONGEST_DETAIL)}…`;
+}
+
 /** Who the assistant says it is signed in as, from its account notification; undefined when it says nothing usable. */
 function readAccount(params: Record<string, unknown>): { label: string; detail: string } | undefined {
   const status = params['authStatus'];
@@ -538,10 +570,22 @@ export class Assistant {
         if (update.content.type === 'text') this.emit({ type: 'thought', text: update.content.text, messageId: update.messageId ?? '' });
         return;
       case 'tool_call':
-        this.emit({ type: 'tool', id: update.toolCallId, title: update.title, status: update.status ?? 'pending' });
+        this.emit({
+          type: 'tool',
+          id: update.toolCallId,
+          title: update.title,
+          detail: whatItIsWorkingOn(update),
+          status: update.status ?? 'pending',
+        });
         return;
       case 'tool_call_update':
-        this.emit({ type: 'tool', id: update.toolCallId, title: update.title ?? '', status: update.status ?? '' });
+        this.emit({
+          type: 'tool',
+          id: update.toolCallId,
+          title: update.title ?? '',
+          detail: whatItIsWorkingOn(update),
+          status: update.status ?? '',
+        });
         return;
       case 'session_info_update': {
         const title = update.title ?? '';

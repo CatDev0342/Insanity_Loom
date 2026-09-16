@@ -4,6 +4,11 @@
 // this one points at, and the whispers that point here. Everything in them is a place to go — choosing one takes the
 // author there, in this whisper or another.
 //
+// "Points at" means documents, not addresses. A reply full of sources would otherwise fill the panel with web
+// addresses that have nothing to do with how the author's own writing hangs together — "it shouldn't be listing just
+// any URL … the idea [is] to list other documents this document is connected to" (the designer, 2026-Sep-16). A link
+// out to the web is still a link, and still followed from the writing; it is simply not what this list is about.
+//
 // It is drawn from the whisper itself each time it changes, so it can never disagree with what is on the page.
 
 import { readWhisperLink, type WhisperPointingHere } from '../../../shared/whispers';
@@ -53,9 +58,13 @@ export function whereabouts(editor: WhisperEditor): Whereabouts {
       const address = link?.attrs['href'];
       if (typeof address === 'string' && address !== '' && !pointsAt.has(address)) {
         const whisper = readWhisperLink(address);
+        // Another document, and not this one: a link to a heading here is already in the list above.
+        if (whisper === undefined || whisper.name === '') return false;
+        const named = whisper.name.replace(/\.xhtml$/i, '');
         pointsAt.set(address, {
           address,
-          name: whisper === undefined ? address : whisper.name.replace(/\.xhtml$/i, '') || 'this whisper',
+          // The section it points into is part of where it goes, so the list says which.
+          name: whisper.heading === '' ? named : `${named} · ${whisper.heading}`,
           text: node.text ?? address,
         });
       }
@@ -132,7 +141,7 @@ export class Navigation {
           depth: 1,
           go: () => this.actions.follow(link.address),
         })),
-        'This whisper points at nothing yet.',
+        'This whisper points at no other whisper yet.',
       ),
       this.list(
         'Points here',

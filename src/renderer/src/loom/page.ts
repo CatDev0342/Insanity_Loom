@@ -34,7 +34,7 @@ import { ReferenceBar, type ReferenceBarElements } from './reference-bar';
 import { COMMANDS_TAB, Thoughts, type ThoughtsElements } from './thoughts';
 import type { UpdateStanding } from '../../../shared/updates';
 import { NOTHING_YET, withPiece, type ReplyBeingWritten } from './one-reply';
-import { howLong, TICK_SECONDS } from './how-long';
+import { howLong, howLongExactly, TICK_SECONDS } from './how-long';
 import { sendAgain, wentUnheard } from './sending-again';
 import { Saving } from './saving';
 import { theAuthorsOwn } from './the-authors-own';
@@ -146,6 +146,9 @@ export class Loom {
   private steering = false;
   /** What the turn being answered is costing, at each place a turn can spend time (timings.ts). */
   private clock: TurnClock | undefined;
+  /** When the assistant began thinking, and the ticker that says how long it has been at it. */
+  private thinkingSince = 0;
+  private thinkingTimer: ReturnType<typeof setInterval> | undefined;
   /** What the assistant being talked to is, so a row of timings says what it was measured against. */
   private assistantSaid = '';
   /** When the reply being written was asked for, and the timer that keeps saying how long it has been. */
@@ -896,6 +899,37 @@ export class Loom {
     if (unanswered.length === 0) this.stopSayingHowLong();
   }
 
+  /**
+   * Says the assistant is thinking, and how long it has been thinking, counted from the first thought of this run.
+   *
+   * "Thinking…" reads the same after three seconds and after three minutes. The designer, 2026-Sep-16: "the time
+   * you're thinking should display the time". So it does, every second, from the first one.
+   */
+  private sayItIsThinking(): void {
+    if (this.thinkingTimer === undefined) {
+      this.thinkingSince = Date.now();
+      this.thinkingTimer = setInterval(() => this.sayHowLongItHasThought(), MILLISECONDS_PER_SECOND);
+    }
+    this.sayHowLongItHasThought();
+  }
+
+  private sayHowLongItHasThought(): void {
+    if (this.writing === undefined) {
+      this.stopSayingHowLongItHasThought();
+      return;
+    }
+    this.elements.activity.textContent = `Thinking… · ${howLongExactly((Date.now() - this.thinkingSince) / MILLISECONDS_PER_SECOND)}`;
+  }
+
+  /** Thinking is over — a word arrived, or the turn ended. The line goes, and the clock with it. */
+  private stopSayingHowLongItHasThought(): void {
+    if (this.thinkingTimer !== undefined) {
+      clearInterval(this.thinkingTimer);
+      this.thinkingTimer = undefined;
+    }
+    this.elements.activity.textContent = '';
+  }
+
   /** Starts saying how long, if nothing is saying it yet. The ticker stops itself once everything is answered. */
   private startSayingHowLong(): void {
     this.sayHowLong();
@@ -934,7 +968,7 @@ export class Loom {
       if (writing.markdown === '') editor.setReplyState(writing.replyId, state);
       else editor.setReply(writing.replyId, writing.markdown, state);
     });
-    this.elements.activity.textContent = '';
+    this.stopSayingHowLongItHasThought();
     // What the reply cited of the library, for the Library tab beside the whisper, and for the bar between them.
     const answered = editor.turnAnswering(writing.replyId);
     void this.library.cite(answered, referencesIn(writing.markdown, this.library.addresses)).then(() => {
@@ -1058,14 +1092,14 @@ export class Loom {
           unasked: this.writing.unasked,
           ...withPiece(this.writing, event.text, event.messageId),
         };
+        this.stopSayingHowLongItHasThought();
         this.clock?.piece();
         // Nothing will come to say an unasked reply is over, so its own silence says it.
         if (this.writing.unasked) this.endAnUnaskedReplyAfterSilence();
-        this.elements.activity.textContent = '';
         this.scheduleRender();
         return;
       case 'thinking':
-        if (this.writing !== undefined) this.elements.activity.textContent = 'Thinking…';
+        if (this.writing !== undefined) this.sayItIsThinking();
         return;
       case 'thought':
         this.thoughts.add(event.text, event.messageId);
@@ -1085,7 +1119,7 @@ export class Loom {
       case 'tool':
         // Commands are shown beside the whisper, never in the status bar: a line beneath the writing cannot hold one,
         // and a long one used to push the bar up into the writing itself.
-        this.thoughts.command(event.id, event.title, event.status);
+        this.thoughts.command(event.id, event.title, event.detail, event.status);
         return;
       case 'permission':
         this.ask(event.requestId, event.title, event.choices);

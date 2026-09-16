@@ -123,7 +123,7 @@ describe("where the assistant's thinking is kept", () => {
     thoughts.keepBeside('/alcove/A.xhtml');
     thoughts.beginTurn(1, 'now');
     thoughts.add('Working out what to do.');
-    thoughts.command('one', 'export PATH="$HOME/bin:$PATH"; cd ~/work && npm run check', 'in_progress');
+    thoughts.command('one', 'export PATH="$HOME/bin:$PATH"; cd ~/work && npm run check', '', 'in_progress');
 
     // The thinking is not crowded out by the command, and the command says the work rather than the getting ready.
     expect(stream.textContent).toContain('Working out what to do.');
@@ -137,26 +137,42 @@ describe("where the assistant's thinking is kept", () => {
     vi.useRealTimers();
   });
 
-  it('says the same work done again in a row once, with a count', () => {
+  it('gives every command its own line, and says what each was working on', () => {
     const { thoughts, commands } = panel();
     thoughts.keepBeside('/alcove/A.xhtml');
-    thoughts.command('one', 'cd ~/work && npm run check', 'completed');
-    thoughts.command('two', 'export PATH="/x:$PATH"; npm run check', 'completed');
-    thoughts.command('three', 'npm run check', 'completed');
+    // Two commands that read alike from the front and are not the same command at all: what they worked on is the
+    // whole difference between them (the designer, 2026-Sep-16).
+    thoughts.command('one', 'Read File', '/alcove/A.xhtml', 'completed');
+    thoughts.command('two', 'Read File', '/alcove/B.xhtml', 'completed');
+    thoughts.command('three', 'cd ~/work && npm run check', '', 'completed');
 
-    expect(commands.querySelectorAll('.thought-command')).toHaveLength(1);
-    expect(commands.textContent).toContain('× 3');
+    const lines = [...commands.querySelectorAll('.thought-command')].map((line) => line.textContent);
+    expect(lines).toHaveLength(3);
+    expect(lines[0]).toBe('Read File — /alcove/A.xhtml');
+    expect(lines[1]).toBe('Read File — /alcove/B.xhtml');
+    // Nothing is counted away, and nothing is cut short.
+    expect(commands.textContent).not.toContain('×');
+    expect(lines[2]).toBe('npm run check');
+  });
+
+  it('heads the commands by turn, in the words the whisper uses', () => {
+    const { thoughts, commands } = panel();
+    thoughts.keepBeside('/alcove/A.xhtml');
+    thoughts.beginTurn(7, 'Sep 16, 2026, 05:14 AM');
+    thoughts.command('one', 'Read File', '/alcove/A.xhtml', 'completed');
+    // A command can be read back to the turn that caused it.
+    expect(commands.querySelector('.thought-turn')?.textContent).toBe('Turn 7 · Sep 16, 2026, 05:14 AM');
   });
 
   it('says how many commands the author has not looked at, and stops once they have', () => {
     const { thoughts, news } = panel();
     thoughts.keepBeside('/alcove/A.xhtml');
-    thoughts.command('one', 'npm run check', 'completed');
-    thoughts.command('two', 'git status', 'completed');
+    thoughts.command('one', 'npm run check', '', 'completed');
+    thoughts.command('two', 'git status', '', 'completed');
     expect(news.at(-1)).toEqual({ tabId: COMMANDS_TAB, howMuch: 2 });
 
     thoughts.commandsSeen();
-    thoughts.command('three', 'git log', 'completed');
+    thoughts.command('three', 'git log', '', 'completed');
     expect(news.at(-1)).toEqual({ tabId: COMMANDS_TAB, howMuch: 1 });
   });
 });
@@ -176,6 +192,20 @@ describe('what the navigation panel reads from the whisper', () => {
     ]);
     expect(here.turns).toEqual([{ sectionId: 's1', turn: '1', shown: '14 Sep 2026, 06:12' }]);
     expect(here.pointsAt).toEqual([{ address: 'Another%20whisper.xhtml', name: 'Another whisper', text: 'a link' }]);
+  });
+
+  it('points at documents, not at every address in the writing', () => {
+    const w = whisper(
+      '<p>A source: <a href="https://example.com/a-page">the page</a>, and ' +
+        '<a href="Another%20whisper.xhtml#what-the-loom-is">a whisper</a>, and ' +
+        '<a href="#a-heading-here">a heading of this one</a>.</p>',
+    );
+    // A reply full of sources would otherwise fill the panel with web addresses that say nothing about how the
+    // author's own writing hangs together (the designer, 2026-Sep-16). A heading of this whisper is in the list
+    // above, not this one.
+    expect(whereabouts(w).pointsAt).toEqual([
+      { address: 'Another%20whisper.xhtml#what-the-loom-is', name: 'Another whisper · what-the-loom-is', text: 'a whisper' },
+    ]);
   });
 });
 

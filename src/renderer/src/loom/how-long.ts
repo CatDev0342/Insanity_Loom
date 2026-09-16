@@ -21,3 +21,19 @@ export function howLong(seconds: number): string {
   if (minutes === 0) return ` · ${rest}s`;
   return rest === 0 ? ` · ${minutes}m` : ` · ${minutes}m ${rest}s`;
 }
+
+/**
+ * "3s", "1m 04s" — how long, said exactly, from the first second.
+ *
+ * The label on an unanswered reply says nothing for the first twenty seconds, because every reply takes a few and
+ * saying so would be noise. A line whose whole purpose is the clock is the other case: it says the time from the
+ * moment it appears, because a clock that waits before starting looks like a clock that is not running (the
+ * designer, 2026-Sep-16).
+ */
+export function howLongExactly(seconds: number): string {
+  if (!Number.isFinite(seconds) || seconds < 0) return '0s';
+  const whole = Math.floor(seconds);
+  const minutes = Math.floor(whole / SECONDS_PER_MINUTE);
+  const rest = whole % SECONDS_PER_MINUTE;
+  return minutes === 0 ? `${rest}s` : `${minutes}m ${String(rest).padStart(2, '0')}s`;
+}

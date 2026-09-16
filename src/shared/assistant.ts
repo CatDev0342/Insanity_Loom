@@ -67,7 +67,11 @@ export type AssistantEvent =
   | { readonly type: 'commands'; readonly names: readonly string[] }
   /** The assistant is making room in its context window: 'in_progress', 'completed', 'failed' or 'cancelled'. */
   | { readonly type: 'compacting'; readonly status: string; readonly summary: string }
-  | { readonly type: 'tool'; readonly id: string; readonly title: string; readonly status: string }
+  /**
+   * A command the assistant is running. `detail` is what it is working on — the file read, the pattern searched for —
+   * which is the whole difference between two commands whose titles read alike ("Read File", "Read File").
+   */
+  | { readonly type: 'tool'; readonly id: string; readonly title: string; readonly detail: string; readonly status: string }
   | { readonly type: 'permission'; readonly requestId: string; readonly title: string; readonly choices: readonly PermissionChoice[] }
   | { readonly type: 'replyFinished'; readonly reason: string }
   | { readonly type: 'problem'; readonly message: string }

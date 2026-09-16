@@ -107,6 +107,11 @@ body {
   overflow-y: auto;
 }
 
+/* The commands are lines of code, shown whole; the panel scrolls sideways to them rather than cutting them. */
+#commands-pane {
+  overflow-x: auto;
+}
+
 /* The tabs at the top of a panel: square, quiet, the one in use lit. */
 .panel-tabs {
   flex: none;
@@ -406,12 +411,12 @@ body {
 .thought-command {
   margin: 0;
   padding-left: 1.1rem;
-  overflow: hidden;
   color: var(--ink);
   font-family: ui-monospace, Consolas, 'DejaVu Sans Mono', monospace;
   font-size: 0.8rem;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  /* Whole, on one line: a command cut to fit the panel loses the part that says which command it was. The panel
+     scrolls sideways instead (the designer, 2026-Sep-16). */
+  white-space: pre;
   position: relative;
 }
 
@@ -432,16 +437,9 @@ body {
   color: var(--problem);
 }
 
-/* The work the command does, which is what the author reads down the panel; the whole of it is on hover. */
+/* The work the command does, and what it is working on: the file read, the pattern looked for. */
 .thought-command-said {
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-/* The same work done again and again in a row is said once, counted here, rather than filling the panel. */
-.thought-command-times:not(:empty) {
-  margin-left: 0.4rem;
-  color: var(--ink-quiet);
+  white-space: pre;
 }
 
 .thought-turn {

@@ -16,7 +16,7 @@
 // whisper cannot hold a command, and should never try.
 
 import type { WhispersBridge } from '../../../shared/whispers';
-import { sameCommand, shortCommand, timesOver } from './command-lines';
+import { workOfACommand } from './command-lines';
 
 /** The tab the commands are shown in, for saying that something has happened there. */
 export const COMMANDS_TAB = 'commands';
@@ -46,8 +46,6 @@ export class Thoughts {
   private thinkingAbout = '';
   /** The commands being followed, by the name the assistant gave them, so each is shown once. */
   private readonly commands = new Map<string, HTMLElement>();
-  /** The last command shown, and how many times that same work has been done in a row. */
-  private lastCommand = { title: '', times: 0, line: undefined as HTMLElement | undefined };
   /** How many commands have arrived since the author last looked at the Commands tab. */
   private unseenCommands = 0;
 
@@ -70,7 +68,6 @@ export class Thoughts {
     this.whisperPath = whisperPath;
     this.headed = false;
     this.commands.clear();
-    this.lastCommand = { title: '', times: 0, line: undefined };
     this.unseenCommands = 0;
     this.saySomethingHappened(COMMANDS_TAB, 0);
     this.elements.thoughtsStream.replaceChildren();
@@ -87,7 +84,12 @@ export class Thoughts {
     this.whisperPath = whisperPath;
   }
 
-  /** A turn was taken: what the assistant thinks from here belongs to it. */
+  /**
+   * A turn was taken: what the assistant thinks from here, and everything it runs, belongs to it.
+   *
+   * Both streams are headed the same way and with the same words the whisper uses, so a command can be read back to
+   * the turn that caused it (the designer, 2026-Sep-16).
+   */
   beginTurn(number: number, shown: string): void {
     this.flush();
     this.commands.clear();
@@ -97,6 +99,11 @@ export class Thoughts {
     heading.className = 'thought-turn';
     heading.textContent = `Turn ${number} · ${shown}`;
     this.elements.thoughtsStream.append(heading);
+    const overTheCommands = document.createElement('p');
+    overTheCommands.className = 'thought-turn';
+    overTheCommands.textContent = `Turn ${number} · ${shown}`;
+    this.elements.commandsStream.append(overTheCommands);
+    this.commandsToTheEnd();
     this.goToTheEnd();
   }
 
@@ -111,39 +118,34 @@ export class Thoughts {
    * the same file read twice, the same build tried twice — is said once with a count beside it rather than filling
    * the panel with the same line.
    */
-  command(id: string, title: string, status: string): void {
-    const whole = title.trim();
+  command(id: string, title: string, detail: string, status: string): void {
+    const whole = [title.trim(), detail.trim()].filter((part) => part !== '').join(' — ');
     if (whole === '') return;
     const already = this.commands.get(id);
     if (already !== undefined) {
       already.dataset['status'] = status;
-      already.title = `${whole} — ${status}`;
-      return;
-    }
-    const shown = shortCommand(whole);
-    // The same work again, right after itself: counted on the line already there.
-    const lastLine = this.lastCommand.line;
-    if (lastLine !== undefined && sameCommand(this.lastCommand.title, whole)) {
-      this.lastCommand = { ...this.lastCommand, times: this.lastCommand.times + 1 };
-      const count = lastLine.querySelector('.thought-command-times');
-      if (count instanceof HTMLElement) count.textContent = timesOver(this.lastCommand.times);
-      this.commands.set(id, lastLine);
-      this.newsOfACommand();
+      // A command says more of itself as it goes: what it is working on may only be known once it has begun.
+      const said = already.querySelector('.thought-command-said');
+      const now = workOfACommand(whole);
+      if (said instanceof HTMLElement && now.length > (said.textContent ?? '').length) {
+        said.textContent = now;
+        already.title = whole;
+      }
       return;
     }
 
+    // Every command is its own line, whole: two that read alike from the front are not the same command, and a line
+    // cut short to fit the panel hides exactly the part that tells them apart (the designer, 2026-Sep-16).
     const line = document.createElement('p');
     line.className = 'thought-command';
-    line.title = `${whole} — ${status}`;
+    // The whole of it, getting-ready and all, is on hover: the line shows the work, the hover shows what was run.
+    line.title = whole;
     line.dataset['status'] = status;
     const said = document.createElement('span');
     said.className = 'thought-command-said';
-    said.textContent = shown;
-    const count = document.createElement('span');
-    count.className = 'thought-command-times';
-    line.append(said, count);
+    said.textContent = workOfACommand(whole);
+    line.append(said);
     this.commands.set(id, line);
-    this.lastCommand = { title: whole, times: 1, line };
     this.elements.commandsStream.append(line);
     this.commandsToTheEnd();
     this.newsOfACommand();
