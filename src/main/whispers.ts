@@ -122,8 +122,10 @@ export class Whispers {
     const moved = this.alcove.rename(path, title);
     if (moved !== path) {
       this.journal.whisperPath = moved;
-      // The whispers that pointed at this one are put right, so a rename never breaks a link (40.6).
-      this.alcove.relink(basename(path), basename(moved));
+      // The whispers that pointed at this one are put right, so a rename never breaks a link (40.6). Only when the
+      // whisper renamed is a file of the alcove itself: a link names a file in the alcove, so rewriting those links
+      // for a whisper that lives somewhere beneath it would point them away from the whisper they meant.
+      if (dirname(path) === this.alcove.path) this.alcove.relink(basename(path), basename(moved));
     }
     return { path: moved, name: basename(moved), xhtml: this.alcove.read(moved) };
   }

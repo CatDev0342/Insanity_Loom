@@ -17,3 +17,21 @@ export function writeFileSafely(path: string, contents: string): void {
   }
   renameSync(temporary, path);
 }
+
+/**
+ * Adds to the end of a file, forcing what was added onto the disk, making the file if it is not there yet.
+ *
+ * A record that only ever grows — the assistant's thinking, written a second at a time — must not be read whole and
+ * written whole for every piece added: a long conversation's companion document would then be rewritten from the
+ * beginning every second, and the cost of adding one line would grow with everything already written. Adding to the
+ * end cannot half-write what is already there, so nothing already kept can be lost by it.
+ */
+export function appendFileSafely(path: string, contents: string): void {
+  const handle = openSync(path, 'a');
+  try {
+    writeSync(handle, contents);
+    fsyncSync(handle);
+  } finally {
+    closeSync(handle);
+  }
+}

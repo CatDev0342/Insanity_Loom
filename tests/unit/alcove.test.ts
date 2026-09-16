@@ -1,6 +1,6 @@
-import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { basename, join } from 'node:path';
+import { basename, dirname, join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import { Alcove, nameDate, nameFromTitle } from '../../src/main/alcove';
 
@@ -192,5 +192,54 @@ describe('finding writing in the alcove', () => {
     held.create('A conversation', '<p>Salt &amp; Pepper &lt;here&gt;</p>', WHEN);
     expect(held.search('Salt & Pepper')).toHaveLength(1);
     expect(held.search('<here>')).toHaveLength(1);
+  });
+});
+
+describe('a whisper is renamed where it stands', () => {
+  it('does not move a whisper out of the folder the author keeps it in', () => {
+    const folder = mkdtempSync(join(tmpdir(), 'insanity-loom-'));
+    made.push(folder);
+    const beneath = join(folder, 'Beneath');
+    mkdirSync(beneath, { recursive: true });
+    const path = join(beneath, '2026-09-14 1532 Where it lives.xhtml');
+    writeFileSync(path, '<html/>');
+    // Find in Files reaches whispers in the folders beneath the alcove, and a hall may name several alcoves.
+    const moved = new Alcove(folder).rename(path, 'Renamed');
+    expect(dirname(moved)).toBe(beneath);
+    expect(basename(moved)).toBe('2026-09-14 1532 Renamed.xhtml');
+    expect(existsSync(join(folder, '2026-09-14 1532 Renamed.xhtml'))).toBe(false);
+  });
+
+  it("leaves a name the author gave it to begin as it does", () => {
+    const folder = mkdtempSync(join(tmpdir(), 'insanity-loom-'));
+    made.push(folder);
+    const path = join(folder, 'Notes to myself.xhtml');
+    writeFileSync(path, '<html/>');
+    // The first fifteen characters of a name that is not a date are not a date, and were being pushed in front of
+    // the new title: "Notes to myself Renamed.xhtml".
+    expect(basename(new Alcove(folder).rename(path, 'Renamed'))).toBe('Renamed.xhtml');
+  });
+});
+
+describe('a link written by hand is still read', () => {
+  it('is not thrown over by an escape that is no escape', () => {
+    const it_ = alcove();
+    const path = it_.create('Pointed at', '<html/>', WHEN);
+    // "%zz" is not an escape sequence; reading it back used to throw, and What Points Here gave up on the whole alcove.
+    writeFileSync(join(it_.path, 'Pointing.xhtml'), '<a href="%zz.xhtml">broken</a><a href="' + encodeURIComponent(basename(path)) + '#A heading">good</a>');
+    const pointing = it_.pointingAt(basename(path));
+    expect(pointing.map((one) => one.name)).toEqual(['Pointing.xhtml']);
+    expect(pointing[0]?.headings).toEqual(['A heading']);
+    expect(it_.find('%zz.xhtml')).toBeUndefined();
+  });
+});
+
+describe('thinking is added to, not written again', () => {
+  it('keeps everything already written, and adds to the end', () => {
+    const it_ = alcove();
+    const path = it_.create('A conversation', '<html/>', WHEN);
+    it_.addThought(path, '## Turn 1\n\nThinking.\n');
+    it_.addThought(path, 'More thinking.\n');
+    expect(readFileSync(Alcove.thoughtsOf(path), 'utf8')).toBe('## Turn 1\n\nThinking.\nMore thinking.\n');
   });
 });

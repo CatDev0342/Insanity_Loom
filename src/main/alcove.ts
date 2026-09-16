@@ -5,8 +5,8 @@
 // it; the author may put it anywhere (Edit > Preferences). Whispers are written crash-safely, as everything is.
 
 import { existsSync, mkdirSync, readdirSync, readFileSync, renameSync } from 'node:fs';
-import { basename, join } from 'node:path';
-import { writeFileSafely } from './files';
+import { basename, dirname, join } from 'node:path';
+import { appendFileSafely, writeFileSafely } from './files';
 
 /** The folder name used when the author has not chosen one: beside the program, next to Data. */
 export const DEFAULT_ALCOVE_NAME = 'Alcove';
@@ -23,6 +23,10 @@ const THOUGHTS_SUFFIX = '.thoughts.md';
 
 // A whisper's file name begins with when it began, so an alcove reads in order in any file manager.
 const NAME_DATE_LENGTH = 'YYYY-MM-DD HHMM'.length;
+
+// How that beginning is recognised in a name already written: "2026-09-14 1532". A whisper the author made
+// themselves, or one written by something else, need not have one, and must not be given a made-up one.
+const NAME_BEGINS_WITH_DATE = /^\d{4}-\d{2}-\d{2} \d{4}/;
 
 // How much of a conversation's title a file name keeps.
 const LONGEST_TITLE_IN_NAME = 60;
@@ -74,15 +78,23 @@ function glimpseAt(writing: string, where: number, length: number): string {
 /** A link's address as it stands in a whisper's file. */
 const LINK_ADDRESS = /href="([^"]*)"/g;
 
+/**
+ * What a link says, read back as a browser would read it. A link is written by hand as often as by the program, and
+ * `%zz` is not an escape at all; what cannot be read back is given as it stands rather than thrown over.
+ */
+function asWritten(text: string): string {
+  try {
+    return decodeURIComponent(text);
+  } catch {
+    return text;
+  }
+}
+
 /** The whisper a link names, as it is written on disk, or '' when the link names no whisper. */
 function readLinkName(address: string): string {
   const written = address.replace(/&amp;/g, '&');
   const name = written.split('#')[0] ?? '';
-  try {
-    return decodeURIComponent(name);
-  } catch {
-    return '';
-  }
+  return asWritten(name);
 }
 
 /** Whatever follows the whisper's name in a link: the heading it points at, with its '#', or nothing. */
@@ -156,7 +168,7 @@ export class Alcove {
    * plain file name in the alcove itself: a link may not reach out of it into the rest of the computer.
    */
   find(name: string): string | undefined {
-    const decoded = decodeURIComponent(name);
+    const decoded = asWritten(name);
     if (decoded !== basename(decoded) || !Alcove.isWhisper(decoded)) return undefined;
     const path = join(this.folder, decoded);
     return existsSync(path) ? path : undefined;
@@ -173,13 +185,20 @@ export class Alcove {
   /**
    * Moves a whisper alongside its new title, keeping the date it began, so an alcove says what its whispers are
    * about. A name already taken is left alone rather than fought over.
+   *
+   * The whisper is renamed where it stands. Not every whisper open is a file in the alcove itself: Find in Files
+   * reaches whispers in the folders beneath it, and a hall may name several alcoves. Renaming used to write the new
+   * name into the alcove in use, which moved the file out of the folder the author keeps it in without a word.
+   *
+   * A name that does not begin with a date is left to begin as it does. A whisper the author named themselves is
+   * theirs, and pushing the first fifteen characters of its name in front of the new title made nonsense of it.
    */
   rename(path: string, title: string): string {
     const current = basename(path);
-    const began = current.slice(0, NAME_DATE_LENGTH);
-    const wanted = `${began} ${nameFromTitle(title)}${WHISPER_SUFFIX}`;
+    const began = NAME_BEGINS_WITH_DATE.test(current) ? `${current.slice(0, NAME_DATE_LENGTH)} ` : '';
+    const wanted = `${began}${nameFromTitle(title)}${WHISPER_SUFFIX}`;
     if (current === wanted || !existsSync(path)) return path;
-    const taken = join(this.folder, wanted);
+    const taken = join(dirname(path), wanted);
     if (existsSync(taken)) return path;
     renameSync(path, taken);
     this.moveThoughts(path, taken);
@@ -221,7 +240,7 @@ export class Alcove {
       const headings = new Set<string>();
       for (const [, address] of readFileSync(whisper.path, 'utf8').matchAll(LINK_ADDRESS)) {
         if (address === undefined || readLinkName(address) !== name) continue;
-        headings.add(decodeURIComponent(addressAfterName(address).replace(/^#/, '')));
+        headings.add(asWritten(addressAfterName(address).replace(/^#/, '')));
       }
       if (headings.size > 0) found.push({ name: whisper.name, headings: [...headings] });
     }
@@ -252,9 +271,7 @@ export class Alcove {
 
   /** Adds to a whisper's companion document, making it if it is not there yet. */
   addThought(whisperPath: string, written: string): void {
-    const path = Alcove.thoughtsOf(whisperPath);
-    const before = existsSync(path) ? readFileSync(path, 'utf8') : '';
-    writeFileSafely(path, `${before}${written}`);
+    appendFileSafely(Alcove.thoughtsOf(whisperPath), written);
   }
 
   /** Moves a whisper's companion document along with it, so the two never come apart. */
