@@ -30,6 +30,17 @@ body {
   background: var(--ground);
   color: var(--ink);
   font-family: system-ui, 'Segoe UI', Ubuntu, Cantarell, 'Noto Sans', sans-serif;
+  /* The scrollbars belong to the program, not to the machine: the pale ones Windows and GTK draw by default are the
+     one piece of a dark window that announces it is a web page in a frame. */
+  scrollbar-color: var(--menu-edge) transparent;
+  scrollbar-width: thin;
+}
+
+/* Selected writing is marked in the program's own blue. Left alone, it is marked in the system's, which is a
+   different blue in every window and on every machine. */
+::selection {
+  background: var(--highlight);
+  color: var(--ink);
 }
 
 body {
@@ -535,6 +546,16 @@ body {
   overflow-y: auto;
 }
 
+/* Numbers that change while the author watches — turn numbers, how long a reply has been coming, how full the
+   context window is — are set in figures of one width, so the writing beside them does not shift as they count. */
+.whisper-editor hr[data-turn]::after,
+.whisper-editor section.reply::before,
+.status-context,
+.thought-turn,
+.thought-command-times {
+  font-variant-numeric: tabular-nums;
+}
+
 /* The whisper itself: a page of rich text, centered, with room around it. */
 .whisper-editor {
   min-height: 100%;
@@ -551,6 +572,9 @@ body {
 
 .whisper-editor p {
   margin: 0 0 0.7em;
+  /* A last line holding one word is the commonest blemish in prose set by a machine. The browser is asked to look
+     ahead over the last few lines of a paragraph and break them more evenly; it costs nothing to read. */
+  text-wrap: pretty;
 }
 
 .whisper-editor h1,
@@ -558,6 +582,8 @@ body {
 .whisper-editor h3 {
   line-height: 1.25;
   margin: 1.2em 0 0.5em;
+  /* A heading is short enough that its lines can be weighed against each other whole. */
+  text-wrap: balance;
 }
 
 .whisper-editor ul,
@@ -1371,4 +1397,20 @@ body.find-window {
 
 .status-whisper:empty {
   display: none;
+}
+
+/*
+ * Movement is a courtesy, and some authors ask their machine for none of it — a vestibular disorder makes a moving
+ * interface genuinely unpleasant, and both Windows and the desktops of Linux carry the setting for saying so. What
+ * is left is everything that matters: the marks, the colors, and the writing.
+ */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 1ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 1ms !important;
+    scroll-behavior: auto !important;
+  }
 }
