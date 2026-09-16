@@ -549,8 +549,7 @@ body {
 .whisper-editor hr[data-turn]::after,
 .whisper-editor section.reply::before,
 .status-context,
-.thought-turn,
-.thought-command-times {
+.thought-turn {
   font-variant-numeric: tabular-nums;
 }
 
