@@ -33,6 +33,23 @@ export class PreferenceStore {
     return this.preferences.assistantMode;
   }
 
+  /**
+   * What each of the assistant's own settings was last set to — which model answers, how hard it thinks — by the
+   * assistant's identifier for it. Put back when a conversation opens, exactly as the way of working is.
+   */
+  get assistantSettings(): Readonly<Record<string, string>> {
+    return this.preferences.assistantSettings;
+  }
+
+  setAssistantSetting(settingId: string, value: string): void {
+    if (this.preferences.assistantSettings[settingId] === value) return;
+    this.write(
+      preferencesWith(this.preferences, {
+        assistantSettings: { ...this.preferences.assistantSettings, [settingId]: value },
+      }),
+    );
+  }
+
   /** The folder the author's whispers live in; '' for the Alcove folder beside the program. */
   get alcoveFolder(): string {
     return this.preferences.alcoveFolder;

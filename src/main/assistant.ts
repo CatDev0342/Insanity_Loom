@@ -151,11 +151,17 @@ function clientInfo(): { name: string; title: string; version: string } {
 
 type Emit = (event: AssistantEvent) => void;
 
-/** Where the author's chosen way of working is remembered between conversations and between runs. */
+/**
+ * Where the author's choices about the assistant are remembered between conversations and between runs: the way of
+ * working, and every setting the assistant offers — which model answers, how hard it thinks.
+ */
 export interface ModeMemory {
   /** The way of working last chosen; '' for the assistant's own default. */
   readonly assistantMode: string;
   setAssistantMode(modeId: string): void;
+  /** What each setting was last set to, by the assistant's own identifier for it. */
+  readonly assistantSettings: Readonly<Record<string, string>>;
+  setAssistantSetting(settingId: string, value: string): void;
 }
 
 interface PendingPermission {
@@ -357,7 +363,12 @@ export class Assistant {
     private readonly journal: Journal,
     logsFolder: string,
     private readonly tell: Emit,
-    private readonly memory: ModeMemory = { assistantMode: '', setAssistantMode: () => undefined },
+    private readonly memory: ModeMemory = {
+      assistantMode: '',
+      setAssistantMode: () => undefined,
+      assistantSettings: {},
+      setAssistantSetting: () => undefined,
+    },
     /** How long a turn may go in silence before the host is asked whether it is still there. Tests shorten it. */
     quietSeconds: number = QUIET_SECONDS_BEFORE_A_CHECK,
   ) {
@@ -677,7 +688,7 @@ export class Assistant {
     this.conversationId = created.sessionId;
     this.journal.saveConversationId(created.sessionId);
     this.emit({ type: 'conversation', id: created.sessionId, title: 'New conversation', replaying: false });
-    this.emit({ type: 'settings', settings: settingsFrom(created.configOptions) });
+    await this.putRememberedSettingsBack(settingsFrom(created.configOptions));
     await this.useModes(created.modes);
   }
 
@@ -719,9 +730,54 @@ export class Assistant {
    * every model thinks at every level — so what comes back is what is shown, rather than what was asked for.
    */
   async setSetting(settingId: string, value: string): Promise<void> {
+    const settings = await this.setOneSetting(settingId, value);
+    // Remembered only once the assistant has taken it: a value it refused is not what the author is using.
+    this.memory.setAssistantSetting(settingId, value);
+    this.emit({ type: 'settings', settings });
+  }
+
+  /** Sets one setting and answers with the whole list as it now stands. Says nothing to the page by itself. */
+  private async setOneSetting(settingId: string, value: string): Promise<readonly SessionSetting[]> {
     const { connection, conversationId } = this.requireConversation();
     const answer = await connection.setSessionConfigOption({ sessionId: conversationId, configId: settingId, value });
-    this.emit({ type: 'settings', settings: settingsFrom(answer.configOptions) });
+    return settingsFrom(answer.configOptions);
+  }
+
+  /**
+   * Takes the settings a conversation opens with, and puts the author's remembered choices back in use.
+   *
+   * A conversation begins in whatever the assistant defaults to — its own model, its own thinking level — and the
+   * author had to choose again every time, which is not remembering at all (the designer, 2026-Sep-16). This is the
+   * same thing `useModes` does for the way of working, and for the same reason.
+   *
+   * Setting one thing can move another (choosing a quick model can drop the thinking level with it), so the settings
+   * are applied one at a time and what the assistant answers with is what is shown. A remembered value the assistant
+   * no longer offers is passed over in silence: the model list is the assistant's, and it may change under us.
+   */
+  private async putRememberedSettingsBack(offered: readonly SessionSetting[]): Promise<void> {
+    let settings = offered;
+    const remembered = this.memory.assistantSettings;
+
+    for (const setting of offered) {
+      const wanted = remembered[setting.id];
+      if (wanted === undefined || wanted === '') continue;
+
+      // Asked of the list as it now stands: an earlier setting may have moved this one already.
+      const now = settings.find((one) => one.id === setting.id);
+      if (now === undefined || now.current === wanted) continue;
+      if (!now.choices.some((choice) => choice.value === wanted)) continue;
+
+      try {
+        settings = await this.setOneSetting(setting.id, wanted);
+      } catch (cause) {
+        this.emit({
+          type: 'problem',
+          message: `"${setting.name}" could not be set to what it was last set to: ${cause instanceof Error ? cause.message : String(cause)}`,
+        });
+      }
+    }
+
+    this.emit({ type: 'settings', settings });
   }
 
   /** Changes the way of working, and remembers it for later conversations. */
@@ -770,7 +826,7 @@ export class Assistant {
     this.watchdog.idle();
     this.journal.saveConversationId(id);
     this.emit({ type: 'replayFinished' });
-    this.emit({ type: 'settings', settings: settingsFrom(resumed.configOptions) });
+    await this.putRememberedSettingsBack(settingsFrom(resumed.configOptions));
     await this.useModes(resumed.modes);
   }
 

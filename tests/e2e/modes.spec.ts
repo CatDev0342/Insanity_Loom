@@ -67,4 +67,14 @@ test('the settings the assistant offers stand beside the way of working, and the
   // Setting one can move another — the quick model does not think hard — and what is shown is what came back.
   await model.selectOption('fake-haiku');
   await expect(thinking).toHaveValue('low');
+
+  // AND IT IS REMEMBERED. A conversation opens in whatever the assistant defaults to, so without this the author
+  // chose again every time (the designer, 2026-Sep-16).
+  const running = application;
+  application = undefined;
+  await running?.close();
+
+  const again = await open(true);
+  await expect(again.getByLabel('Model:')).toHaveValue('fake-haiku');
+  await expect(again.getByLabel('Thinking:')).toHaveValue('low');
 });

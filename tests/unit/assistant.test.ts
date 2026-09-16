@@ -38,7 +38,7 @@ afterEach(async () => {
 
 function start(
   hostCommand: string[] = [process.execPath, FAKE_ASSISTANT],
-  memory: ModeMemory = { assistantMode: '', setAssistantMode: () => undefined },
+  memory: ModeMemory = { assistantMode: '', setAssistantMode: () => undefined, assistantSettings: {}, setAssistantSetting: () => undefined },
   quietSeconds?: number,
 ): { assistant: Assistant; events: AssistantEvent[]; folder: string } {
   const folder = mkdtempSync(join(tmpdir(), 'insanity-loom-'));
@@ -173,7 +173,12 @@ describe('the assistant connection', () => {
 
   it('offers the assistant\'s ways of working, and remembers the one chosen', async () => {
     const remembered: string[] = [];
-    const { assistant, events } = start(undefined, { assistantMode: '', setAssistantMode: (mode) => remembered.push(mode) });
+    const { assistant, events } = start(undefined, {
+      assistantMode: '',
+      setAssistantMode: (mode) => remembered.push(mode),
+      assistantSettings: {},
+      setAssistantSetting: () => undefined,
+    });
     await assistant.connect();
     expect(events).toContainEqual({
       type: 'modes',
@@ -191,7 +196,12 @@ describe('the assistant connection', () => {
   });
 
   it('puts the remembered way of working back in use for a new conversation', async () => {
-    const { assistant, events } = start(undefined, { assistantMode: 'auto', setAssistantMode: () => undefined });
+    const { assistant, events } = start(undefined, {
+      assistantMode: 'auto',
+      setAssistantMode: () => undefined,
+      assistantSettings: {},
+      setAssistantSetting: () => undefined,
+    });
     await assistant.connect();
     expect(lastOfType(events, 'modes')).toMatchObject({ type: 'modes', current: 'auto' });
   });
@@ -360,5 +370,51 @@ describe('what the assistant offers to be set', () => {
     const said = lastOfType(events, 'settings');
     const settings = said?.type === 'settings' ? said.settings : [];
     expect(settings.find((setting) => setting.id === 'model')?.current).toBe('fake-opus');
+  });
+});
+
+describe('what the assistant is set to is remembered', () => {
+  it('puts the model and the thinking level back when the next conversation opens', async () => {
+    const remembered: Record<string, string> = {};
+    const memory: ModeMemory = {
+      assistantMode: '',
+      setAssistantMode: () => undefined,
+      get assistantSettings() {
+        return remembered;
+      },
+      setAssistantSetting: (settingId, value) => {
+        remembered[settingId] = value;
+      },
+    };
+
+    const first = start(undefined, memory);
+    await first.assistant.connect();
+    await first.assistant.setSetting('effort', 'high');
+    expect(remembered['effort']).toBe('high');
+    await first.assistant.close();
+
+    // Another run of the program, with the same memory: the author should not have to choose again.
+    const { assistant, events } = start(undefined, memory);
+    await assistant.connect();
+    const said = lastOfType(events, 'settings');
+    const settings = said?.type === 'settings' ? said.settings : [];
+    expect(settings.find((setting) => setting.id === 'effort')?.current).toBe('high');
+  });
+
+  it('passes over a remembered value the assistant no longer offers, rather than insisting on it', async () => {
+    const memory: ModeMemory = {
+      assistantMode: '',
+      setAssistantMode: () => undefined,
+      assistantSettings: { model: 'fake-a-model-that-went-away' },
+      setAssistantSetting: () => undefined,
+    };
+
+    const { assistant, events } = start(undefined, memory);
+    await assistant.connect();
+    // The model list is the assistant's and may change under us; what it offers wins, in silence.
+    const said = lastOfType(events, 'settings');
+    const settings = said?.type === 'settings' ? said.settings : [];
+    expect(settings.find((setting) => setting.id === 'model')?.current).toBe('fake-opus');
+    expect(events.some((event) => event.type === 'problem')).toBe(false);
   });
 });

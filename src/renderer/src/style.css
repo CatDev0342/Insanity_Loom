@@ -646,11 +646,18 @@ body {
   gap: 0.75rem;
 }
 
+/* Gold, as Mode is (the designer, 2026-Sep-16): which model answers and how hard it thinks are the two things worth
+   noticing at a glance in a status bar, and they read as one family with the way of working beside them. */
 .status-setting {
   display: flex;
   align-items: center;
   gap: 0.3rem;
-  color: var(--ink-quiet);
+  color: var(--attention);
+}
+
+.status-setting .status-mode-choice {
+  color: var(--attention);
+  border-color: var(--attention);
 }
 
 /* Said in the status bar while section isolation is on, because it changes what a key does. */

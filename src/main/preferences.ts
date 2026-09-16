@@ -12,12 +12,14 @@ import { writeFileSafely } from './files';
 export const PREFERENCES_FILE_NAME = 'preferences.json';
 
 // Version 1 held the spelling preferences alone; version 2 added the assistant's way of working; version 3 added the
-// alcove the author keeps their whispers in; version 4 adds how wide the writing is set. An older file is upgraded,
-// and written back complete, when read.
-const PREFERENCES_VERSION = 4;
-const OLDER_VERSIONS: readonly number[] = [1, 2, 3];
+// alcove the author keeps their whispers in; version 4 added how wide the writing is set; version 5 adds the
+// assistant's own settings — which model answers, how hard it thinks. An older file is upgraded, and written back
+// complete, when read.
+const PREFERENCES_VERSION = 5;
+const OLDER_VERSIONS: readonly number[] = [1, 2, 3, 4];
 const SECOND_VERSION = 2;
 const THIRD_VERSION = 3;
+const FOURTH_VERSION = 4;
 
 export interface Preferences {
   readonly version: typeof PREFERENCES_VERSION;
@@ -35,6 +37,11 @@ export interface Preferences {
    * than filling whatever room the panels leave. Off unless the author asks for it (View ▸ Comfortable Measure).
    */
   readonly comfortableMeasure: boolean;
+  /**
+   * What each setting the assistant offers was last set to, by the assistant's identifier for it: `model`,
+   * `effort`, and whatever else it comes to offer. Put back when a conversation opens.
+   */
+  readonly assistantSettings: Readonly<Record<string, string>>;
 }
 
 export const DEFAULT_PREFERENCES: Preferences = {
@@ -45,6 +52,7 @@ export const DEFAULT_PREFERENCES: Preferences = {
   assistantMode: '',
   alcoveFolder: '',
   comfortableMeasure: false,
+  assistantSettings: {},
 };
 
 // A mode's name as the protocol gives it: short, and without spaces or control characters.
@@ -102,7 +110,8 @@ export function loadPreferences(dataFolder: string): Preferences {
       alcoveFolder: held('alcoveFolder', THIRD_VERSION) === undefined ? '' : readFolder(parsed['alcoveFolder'], file),
       greatHallPath: typeof held('greatHallPath', THIRD_VERSION) === 'string' ? (parsed['greatHallPath'] as string) : '',
       panelWidths: readPanelWidths(held('panelWidths', THIRD_VERSION)),
-      comfortableMeasure: false,
+      comfortableMeasure: held('comfortableMeasure', FOURTH_VERSION) === true,
+      assistantSettings: {},
     };
     savePreferences(dataFolder, upgraded);
     return upgraded;
@@ -118,7 +127,22 @@ export function loadPreferences(dataFolder: string): Preferences {
     greatHallPath: typeof parsed['greatHallPath'] === 'string' ? parsed['greatHallPath'] : '',
     panelWidths: readPanelWidths(parsed['panelWidths']),
     comfortableMeasure: parsed['comfortableMeasure'] === true,
+    assistantSettings: readAssistantSettings(parsed['assistantSettings']),
   };
+}
+
+/**
+ * What the assistant's settings were last set to, as far as it can be believed: identifiers and values are the
+ * assistant's own words, so anything that is not a pair of strings is passed over rather than trusted.
+ */
+export function readAssistantSettings(value: unknown): Readonly<Record<string, string>> {
+  if (!isObject(value)) return {};
+
+  const settings: Record<string, string> = {};
+  for (const [settingId, setting] of Object.entries(value)) {
+    if (typeof setting === 'string' && settingId !== '') settings[settingId] = setting;
+  }
+  return settings;
 }
 
 export function savePreferences(dataFolder: string, preferences: Preferences): void {

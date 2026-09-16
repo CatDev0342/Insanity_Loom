@@ -7,6 +7,7 @@ import {
   loadPreferences,
   preferencesWith,
   PREFERENCES_FILE_NAME,
+  readAssistantSettings,
   readMode,
   readSpelling,
   savePreferences,
@@ -102,13 +103,14 @@ describe('preferences', () => {
       JSON.stringify({ version: 1, spelling: { enabled: false, languages: [] } }),
     );
     expect(loadPreferences(data)).toEqual({
-      version: 4,
+      version: 5,
       spelling: { enabled: false, languages: [], fetchDictionaries: false },
       assistantMode: '',
       alcoveFolder: '',
       greatHallPath: '',
       panelWidths: { left: 0, right: 0 },
       comfortableMeasure: false,
+      assistantSettings: {},
     });
   });
 
@@ -127,14 +129,47 @@ describe('preferences', () => {
       }),
     );
     expect(loadPreferences(data)).toEqual({
-      version: 4,
+      version: 5,
       spelling: { enabled: true, languages: ['en-US'], fetchDictionaries: true },
       assistantMode: 'acceptEdits',
       alcoveFolder: '/somewhere/of/their/own',
       greatHallPath: '/somewhere/of/their/own/CoreGame.greathall',
       panelWidths: { left: 320, right: 400 },
       comfortableMeasure: false,
+      assistantSettings: {},
     });
+  });
+
+  it('upgrade a version-4 file, keeping the measure the author chose', () => {
+    const data = folder();
+    // What an author on build 111 has: everything version 4 held, including a measure they had turned on.
+    writeFileSync(
+      join(data, PREFERENCES_FILE_NAME),
+      JSON.stringify({
+        version: 4,
+        spelling: { enabled: true, languages: [], fetchDictionaries: false },
+        assistantMode: '',
+        alcoveFolder: '',
+        greatHallPath: '',
+        panelWidths: { left: 0, right: 0 },
+        comfortableMeasure: true,
+      }),
+    );
+    const read = loadPreferences(data);
+    expect(read.version).toBe(5);
+    expect(read.comfortableMeasure).toBe(true);
+    expect(read.assistantSettings).toEqual({});
+  });
+
+  it("remember what the assistant was set to, and pass over what is not a setting", () => {
+    const data = folder();
+    savePreferences(data, preferencesWith(DEFAULT_PREFERENCES, { assistantSettings: { model: 'claude-opus-5', effort: 'medium' } }));
+    expect(loadPreferences(data).assistantSettings).toEqual({ model: 'claude-opus-5', effort: 'medium' });
+
+    // The identifiers and values are the assistant's own words, so anything that is not a pair of strings is
+    // passed over rather than trusted.
+    expect(readAssistantSettings({ model: 'claude-opus-5', effort: 3, '': 'x' })).toEqual({ model: 'claude-opus-5' });
+    expect(readAssistantSettings('not an object')).toEqual({});
   });
 
   it('remember the measure once it is chosen', () => {
