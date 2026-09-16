@@ -33,6 +33,7 @@ const bridge: InsanityLoomBridge = {
     resumeConversation: (id) => ipcRenderer.invoke(ASSISTANT_CHANNELS.resume, id),
     send: (text) => ipcRenderer.invoke(ASSISTANT_CHANNELS.send, text),
     steer: (text) => ipcRenderer.invoke(ASSISTANT_CHANNELS.steer, text),
+    setSetting: (settingId, value) => ipcRenderer.invoke(ASSISTANT_CHANNELS.setSetting, settingId, value),
     stop: () => ipcRenderer.invoke(ASSISTANT_CHANNELS.stop),
     answerPermission: (requestId, choiceId) => ipcRenderer.invoke(ASSISTANT_CHANNELS.answer, requestId, choiceId),
     onEvent: (listener) => {

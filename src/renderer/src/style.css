@@ -640,6 +640,20 @@ body {
   border-top-color: var(--focus);
 }
 
+/* The settings the assistant offers — which model answers, how hard it thinks — beside the way of working. */
+.status-settings {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.status-setting {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+  color: var(--ink-quiet);
+}
+
 /* Said in the status bar while section isolation is on, because it changes what a key does. */
 .status-isolation {
   padding: 0 0.35rem;

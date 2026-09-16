@@ -51,6 +51,7 @@ const loom = new Loom(
     replace: required<HTMLButtonElement>('#find-replace'),
     replaceAll: required<HTMLButtonElement>('#find-replace-all'),
     isolation: required<HTMLElement>('#isolation'),
+    settings: required<HTMLElement>('#settings'),
     contextHolder: required<HTMLElement>('#context'),
     contextSaid: required<HTMLElement>('#context-said'),
     contextFull: required<HTMLElement>('#context-full'),

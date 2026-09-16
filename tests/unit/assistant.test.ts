@@ -319,3 +319,40 @@ describe('a turn written while the assistant is writing', () => {
 
 /** Long enough for a slow reply to have begun writing, so there is a turn running to steer. */
 const ENOUGH_TO_BEGIN_MS = 300;
+
+describe('what the assistant offers to be set', () => {
+  it('says which model answers and how hard it thinks, as the conversation opens', async () => {
+    const { assistant, events } = start();
+    await assistant.connect();
+    const said = lastOfType(events, 'settings');
+    expect(said?.type).toBe('settings');
+    const settings = said?.type === 'settings' ? said.settings : [];
+    expect(settings.map((setting) => setting.id)).toEqual(['model', 'effort']);
+    // The assistant says which kind of setting each is, so the status bar can show them without knowing their names.
+    expect(settings.map((setting) => setting.category)).toEqual(['model', 'thought_level']);
+    expect(settings[0]?.current).toBe('fake-opus');
+    expect(settings[1]?.choices.map((choice) => choice.value)).toEqual(['low', 'medium', 'high']);
+  });
+
+  it('changes one, and says the whole list back, because one setting can move another', async () => {
+    const { assistant, events } = start();
+    await assistant.connect();
+    await assistant.setSetting('model', 'fake-haiku');
+    const said = lastOfType(events, 'settings');
+    const settings = said?.type === 'settings' ? said.settings : [];
+    expect(settings.find((setting) => setting.id === 'model')?.current).toBe('fake-haiku');
+    // The quick model does not think hard: the thinking level moved with it, and what is shown is what came back.
+    expect(settings.find((setting) => setting.id === 'effort')?.current).toBe('low');
+  });
+
+  it('refuses a setting the assistant does not offer, and leaves what is shown alone', async () => {
+    const { assistant, events } = start();
+    await assistant.connect();
+    // Whatever the assistant makes of it — the protocol carries back only that it went wrong — the refusal reaches
+    // the author, and nothing is shown as having changed.
+    await expect(assistant.setSetting('nonsense', 'x')).rejects.toThrow();
+    const said = lastOfType(events, 'settings');
+    const settings = said?.type === 'settings' ? said.settings : [];
+    expect(settings.find((setting) => setting.id === 'model')?.current).toBe('fake-opus');
+  });
+});

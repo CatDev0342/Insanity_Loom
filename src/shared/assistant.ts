@@ -51,6 +51,8 @@ export type AssistantEvent =
   | { readonly type: 'replayFinished' }
   /** Whether this assistant can be steered — told once a connection has been made and the handshake read. */
   | { readonly type: 'steering'; readonly supported: boolean }
+  /** What the assistant offers to be set for this conversation, and what each is set to now. */
+  | { readonly type: 'settings'; readonly settings: readonly SessionSetting[] }
   /** Text the author sent, as the assistant recorded it (seen while a resumed conversation's history is replayed). */
   | { readonly type: 'authorText'; readonly text: string }
   /**
@@ -86,6 +88,23 @@ export type AssistantEvent =
   /** The conversation now has a title of its own, which the assistant chose from what was said. */
   | { readonly type: 'title'; readonly title: string };
 
+/**
+ * One thing the assistant offers to be set for this conversation: which model answers, how hard it thinks, and
+ * whatever else it chooses to offer. The protocol calls these its config options; each says what it is, what it is
+ * set to now, and what else it could be set to.
+ *
+ * `category` is the assistant's own hint at what kind of setting it is — "model", "thought_level", "model_config" —
+ * so the status bar can show the two that matter without knowing their names. It may be anything, or missing.
+ */
+export interface SessionSetting {
+  readonly id: string;
+  readonly name: string;
+  readonly description: string;
+  readonly category: string;
+  readonly current: string;
+  readonly choices: readonly { readonly value: string; readonly name: string; readonly description: string }[];
+}
+
 export interface AssistantBridge {
   /** Connects, using the settings in Data/settings.json, and resumes the last conversation if there was one. */
   connect(): Promise<void>;
@@ -112,6 +131,8 @@ export interface AssistantBridge {
   onEvent(listener: (event: AssistantEvent) => void): () => void;
   /** Changes the way of working (and remembers it for later conversations). */
   setMode(modeId: string): Promise<void>;
+  /** Changes one of the settings the assistant offers — which model answers, how hard it thinks. */
+  setSetting(settingId: string, value: string): Promise<void>;
   /** The ways the assistant offers to sign in; empty when it offers none, or is not connected. */
   signInMethods(): Promise<readonly SignInMethod[]>;
   /** Begins signing in with one of the offered methods. Its progress arrives as signIn events. */
@@ -161,6 +182,7 @@ export const ASSISTANT_CHANNELS = {
   resume: 'insanity-loom:assistant-resume',
   send: 'insanity-loom:assistant-send',
   steer: 'insanity-loom:assistant-steer',
+  setSetting: 'insanity-loom:assistant-set-setting',
   stop: 'insanity-loom:assistant-stop',
   answer: 'insanity-loom:assistant-answer',
   event: 'insanity-loom:assistant-event',

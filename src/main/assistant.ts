@@ -18,6 +18,7 @@ import {
   type ConnectionState,
   type ConversationSummary,
   type SessionMode,
+  type SessionSetting,
   type SignInMethod,
 } from '../shared/assistant';
 import { isContextFull } from '../shared/assistant';
@@ -287,6 +288,38 @@ function saysItCanBeSteered(greeting: acp.InitializeResponse): boolean {
   if (typeof meta !== 'object' || meta === null) return false;
   const steering = (meta as { steering?: unknown }).steering;
   return typeof steering === 'object' && steering !== null && (steering as { supported?: unknown }).supported === true;
+}
+
+/**
+ * The settings the assistant offers for a conversation, as the protocol gives them: a list of "config options", each
+ * a chooser with its current value. Which model answers and how hard it thinks are two of them.
+ *
+ * Only the choosers are taken. An option that is on-or-off rather than a choice of values is passed over for now:
+ * nothing shows one yet, and showing a switch the author cannot see the meaning of is worse than showing nothing.
+ */
+function settingsFrom(options: readonly acp.SessionConfigOption[] | null | undefined): readonly SessionSetting[] {
+  if (options === undefined || options === null) return [];
+  const settings: SessionSetting[] = [];
+  for (const option of options) {
+    if (option.type !== 'select') continue;
+    // The values may come in one list or in named groups; both are flattened, since a chooser is a chooser.
+    const choices = option.options.flatMap((one) =>
+      'options' in one && Array.isArray(one.options) ? one.options : [one as acp.SessionConfigSelectOption],
+    );
+    settings.push({
+      id: option.id,
+      name: option.name,
+      description: option.description ?? '',
+      category: option.category ?? '',
+      current: option.currentValue,
+      choices: choices.map((choice) => ({
+        value: choice.value,
+        name: choice.name,
+        description: choice.description ?? '',
+      })),
+    });
+  }
+  return settings;
 }
 
 /** What Claude Code calls the command that makes room in its context window. */
@@ -613,6 +646,11 @@ export class Assistant {
         // The summary is the assistant's account of what it kept: thinking about the conversation, not part of it.
         if (update.content.type === 'text') this.emit({ type: 'thought', text: update.content.text, messageId: update.compactionId });
         return;
+      case 'config_option_update':
+        // The assistant may change these itself — a model that is not available falls back to another — so the whole
+        // list is sent again whenever anything moves, and the status bar follows it.
+        this.emit({ type: 'settings', settings: settingsFrom(update.configOptions) });
+        return;
       case 'current_mode_update':
         // The assistant can change its own way of working — leaving Plan mode, say; the status bar follows it.
         this.modes = { ...this.modes, current: update.currentModeId };
@@ -639,6 +677,7 @@ export class Assistant {
     this.conversationId = created.sessionId;
     this.journal.saveConversationId(created.sessionId);
     this.emit({ type: 'conversation', id: created.sessionId, title: 'New conversation', replaying: false });
+    this.emit({ type: 'settings', settings: settingsFrom(created.configOptions) });
     await this.useModes(created.modes);
   }
 
@@ -671,6 +710,18 @@ export class Assistant {
       }
     }
     this.emit({ type: 'modes', modes: this.modes.available, current: this.modes.current });
+  }
+
+  /**
+   * Changes one of the settings the assistant offers: which model answers, how hard it thinks.
+   *
+   * The assistant answers with the whole list as it now stands — setting one thing can change another, since not
+   * every model thinks at every level — so what comes back is what is shown, rather than what was asked for.
+   */
+  async setSetting(settingId: string, value: string): Promise<void> {
+    const { connection, conversationId } = this.requireConversation();
+    const answer = await connection.setSessionConfigOption({ sessionId: conversationId, configId: settingId, value });
+    this.emit({ type: 'settings', settings: settingsFrom(answer.configOptions) });
   }
 
   /** Changes the way of working, and remembers it for later conversations. */
@@ -719,6 +770,7 @@ export class Assistant {
     this.watchdog.idle();
     this.journal.saveConversationId(id);
     this.emit({ type: 'replayFinished' });
+    this.emit({ type: 'settings', settings: settingsFrom(resumed.configOptions) });
     await this.useModes(resumed.modes);
   }
 

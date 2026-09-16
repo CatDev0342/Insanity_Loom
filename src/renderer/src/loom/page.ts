@@ -13,6 +13,7 @@ import type {
   ConnectionState,
   JournalBridge,
   SessionMode,
+  SessionSetting,
 } from '../../../shared/assistant';
 import { referencesIn, type GreatHallBridge } from '../../../shared/greathall';
 import type { TimingsBridge } from '../../../shared/timings';
@@ -50,6 +51,8 @@ export interface LoomElements
     ReferenceBarElements {
   /** The word in the status bar saying that section isolation is on. */
   readonly isolation: HTMLElement;
+  /** Where the settings the assistant offers are shown and changed: which model answers, how hard it thinks. */
+  readonly settings: HTMLElement;
   readonly whisper: HTMLElement;
   /** What scrolls when the whisper is longer than the window. */
   readonly scroll: HTMLElement;
@@ -1143,6 +1146,9 @@ export class Loom {
       case 'modes':
         this.showModes(event.modes, event.current);
         return;
+      case 'settings':
+        this.showSettings(event.settings);
+        return;
       case 'title':
         void this.useTitle(event.title);
         return;
@@ -1416,6 +1422,53 @@ export class Loom {
     mode.title = modes.find((offered) => offered.id === current)?.description ?? '';
     // Anything but the assistant's first way of working means it is acting with less asking: said plainly, in color.
     mode.dataset['asking'] = current === modes[0]?.id ? 'always' : 'less';
+  }
+
+  /**
+   * The settings the assistant offers for this conversation, in the status bar beside the way of working.
+   *
+   * Which model answers and how hard it thinks are the two worth a glance, and the assistant says which is which
+   * (`category`), so they are shown without this program knowing their names. Everything else it offers is a chooser
+   * too, and is shown the same way rather than being hidden for not being expected.
+   *
+   * There was no way to see either of these at all, let alone change them, and a ten-second wait before the first
+   * word is exactly what a high thinking level looks like (the designer, 2026-Sep-16).
+   */
+  private showSettings(settings: readonly SessionSetting[]): void {
+    const { settings: where } = this.elements;
+    where.replaceChildren(
+      ...settings.map((setting) => {
+        const label = document.createElement('label');
+        label.className = 'status-setting';
+        label.dataset['category'] = setting.category;
+        const said = document.createElement('span');
+        said.textContent = `${setting.name}:`;
+        const chooser = document.createElement('select');
+        chooser.className = 'status-mode-choice';
+        chooser.title = setting.description;
+        chooser.replaceChildren(
+          ...setting.choices.map((choice) => {
+            const option = document.createElement('option');
+            option.value = choice.value;
+            option.textContent = choice.name;
+            if (choice.description !== '') option.title = choice.description;
+            return option;
+          }),
+        );
+        chooser.value = setting.current;
+        chooser.addEventListener('change', () => void this.chooseSetting(setting.id, chooser.value));
+        label.append(said, chooser);
+        return label;
+      }),
+    );
+  }
+
+  private async chooseSetting(settingId: string, value: string): Promise<void> {
+    try {
+      await this.assistant.setSetting(settingId, value);
+    } catch (problem) {
+      this.showProblem(problem instanceof Error ? problem.message : String(problem));
+    }
   }
 
   private async chooseMode(modeId: string): Promise<void> {

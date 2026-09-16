@@ -60,6 +60,36 @@ function startAgent() {
 
   let conversationNumber = 0;
   const cancelled = new Set();
+  /** The settings it offers for a conversation, as Claude's adapter offers a model and a thinking level. */
+  const settings = {
+    model: 'fake-opus',
+    thinking: 'medium',
+  };
+  const configOptions = () => [
+    {
+      type: 'select',
+      id: 'model',
+      name: 'Model',
+      category: 'model',
+      currentValue: settings.model,
+      options: [
+        { value: 'fake-opus', name: 'Fake Opus', description: 'The thorough one' },
+        { value: 'fake-haiku', name: 'Fake Haiku', description: 'The quick one' },
+      ],
+    },
+    {
+      type: 'select',
+      id: 'effort',
+      name: 'Thinking',
+      category: 'thought_level',
+      currentValue: settings.thinking,
+      options: [
+        { value: 'low', name: 'Low' },
+        { value: 'medium', name: 'Medium' },
+        { value: 'high', name: 'High' },
+      ],
+    },
+  ];
   /** The conversations with a turn being answered right now: only those can be steered. */
   const turnsRunning = new Set();
   /** The conversations a steered message has just gone into, so what was being written gives way to it. */
@@ -150,7 +180,15 @@ function startAgent() {
           const sessionId = `fake-conversation-${++conversationNumber}`;
           // What it offers to be asked to do, as Claude's adapter does once a session is open.
           setTimeout(() => void offerCommands(sessionId), 0);
-          return { sessionId, modes: modeState() };
+          return { sessionId, modes: modeState(), configOptions: configOptions() };
+        },
+        setSessionConfigOption: ({ configId, value }) => {
+          if (configId === 'model') settings.model = value;
+          else if (configId === 'effort') settings.thinking = value;
+          else throw new Error(`Unknown config option: ${configId}`);
+          // The quick model does not think hard, so choosing it changes the other setting too — as a real one does.
+          if (settings.model === 'fake-haiku') settings.thinking = 'low';
+          return { configOptions: configOptions() };
         },
         setSessionMode: async ({ sessionId, modeId }) => {
           currentMode = modeId;
@@ -176,7 +214,7 @@ function startAgent() {
             await say(sessionId, answer);
           }
           setTimeout(() => void offerCommands(sessionId), 0);
-          return { modes: modeState() };
+          return { modes: modeState(), configOptions: configOptions() };
         },
         cancel: ({ sessionId }) => {
           cancelled.add(sessionId);

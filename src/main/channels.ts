@@ -182,6 +182,12 @@ export function startServices(dataFolder: string, logsFolder: string, journal: J
   ipcMain.handle(ASSISTANT_CHANNELS.steer, (_event, section: unknown) =>
     assistant.steer(text(section, 'section of writing', MAXIMUM_SECTION_LENGTH)),
   );
+  ipcMain.handle(ASSISTANT_CHANNELS.setSetting, (_event, settingId: unknown, value: unknown) =>
+    assistant.setSetting(
+      identifier(settingId, 'setting'),
+      text(value, 'setting value', MAXIMUM_IDENTIFIER_LENGTH),
+    ),
+  );
   ipcMain.handle(ASSISTANT_CHANNELS.stop, () => assistant.stop());
   ipcMain.handle(ASSISTANT_CHANNELS.answer, (_event, requestId: unknown, choiceId: unknown) =>
     assistant.answerPermission(
