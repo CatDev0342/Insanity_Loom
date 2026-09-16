@@ -92,6 +92,12 @@ const MILLISECONDS_PER_SECOND = 1000;
  * wrote afterwards queued silently behind it** and was never sent (the designer, 2026-Sep-14). Silence ends it.
  */
 const QUIET_BEFORE_AN_UNASKED_REPLY_IS_OVER_SECONDS = 5;
+
+/**
+ * The category an assistant gives the setting that is the way of working. It has a chooser of its own in the status
+ * bar, and has had since before settings were read at all, so it is left out of the row of settings beside it.
+ */
+const SETTING_IS_THE_MODE = 'mode';
 const UNTITLED = 'Untitled whisper';
 
 
@@ -1436,8 +1442,13 @@ export class Loom {
    */
   private showSettings(settings: readonly SessionSetting[]): void {
     const { settings: where } = this.elements;
+    // The way of working is offered twice by an assistant that offers settings at all: once as a mode, which this
+    // program has always shown and set, and again among its settings. Shown as both, the status bar carried two
+    // Mode choosers side by side (the designer, 2026-Sep-16). The dedicated one keeps it.
     where.replaceChildren(
-      ...settings.map((setting) => {
+      ...settings
+        .filter((setting) => setting.category !== SETTING_IS_THE_MODE)
+        .map((setting) => {
         const label = document.createElement('label');
         label.className = 'status-setting';
         label.dataset['category'] = setting.category;

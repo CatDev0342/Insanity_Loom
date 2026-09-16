@@ -327,11 +327,17 @@ describe('what the assistant offers to be set', () => {
     const said = lastOfType(events, 'settings');
     expect(said?.type).toBe('settings');
     const settings = said?.type === 'settings' ? said.settings : [];
-    expect(settings.map((setting) => setting.id)).toEqual(['model', 'effort']);
+    // The way of working is offered among them too, which is why the status bar must leave it out of its own row:
+    // it has a chooser of its own, and showing both drew two Mode choosers side by side.
+    expect(settings.map((setting) => setting.id)).toEqual(['mode', 'model', 'effort']);
     // The assistant says which kind of setting each is, so the status bar can show them without knowing their names.
-    expect(settings.map((setting) => setting.category)).toEqual(['model', 'thought_level']);
-    expect(settings[0]?.current).toBe('fake-opus');
-    expect(settings[1]?.choices.map((choice) => choice.value)).toEqual(['low', 'medium', 'high']);
+    expect(settings.map((setting) => setting.category)).toEqual(['mode', 'model', 'thought_level']);
+    expect(settings.find((setting) => setting.id === 'model')?.current).toBe('fake-opus');
+    expect(settings.find((setting) => setting.id === 'effort')?.choices.map((choice) => choice.value)).toEqual([
+      'low',
+      'medium',
+      'high',
+    ]);
   });
 
   it('changes one, and says the whole list back, because one setting can move another', async () => {

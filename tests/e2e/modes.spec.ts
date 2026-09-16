@@ -50,3 +50,21 @@ test('Manual asks; Auto does not; and the choice is still there after a restart'
   page = await open(true);
   await expect(page.getByLabel('Mode:')).toHaveValue('auto');
 });
+
+test('the settings the assistant offers stand beside the way of working, and the mode is not shown twice', async () => {
+  const page = await open(false);
+
+  // An assistant that offers settings offers the way of working among them as well as as a mode. Shown as both, the
+  // status bar carried two Mode choosers side by side (the designer, 2026-Sep-16).
+  await expect(page.getByLabel('Mode:')).toHaveCount(1);
+
+  // What is worth a glance and had no way of being seen at all: which model answers, and how hard it thinks.
+  const model = page.getByLabel('Model:');
+  const thinking = page.getByLabel('Thinking:');
+  await expect(model).toHaveValue('fake-opus');
+  await expect(thinking).toHaveValue('medium');
+
+  // Setting one can move another — the quick model does not think hard — and what is shown is what came back.
+  await model.selectOption('fake-haiku');
+  await expect(thinking).toHaveValue('low');
+});

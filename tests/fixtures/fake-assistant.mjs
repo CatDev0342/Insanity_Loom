@@ -65,7 +65,19 @@ function startAgent() {
     model: 'fake-opus',
     thinking: 'medium',
   };
-  const configOptions = () => [
+  const configOptions = (modeNow) => [
+    {
+      // Offered as a setting as well as a mode, exactly as Claude's adapter offers it.
+      type: 'select',
+      id: 'mode',
+      name: 'Mode',
+      category: 'mode',
+      currentValue: modeNow,
+      options: [
+        { value: 'default', name: 'Auto' },
+        { value: 'plan', name: 'Plan' },
+      ],
+    },
     {
       type: 'select',
       id: 'model',
@@ -180,7 +192,7 @@ function startAgent() {
           const sessionId = `fake-conversation-${++conversationNumber}`;
           // What it offers to be asked to do, as Claude's adapter does once a session is open.
           setTimeout(() => void offerCommands(sessionId), 0);
-          return { sessionId, modes: modeState(), configOptions: configOptions() };
+          return { sessionId, modes: modeState(), configOptions: configOptions(currentMode) };
         },
         setSessionConfigOption: ({ configId, value }) => {
           if (configId === 'model') settings.model = value;
@@ -188,7 +200,7 @@ function startAgent() {
           else throw new Error(`Unknown config option: ${configId}`);
           // The quick model does not think hard, so choosing it changes the other setting too — as a real one does.
           if (settings.model === 'fake-haiku') settings.thinking = 'low';
-          return { configOptions: configOptions() };
+          return { configOptions: configOptions(currentMode) };
         },
         setSessionMode: async ({ sessionId, modeId }) => {
           currentMode = modeId;
@@ -214,7 +226,7 @@ function startAgent() {
             await say(sessionId, answer);
           }
           setTimeout(() => void offerCommands(sessionId), 0);
-          return { modes: modeState(), configOptions: configOptions() };
+          return { modes: modeState(), configOptions: configOptions(currentMode) };
         },
         cancel: ({ sessionId }) => {
           cancelled.add(sessionId);
