@@ -186,6 +186,11 @@ async function run(command: AnyCommandId): Promise<void> {
   if (command === 'find.replace') return loom.showReplaceBar();
   if (command === 'find.next') return loom.stepFind('next');
   if (command === 'find.previous') return loom.stepFind('previous');
+  if (command === 'view.comfortableMeasure') {
+    holdTheMeasure(!measured);
+    void bridge.layout.saveComfortableMeasure(measured);
+    return;
+  }
   if (!isPageCommand(command)) return bridge.runCommand(command);
   if (command === 'app.preferences') return preferences.show();
   if (command === 'app.checkForUpdates') return checkForUpdates();
@@ -197,10 +202,29 @@ async function run(command: AnyCommandId): Promise<void> {
 // is always ready.
 const standingOf = (command: AnyCommandId): { enabled: boolean; checked: boolean } => {
   if (isFormatCommand(command)) return loom.formatStanding(command);
-  // The one other command that is either on or off: the menu shows a tick beside it.
+  // The two other commands that are either on or off: the menu shows a tick beside each when it is.
   if (command === 'edit.isolateSections') return { enabled: true, checked: loom.isolatingSections };
+  if (command === 'view.comfortableMeasure') return { enabled: true, checked: measured };
   return { enabled: true, checked: false };
 };
+
+/**
+ * View ▸ Comfortable Measure: whether a line of writing is held to a width the eye returns from easily, or fills
+ * whatever room the panels leave it.
+ *
+ * Long lines are read worse — the eye loses its place coming back to the left — and the room a wide screen gives is
+ * far more than prose wants. But how wide the writing is set is the author's business, not the program's: this is
+ * offered, remembered, and off until it is asked for.
+ */
+const whisperHost = required<HTMLElement>('#whisper');
+let measured = false;
+function holdTheMeasure(on: boolean): void {
+  measured = on;
+  whisperHost.classList.toggle('is-measured', on);
+}
+void bridge.layout.comfortableMeasure().then((on) => {
+  holdTheMeasure(on);
+});
 
 new MenuBar(required<HTMLElement>('#menubar'), MENUS, run, standingOf);
 

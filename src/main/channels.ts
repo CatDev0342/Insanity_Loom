@@ -327,6 +327,10 @@ export function startServices(dataFolder: string, logsFolder: string, journal: J
   ipcMain.handle(LAYOUT_CHANNELS.savePanelWidths, (_event, widths: unknown) => {
     preferences.setPanelWidths(readPanelWidths(widths));
   });
+  ipcMain.handle(LAYOUT_CHANNELS.comfortableMeasure, () => preferences.comfortableMeasure);
+  ipcMain.handle(LAYOUT_CHANNELS.saveComfortableMeasure, (_event, on: unknown) => {
+    preferences.setComfortableMeasure(on === true);
+  });
   ipcMain.handle(HALL_CHANNELS.openWindow, (event) => {
     openFindWindow(windowOf(event), WINDOW_BACKGROUND_COLOR, PAGE_PREFERENCES);
   });

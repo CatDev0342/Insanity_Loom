@@ -132,6 +132,8 @@ const bridge: InsanityLoomBridge = {
   layout: {
     panelWidths: () => ipcRenderer.invoke(LAYOUT_CHANNELS.panelWidths),
     savePanelWidths: (widths) => ipcRenderer.invoke(LAYOUT_CHANNELS.savePanelWidths, widths),
+    comfortableMeasure: () => ipcRenderer.invoke(LAYOUT_CHANNELS.comfortableMeasure),
+    saveComfortableMeasure: (on) => ipcRenderer.invoke(LAYOUT_CHANNELS.saveComfortableMeasure, on),
   },
 
   greatHall: {

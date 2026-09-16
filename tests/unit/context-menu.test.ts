@@ -102,13 +102,45 @@ describe('preferences', () => {
       JSON.stringify({ version: 1, spelling: { enabled: false, languages: [] } }),
     );
     expect(loadPreferences(data)).toEqual({
-      version: 3,
+      version: 4,
       spelling: { enabled: false, languages: [], fetchDictionaries: false },
       assistantMode: '',
       alcoveFolder: '',
       greatHallPath: '',
       panelWidths: { left: 0, right: 0 },
+      comfortableMeasure: false,
     });
+  });
+
+  it('upgrade a file written before the measure was remembered, keeping everything it held', () => {
+    const data = folder();
+    // What an author using the program before this was written actually has on disk. Everything in it is theirs.
+    writeFileSync(
+      join(data, PREFERENCES_FILE_NAME),
+      JSON.stringify({
+        version: 3,
+        spelling: { enabled: true, languages: ['en-US'], fetchDictionaries: true },
+        assistantMode: 'acceptEdits',
+        alcoveFolder: '/somewhere/of/their/own',
+        greatHallPath: '/somewhere/of/their/own/CoreGame.greathall',
+        panelWidths: { left: 320, right: 400 },
+      }),
+    );
+    expect(loadPreferences(data)).toEqual({
+      version: 4,
+      spelling: { enabled: true, languages: ['en-US'], fetchDictionaries: true },
+      assistantMode: 'acceptEdits',
+      alcoveFolder: '/somewhere/of/their/own',
+      greatHallPath: '/somewhere/of/their/own/CoreGame.greathall',
+      panelWidths: { left: 320, right: 400 },
+      comfortableMeasure: false,
+    });
+  });
+
+  it('remember the measure once it is chosen', () => {
+    const data = folder();
+    savePreferences(data, preferencesWith(DEFAULT_PREFERENCES, { comfortableMeasure: true }));
+    expect(loadPreferences(data).comfortableMeasure).toBe(true);
   });
 
   it('refuse a way of working that is not one', () => {

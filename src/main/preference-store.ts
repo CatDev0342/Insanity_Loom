@@ -48,6 +48,16 @@ export class PreferenceStore {
     return this.preferences.panelWidths;
   }
 
+  /** Whether the writing is held to a comfortable measure (View ▸ Comfortable Measure). */
+  get comfortableMeasure(): boolean {
+    return this.preferences.comfortableMeasure;
+  }
+
+  setComfortableMeasure(comfortableMeasure: boolean): void {
+    if (comfortableMeasure === this.preferences.comfortableMeasure) return;
+    this.write(preferencesWith(this.preferences, { comfortableMeasure }));
+  }
+
   setPanelWidths(panelWidths: { readonly left: number; readonly right: number }): void {
     if (panelWidths.left === this.preferences.panelWidths.left && panelWidths.right === this.preferences.panelWidths.right) return;
     this.write(preferencesWith(this.preferences, { panelWidths }));

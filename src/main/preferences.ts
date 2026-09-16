@@ -11,11 +11,13 @@ import { writeFileSafely } from './files';
 
 export const PREFERENCES_FILE_NAME = 'preferences.json';
 
-// Version 1 held the spelling preferences alone; version 2 added the assistant's way of working; version 3 adds the
-// alcove the author keeps their whispers in. An older file is upgraded, and written back complete, when read.
-const PREFERENCES_VERSION = 3;
-const FIRST_VERSION = 1;
+// Version 1 held the spelling preferences alone; version 2 added the assistant's way of working; version 3 added the
+// alcove the author keeps their whispers in; version 4 adds how wide the writing is set. An older file is upgraded,
+// and written back complete, when read.
+const PREFERENCES_VERSION = 4;
+const OLDER_VERSIONS: readonly number[] = [1, 2, 3];
 const SECOND_VERSION = 2;
+const THIRD_VERSION = 3;
 
 export interface Preferences {
   readonly version: typeof PREFERENCES_VERSION;
@@ -28,6 +30,11 @@ export interface Preferences {
   readonly greatHallPath: string;
   /** How wide the author made the panels either side of the whisper, in pixels; 0 for the width the page gives them. */
   readonly panelWidths: { readonly left: number; readonly right: number };
+  /**
+   * Whether the writing is held to a comfortable measure — a line no wider than the eye returns from easily — rather
+   * than filling whatever room the panels leave. Off unless the author asks for it (View ▸ Comfortable Measure).
+   */
+  readonly comfortableMeasure: boolean;
 }
 
 export const DEFAULT_PREFERENCES: Preferences = {
@@ -37,6 +44,7 @@ export const DEFAULT_PREFERENCES: Preferences = {
   panelWidths: { left: 0, right: 0 },
   assistantMode: '',
   alcoveFolder: '',
+  comfortableMeasure: false,
 };
 
 // A mode's name as the protocol gives it: short, and without spaces or control characters.
@@ -83,14 +91,18 @@ export function loadPreferences(dataFolder: string): Preferences {
     throw problem(file, `It is not valid JSON: ${cause instanceof Error ? cause.message : String(cause)}`);
   }
   if (!isObject(parsed)) throw problem(file, 'It does not hold a preferences object.');
-  if (parsed['version'] === FIRST_VERSION || parsed['version'] === SECOND_VERSION) {
+  // Every older version is upgraded by keeping what it held and giving the rest its default; an author's preferences
+  // are theirs, and a program that has learnt to remember one more thing must not forget everything else.
+  if (OLDER_VERSIONS.includes(parsed['version'] as number)) {
+    const held = (name: string, from: number): unknown => ((parsed['version'] as number) >= from ? parsed[name] : undefined);
     const upgraded: Preferences = {
       version: PREFERENCES_VERSION,
       spelling: readSpelling(parsed['spelling'], file),
-      assistantMode: parsed['version'] === SECOND_VERSION ? readMode(parsed['assistantMode'], file) : '',
-      alcoveFolder: '',
-      greatHallPath: '',
-      panelWidths: { left: 0, right: 0 },
+      assistantMode: held('assistantMode', SECOND_VERSION) === undefined ? '' : readMode(parsed['assistantMode'], file),
+      alcoveFolder: held('alcoveFolder', THIRD_VERSION) === undefined ? '' : readFolder(parsed['alcoveFolder'], file),
+      greatHallPath: typeof held('greatHallPath', THIRD_VERSION) === 'string' ? (parsed['greatHallPath'] as string) : '',
+      panelWidths: readPanelWidths(held('panelWidths', THIRD_VERSION)),
+      comfortableMeasure: false,
     };
     savePreferences(dataFolder, upgraded);
     return upgraded;
@@ -105,6 +117,7 @@ export function loadPreferences(dataFolder: string): Preferences {
     alcoveFolder: readFolder(parsed['alcoveFolder'], file),
     greatHallPath: typeof parsed['greatHallPath'] === 'string' ? parsed['greatHallPath'] : '',
     panelWidths: readPanelWidths(parsed['panelWidths']),
+    comfortableMeasure: parsed['comfortableMeasure'] === true,
   };
 }
 

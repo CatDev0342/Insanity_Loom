@@ -11,9 +11,15 @@ export interface LayoutBridge {
   panelWidths(): Promise<PanelWidths>;
   /** Remembers the widths the author has just dragged. */
   savePanelWidths(widths: PanelWidths): Promise<void>;
+  /** Whether the writing is held to a comfortable measure; false unless the author has asked for it. */
+  comfortableMeasure(): Promise<boolean>;
+  /** Remembers that the author has turned the comfortable measure on or off. */
+  saveComfortableMeasure(on: boolean): Promise<void>;
 }
 
 export const LAYOUT_CHANNELS = {
   panelWidths: 'insanity-loom:layout-panel-widths',
   savePanelWidths: 'insanity-loom:layout-save-panel-widths',
+  comfortableMeasure: 'insanity-loom:layout-comfortable-measure',
+  saveComfortableMeasure: 'insanity-loom:layout-save-comfortable-measure',
 } as const;

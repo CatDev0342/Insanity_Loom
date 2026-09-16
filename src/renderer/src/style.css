@@ -556,6 +556,15 @@ body {
   font-variant-numeric: tabular-nums;
 }
 
+/* View ▸ Comfortable Measure: a line no wider than the eye returns from easily. Typography has measured this for a
+   century and settled on 45 to 75 characters, with 66 about the middle of it; 68 leaves a little room for the wider
+   letters of a heading without ever reaching the point where a line is hard to come back from. Off unless asked for
+   (main.ts): how wide the writing is set is the author's business. */
+.whisper-host.is-measured .whisper-editor {
+  max-width: 68ch;
+  margin-inline: auto;
+}
+
 /* The whisper itself: a page of rich text, centered, with room around it. */
 .whisper-editor {
   min-height: 100%;

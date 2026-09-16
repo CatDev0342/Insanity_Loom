@@ -16,6 +16,7 @@ export const PAGE_COMMANDS = [
   'find.show',
   'find.replace',
   'edit.isolateSections',
+  'view.comfortableMeasure',
   'find.next',
   'find.previous',
   'assistant.reconnect',
@@ -46,6 +47,7 @@ export type AssistantCommandId = Exclude<
   | 'find.next'
   | 'find.previous'
   | 'edit.isolateSections'
+  | 'view.comfortableMeasure'
 >;
 
 /** Any command a menu entry may name. */

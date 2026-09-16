@@ -128,6 +128,8 @@ export const MENUS: readonly TopMenu[] = [
       command('Zoom &Out', 'view.zoomOut', ['Ctrl+Minus']),
       command('&Actual Size', 'view.zoomReset', ['Ctrl+0']),
       SEPARATOR,
+      toggle('&Comfortable Measure', 'view.comfortableMeasure'),
+      SEPARATOR,
       command('&Full Screen', 'view.toggleFullScreen', ['F11']),
     ],
   },
