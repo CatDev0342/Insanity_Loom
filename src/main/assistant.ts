@@ -253,7 +253,7 @@ export class Assistant {
    * What is being waited for. A turn ends in a reply; a conversation's history ends in the replay finishing. Either
    * can be waited on forever by a host that has gone quiet, and the page has to be told the right thing when it is.
    */
-  private awaiting: 'a turn' | 'a history' | undefined;
+  private awaiting: 'a turn' | 'a history' | 'room being made' | undefined;
   /** How many times in a row the connection has been made again without a word from the assistant since. */
   private reconnectionsWithoutASign = 0;
   /** How many silences in a row the host has answered for while saying nothing about what was asked of it. */
@@ -376,6 +376,10 @@ export class Assistant {
       windowsHide: true,
     });
     this.signingIn = program;
+    // A sign-in program that has already finished still has an input to write to, and writing to it fails on the
+    // stream rather than where the writing was asked for. Unheard, that stops the whole program; heard, it is only
+    // a sign-in that is over.
+    program.stdin?.on('error', () => undefined);
     this.emit({ type: 'signIn', stage: 'started', url: '', message: `Starting ${method.name} sign-in…` });
 
     let output = '';
@@ -740,6 +744,7 @@ export class Assistant {
     if (this.reconnectionsWithoutASign >= MOST_RECONNECTIONS_WITHOUT_A_SIGN) {
       this.dropConnection();
       if (waitedFor === 'a turn') this.tell({ type: 'replyFinished', reason: 'error' });
+      if (waitedFor === 'room being made') this.tell({ type: 'compacting', status: 'failed', summary: '' });
       this.tell({
         type: 'status',
         state: 'failed',
@@ -753,11 +758,14 @@ export class Assistant {
       message:
         waitedFor === 'a history'
           ? 'The assistant stopped answering while the conversation was being brought back. Connecting again.'
-          : 'The assistant stopped answering. Connecting again, and sending your turn once more.',
+          : waitedFor === 'room being made'
+            ? 'The assistant stopped answering while it was making room. Connecting again.'
+            : 'The assistant stopped answering. Connecting again, and sending your turn once more.',
     });
     // Whatever was being waited for is not coming; the page is freed before the connection is made again.
     if (waitedFor === 'a turn') this.tell({ type: 'replyFinished', reason: 'error' });
     if (waitedFor === 'a history') this.tell({ type: 'replayFinished' });
+    if (waitedFor === 'room being made') this.tell({ type: 'compacting', status: 'failed', summary: '' });
     await this.connect();
   }
 
@@ -772,6 +780,11 @@ export class Assistant {
   async compact(): Promise<void> {
     const { connection, conversationId } = this.requireConversation();
     this.compacting = true;
+    // Making room is a request like any other, and a host can go quiet in the middle of it exactly as it can in the
+    // middle of a turn. Anything that can hold the one channel open must have something that closes it (20.11.5):
+    // unwatched, a compaction that never came back left the status bar saying room was being made, forever.
+    this.awaiting = 'room being made';
+    this.watchdog.waiting();
     this.emit({ type: 'compacting', status: 'in_progress', summary: '' });
     try {
       await connection.prompt({ sessionId: conversationId, prompt: [{ type: 'text', text: `/${COMPACT_COMMAND}` }] });
@@ -781,6 +794,8 @@ export class Assistant {
       this.emit({ type: 'compacting', status: 'failed', summary: '' });
     } finally {
       this.compacting = false;
+      this.awaiting = undefined;
+      this.watchdog.idle();
     }
   }
 

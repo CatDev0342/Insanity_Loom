@@ -264,6 +264,21 @@ describe('when a turn cannot get through', () => {
   }, LONG_ENOUGH_TO_GIVE_UP_MS);
 });
 
+describe('making room can hold the channel open too', () => {
+  it('notices a host that goes quiet while making room, instead of saying so forever', async () => {
+    const { assistant, events } = start([process.execPath, FAKE_ASSISTANT, '--quiet-compaction'], undefined, 1);
+    await assistant.connect();
+    const making = assistant.compact();
+    // As with a turn, the request never comes back on its own; what must come back is the program.
+    await Promise.race([making, new Promise((resolve) => setTimeout(resolve, QUIET_ENOUGH_MS))]);
+
+    const said = events.flatMap((event) => (event.type === 'problem' ? [event.message] : []));
+    expect(said.some((message) => message.includes('making room'))).toBe(true);
+    // The status bar is not left saying room is being made.
+    expect(events.some((event) => event.type === 'compacting' && event.status === 'failed')).toBe(true);
+  }, LONG_ENOUGH_FOR_A_QUIET_HOST_MS);
+});
+
 /** Long enough for a one-second watch to run out and for the check after it to go unanswered. */
 const QUIET_ENOUGH_MS = 20_000;
 const LONG_ENOUGH_FOR_A_QUIET_HOST_MS = 40_000;

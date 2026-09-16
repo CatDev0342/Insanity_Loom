@@ -168,6 +168,16 @@ function startAgent() {
           const text = prompt.map((block) => (block.type === 'text' ? block.text : '')).join('');
 
           if (text.trim() === '/compact') {
+            // Told to be quiet while making room, it says it has begun and then answers nothing at all: the shape of
+            // a host that suspends mid-compaction.
+            if (process.argv.includes('--quiet-compaction')) {
+              await client.sessionUpdate({
+                sessionId,
+                update: { sessionUpdate: 'compaction_update', compactionId: 'fake-compaction', status: 'in_progress' },
+              });
+              goneQuiet = true;
+              return await answerNothing();
+            }
             // Making room is not a reply: it is reported as a compaction, with a summary of what was kept.
             await client.sessionUpdate({
               sessionId,
