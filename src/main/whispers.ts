@@ -5,7 +5,7 @@ import { BrowserWindow, dialog, shell } from 'electron';
 import { existsSync, mkdirSync } from 'node:fs';
 import { basename, dirname, join } from 'node:path';
 import type { OpenWhisper, WhisperFound, WhisperInAlcove, WhisperPointingHere } from '../shared/whispers';
-import { Alcove, DEFAULT_ALCOVE_NAME } from './alcove';
+import { Alcove, DEFAULT_ALCOVE_NAME, relinkIn } from './alcove';
 import { writeFileSafely } from './files';
 import type { Journal } from './journal';
 import type { PreferenceStore } from './preference-store';
@@ -26,6 +26,20 @@ export class Whispers {
 
   get alcoveFolder(): string {
     return this.alcove.path;
+  }
+
+  /**
+   * Where else the whispers of this hall are kept, asked afresh each time.
+   *
+   * A GreatHall may name several alcoves, and a whisper in one may link to a whisper in another. Renaming used to
+   * put right only the links in the folder the renamed whisper lived in, and left every other alcove of the hall
+   * pointing at a name that is no longer there.
+   */
+  private hallAlcoves: () => readonly string[] = () => [];
+
+  /** Told what the hall's alcoves are, so a rename can reach all of them. */
+  alsoKeptIn(alcoves: () => readonly string[]): void {
+    this.hallAlcoves = alcoves;
   }
 
   /** The whisper last open, when its file is still there. */
@@ -122,10 +136,12 @@ export class Whispers {
     const moved = this.alcove.rename(path, title);
     if (moved !== path) {
       this.journal.whisperPath = moved;
-      // The whispers that pointed at this one are put right, so a rename never breaks a link (40.6). Only when the
-      // whisper renamed is a file of the alcove itself: a link names a file in the alcove, so rewriting those links
-      // for a whisper that lives somewhere beneath it would point them away from the whisper they meant.
-      if (dirname(path) === this.alcove.path) this.alcove.relink(basename(path), basename(moved));
+      // The whispers that pointed at this one are put right, so a rename never breaks a link (40.6) — in the folder
+      // it lives in, and in every alcove of the hall, since a whisper in one alcove may link to a whisper in another.
+      // A link names a file, so only folders that could be holding a link to *this* file are touched: the one it is
+      // in, and the hall's own alcoves.
+      const where = new Set([dirname(path), ...this.hallAlcoves()]);
+      for (const folder of where) relinkIn(folder, basename(path), basename(moved));
     }
     return { path: moved, name: basename(moved), xhtml: this.alcove.read(moved) };
   }

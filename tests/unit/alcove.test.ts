@@ -2,7 +2,7 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync
 import { tmpdir } from 'node:os';
 import { basename, dirname, join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
-import { Alcove, nameDate, nameFromTitle } from '../../src/main/alcove';
+import { Alcove, nameDate, nameFromTitle, relinkIn } from '../../src/main/alcove';
 
 const made: string[] = [];
 afterEach(() => {
@@ -241,5 +241,40 @@ describe('thinking is added to, not written again', () => {
     it_.addThought(path, '## Turn 1\n\nThinking.\n');
     it_.addThought(path, 'More thinking.\n');
     expect(readFileSync(Alcove.thoughtsOf(path), 'utf8')).toBe('## Turn 1\n\nThinking.\nMore thinking.\n');
+  });
+});
+
+describe('a link is put right wherever it stands', () => {
+  it('points every alcove of a hall at the new name, not only the one the whisper lives in', () => {
+    const folder = mkdtempSync(join(tmpdir(), 'insanity-loom-'));
+    made.push(folder);
+    const one = join(folder, 'One');
+    const another = join(folder, 'Another');
+    mkdirSync(one, { recursive: true });
+    mkdirSync(another, { recursive: true });
+    writeFileSync(join(one, '2026-09-14 1532 Pointed at.xhtml'), '<html/>');
+    // A whisper in another alcove of the same hall, pointing at it.
+    writeFileSync(
+      join(another, '2026-09-14 1600 Pointing.xhtml'),
+      '<a href="2026-09-14%201532%20Pointed%20at.xhtml#a-heading">a link</a>',
+    );
+
+    const alcove = new Alcove(one);
+    const moved = alcove.rename(join(one, '2026-09-14 1532 Pointed at.xhtml'), 'Renamed');
+    expect(basename(moved)).toBe('2026-09-14 1532 Renamed.xhtml');
+    // Relinking the folder it lives in is not enough: a hall may name several alcoves, and this link is in another.
+    expect(relinkIn(another, '2026-09-14 1532 Pointed at.xhtml', basename(moved))).toBe(1);
+    const after = readFileSync(join(another, '2026-09-14 1600 Pointing.xhtml'), 'utf8');
+    expect(after).toContain(encodeURIComponent(basename(moved)));
+    expect(after).toContain('#a-heading');
+  });
+
+  it('keeps a copy of a whisper named .XHTML without its suffix in the middle of the name', () => {
+    const folder = mkdtempSync(join(tmpdir(), 'insanity-loom-'));
+    made.push(folder);
+    const path = join(folder, 'Shouted.XHTML');
+    writeFileSync(path, '<html/>');
+    const kept = new Alcove(folder).keepCopy(path, 'before a new conversation', join(folder, 'Kept'));
+    expect(basename(kept).startsWith('Shouted —')).toBe(true);
   });
 });

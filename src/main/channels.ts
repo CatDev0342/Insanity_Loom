@@ -283,6 +283,8 @@ export function startServices(dataFolder: string, logsFolder: string, journal: J
       // A hall that has moved or been deleted is simply not open; the author is not stopped from working.
     }
   }
+  // A rename puts right the links in every alcove the hall names, not only the one the whisper lives in.
+  whispers.alsoKeptIn(() => halls.current?.alcoves ?? []);
   ipcMain.handle(GREATHALL_CHANNELS.current, () => halls.current);
   ipcMain.handle(GREATHALL_CHANNELS.choose, async (event) => {
     const chosen = await chooseGreatHall(windowOf(event));

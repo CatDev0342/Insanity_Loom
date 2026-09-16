@@ -232,3 +232,55 @@ describe('how the window is divided', () => {
     expect(widthWithin(300, 400)).toBe(180);
   });
 });
+
+describe('the Library tab, cited twice at once', () => {
+  it('lists an address once however many citings are in the air', async () => {
+    const { Library } = await import('../../src/renderer/src/loom/library');
+    const inside = document.createElement('div');
+    const said = document.createElement('p');
+    const pane = document.createElement('div');
+    document.body.append(inside, said, pane);
+
+    let answering = 0;
+    const hall = {
+      current: async () => undefined,
+      choose: async () => undefined,
+      // Slow enough that the second citing begins before the first is answered, which is the whole fault.
+      sections: async (addresses: readonly string[]) => {
+        answering += 1;
+        await new Promise((resolve) => setTimeout(resolve, 20));
+        return addresses.map((address) => ({
+          address,
+          document: '40',
+          line: 1,
+          text: 'What stands there.',
+          title: '40',
+          alsoAt: [] as number[],
+        }));
+      },
+      document: async () => ({ markdown: '', stamp: '' }),
+      saveDocument: async () => undefined,
+    };
+    const library = new Library(
+      { libraryInside: inside, librarySaid: said, libraryPane: pane, showLibraryTab: () => undefined },
+      hall,
+      () => undefined,
+    );
+    library.useHall({
+      name: 'A hall',
+      form: 'TOML',
+      trouble: [],
+      path: '/hall/A.greathall',
+      alcoves: ['/hall/Alcove'],
+      library: '/hall/Library',
+      libraryName: 'Test Library',
+      documents: [{ address: '40', file: '40.md', title: '40' }],
+    });
+
+    // A reply finishing while the whisper's own citations are being gathered: both cite 40.6.2, at the same moment.
+    await Promise.all([library.cite(1, ['40.6.2']), library.cite(2, ['40.6.2'])]);
+    expect(inside.querySelectorAll('.library-entry')).toHaveLength(1);
+    // And the library was read once for it, not twice.
+    expect(answering).toBe(1);
+  });
+});

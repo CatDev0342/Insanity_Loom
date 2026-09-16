@@ -68,11 +68,25 @@ function countOf(writing: string, wanted: string): number {
   return count;
 }
 
-/** What is shown of a whisper around the writing found in it, with an ellipsis where it was cut. */
+/**
+ * What is shown of a whisper around the writing found in it, with an ellipsis where it was cut.
+ *
+ * A cut is never made in the middle of a character. Writing is held as pairs for anything beyond the old alphabets —
+ * an emoji, and much of several living scripts — and cutting between the halves leaves a broken mark on the page.
+ */
 function glimpseAt(writing: string, where: number, length: number): string {
-  const from = Math.max(0, where - GLIMPSE_EITHER_SIDE);
-  const to = Math.min(writing.length, where + length + GLIMPSE_EITHER_SIDE);
+  const from = stepOutOfAPair(writing, Math.max(0, where - GLIMPSE_EITHER_SIDE), -1);
+  const to = stepOutOfAPair(writing, Math.min(writing.length, where + length + GLIMPSE_EITHER_SIDE), 1);
   return `${from > 0 ? '…' : ''}${writing.slice(from, to)}${to < writing.length ? '…' : ''}`;
+}
+
+/** The nearest place to cut that is not inside a character, looking the way given. */
+function stepOutOfAPair(writing: string, at: number, way: 1 | -1): number {
+  if (at <= 0 || at >= writing.length) return at;
+  const code = writing.charCodeAt(at);
+  // The low half of a pair: the cut would be inside a character, so it is moved off it.
+  const inTheMiddle = code >= 0xdc00 && code <= 0xdfff;
+  return inTheMiddle ? at + way : at;
 }
 
 /** A link's address as it stands in a whisper's file. */
@@ -119,6 +133,29 @@ export function nameFromTitle(title: string): string {
   // Windows also refuses a name ending in a dot or a space.
   const trimmed = cleaned.replace(/[. ]+$/, '');
   return trimmed === '' ? 'Whisper' : trimmed;
+}
+
+/**
+ * Points every link in a folder that named `from` at `to` instead. Returns how many whispers were changed.
+ *
+ * A folder rather than an alcove, because a GreatHall may name several alcoves and a whisper in one may link to a
+ * whisper in another: renaming one used to put right only the links in the folder it lived in, and left every other
+ * alcove of the hall pointing at a name that is no longer there.
+ */
+export function relinkIn(folder: string, from: string, to: string): number {
+  if (from === to) return 0;
+  let changed = 0;
+  for (const { path } of Alcove.whispersIn(folder)) {
+    const before = readFileSync(path, 'utf8');
+    const after = before.replace(LINK_ADDRESS, (whole, address: string) => {
+      const pointed = readLinkName(address);
+      return pointed === from ? whole.replace(address, encodeURIComponent(to) + addressAfterName(address)) : whole;
+    });
+    if (after === before) continue;
+    writeFileSafely(path, after);
+    changed += 1;
+  }
+  return changed;
 }
 
 export class Alcove {
@@ -214,19 +251,20 @@ export class Alcove {
    * `A%20whisper.xhtml` are the same link and both are put right. Returns how many whispers were changed.
    */
   relink(from: string, to: string): number {
-    if (from === to) return 0;
-    let changed = 0;
-    for (const { path } of this.list()) {
-      const before = readFileSync(path, 'utf8');
-      const after = before.replace(LINK_ADDRESS, (whole, address: string) => {
-        const pointed = readLinkName(address);
-        return pointed === from ? whole.replace(address, encodeURIComponent(to) + addressAfterName(address)) : whole;
-      });
-      if (after === before) continue;
-      writeFileSafely(path, after);
-      changed += 1;
+    return relinkIn(this.folder, from, to);
+  }
+
+  /** Every whisper of a folder, as `list` gives them, without an Alcove to hold it. */
+  static whispersIn(folder: string): readonly { readonly name: string; readonly path: string }[] {
+    try {
+      return readdirSync(folder)
+        .filter((name) => Alcove.isWhisper(name))
+        .sort((left, right) => right.localeCompare(left))
+        .map((name) => ({ name, path: join(folder, name) }));
+    } catch {
+      // A folder that is not there holds no whispers; a hall may name an alcove that has not been made yet.
+      return [];
     }
-    return changed;
   }
 
   /**
@@ -290,7 +328,10 @@ export class Alcove {
     mkdirSync(keptFolder, { recursive: true });
     const when = new Date();
     const stamp = `${nameDate(when)}${String(when.getSeconds()).padStart(2, '0')}`;
-    const kept = join(keptFolder, `${basename(path, WHISPER_SUFFIX)} — ${stamp} — ${nameFromTitle(why)}${WHISPER_SUFFIX}`);
+    // The suffix is taken off whatever case it was written in: a file named `.XHTML` kept its suffix in the middle
+    // of the copy's name, because taking a suffix off is case-sensitive and being a whisper is not.
+    const name = basename(path).replace(/\.xhtml$/i, '');
+    const kept = join(keptFolder, `${name} — ${stamp} — ${nameFromTitle(why)}${WHISPER_SUFFIX}`);
     writeFileSafely(kept, readFileSync(path, 'utf8'));
     return kept;
   }

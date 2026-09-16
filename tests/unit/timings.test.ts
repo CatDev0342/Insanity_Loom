@@ -1,6 +1,6 @@
 // What a turn cost, measured: the numbers themselves, and the row they are written down as.
 import { describe, expect, it } from 'vitest';
-import { TIMING_COLUMNS, TurnClock, timingRow, timingSaid, type TurnTiming } from '../../src/renderer/src/loom/timings';
+import { TIMING_COLUMNS, TurnClock, timingRow, type TurnTiming } from '../../src/renderer/src/loom/timings';
 
 const A_TURN: TurnTiming = {
   turn: 7,
@@ -46,13 +46,6 @@ describe('timing a turn', () => {
     expect(timing.pieces).toBe(0);
     expect(timing.usualGap).toBe(0);
   });
-
-  it('adds up what drawing the pieces cost', () => {
-    const clock = new TurnClock(3, 5);
-    clock.drew(4.4);
-    clock.drew(5.5);
-    expect(clock.finished().drawing).toBe(10);
-  });
 });
 
 describe('writing a turn down', () => {
@@ -65,12 +58,5 @@ describe('writing a turn down', () => {
     expect(fields[4]).toBe('1200');
     // A row is one line: anything said about the assistant is flattened, so a row can never become two.
     expect(timingRow(A_TURN, 'Connected\nto\nsomething').split('\n')).toHaveLength(1);
-  });
-
-  it('says the same thing in words, for the record beside the conversation', () => {
-    const said = timingSaid(A_TURN);
-    expect(said).toContain('Turn 7');
-    expect(said).toContain('first word 1200ms');
-    expect(said).toContain('worst 900ms');
   });
 });

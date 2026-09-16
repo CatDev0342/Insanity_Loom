@@ -60,14 +60,31 @@ export class Library {
     this.say();
   }
 
-  /** What the assistant cited in a reply to one turn: added to the list, in the order written, nothing twice. */
+  /**
+   * What the assistant cited in a reply to one turn: added to the list, in the order written, nothing twice.
+   *
+   * An address takes its place in the list **before** the library is read for it, not after. Reading is a round trip
+   * to the layer underneath, and two citings can be in the air at once — a reply finishing while the whisper's own
+   * citations are being gathered, or two whispers opened in quick succession. Both would find the address absent,
+   * both would read the library for it, and both would add it: one address, listed twice, with nothing in the code
+   * that could ever have said which was which. Claiming the place first makes that impossible.
+   */
   async cite(turn: number, addresses: readonly string[]): Promise<void> {
     if (this.hall === undefined || addresses.length === 0) return;
     const fresh = addresses.filter((address) => !this.cited.some((already) => already.address === address));
     if (fresh.length === 0) return;
+    // Claimed now, filled in when the library answers. Until then each says its address and nothing else, which is
+    // what the panel would show for a place the library does not hold.
+    for (const address of fresh) {
+      this.cited.push({ address, document: documentOf(address), line: 0, text: '', title: documentOf(address), alsoAt: [], turn });
+    }
+    this.drawList();
     try {
       const sections = await this.greatHall.sections(fresh);
-      for (const section of sections) this.cited.push({ ...section, turn });
+      for (const section of sections) {
+        const claimed = this.cited.findIndex((already) => already.address === section.address);
+        if (claimed !== -1) this.cited[claimed] = { ...section, turn: this.cited[claimed]?.turn ?? turn };
+      }
       this.drawList();
     } catch (problem) {
       this.onProblem(`The library could not be read: ${problem instanceof Error ? problem.message : String(problem)}`);
