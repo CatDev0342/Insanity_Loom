@@ -15,6 +15,8 @@ import type {
   SessionMode,
 } from '../../../shared/assistant';
 import { referencesIn, type GreatHallBridge } from '../../../shared/greathall';
+import type { TimingsBridge } from '../../../shared/timings';
+import { TurnClock, timingRow, timingSaid } from './timings';
 import type { LinksBridge } from '../../../shared/links';
 import { readWhisperLink, type OpenWhisper, type WhispersBridge } from '../../../shared/whispers';
 import type { AssistantCommandId } from '../commands';
@@ -99,6 +101,8 @@ interface Waiting {
   readonly tries: number;
   /** When the author closed it, so its label can say how long it has been waiting. */
   readonly since: number;
+  /** What this turn is costing, timed from the moment it was closed (timings.ts). */
+  readonly clock: TurnClock;
 }
 
 /** How a reply that ended is marked, by the protocol's reason for the ending. */
@@ -137,6 +141,10 @@ export class Loom {
   private canSteer = false;
   /** True while a steer is being asked for, so one turn is not steered in twice. */
   private steering = false;
+  /** What the turn being answered is costing, at each place a turn can spend time (timings.ts). */
+  private clock: TurnClock | undefined;
+  /** What the assistant being talked to is, so a row of timings says what it was measured against. */
+  private assistantSaid = '';
   /** When the reply being written was asked for, and the timer that keeps saying how long it has been. */
   private writingSince = 0;
   private writingTimer: ReturnType<typeof setInterval> | undefined;
@@ -175,6 +183,7 @@ export class Loom {
     private readonly links: LinksBridge,
     private readonly greatHall: GreatHallBridge,
     private readonly journal: JournalBridge,
+    private readonly timings: TimingsBridge,
   ) {
     this.findBar = new FindBar(elements, () => this.editor);
     this.contextRoom = new ContextRoom(elements, () => void this.compact());
@@ -344,7 +353,13 @@ export class Loom {
     const editor = this.requireEditor();
     for (const turn of turns) {
       const replyId = turn.replyId === '' ? editor.placeReply(turn.sectionId) : turn.replyId;
-      this.waiting.push({ replyId, markdown: turn.markdown, tries: 0, since: Date.now() });
+      this.waiting.push({
+        replyId,
+        markdown: turn.markdown,
+        tries: 0,
+        since: Date.now(),
+        clock: new TurnClock(editor.turnAnswering(replyId), turn.markdown.length),
+      });
     }
     this.saveNow();
     this.sendNext();
@@ -720,7 +735,7 @@ export class Loom {
     this.withoutMovingTheWriting(() => {
       replyId = editor.placeReply(sectionId);
     });
-    this.waiting.push({ replyId, markdown, tries: 0, since: Date.now() });
+    this.waiting.push({ replyId, markdown, tries: 0, since: Date.now(), clock: new TurnClock(turn.number, markdown.length) });
     this.startSayingHowLong();
     this.saveNow();
     if (this.state !== 'connected') {
@@ -747,6 +762,8 @@ export class Loom {
     if (next === undefined) return;
     this.writingSince = next.since;
     this.writing = { replyId: next.replyId, sent: next.markdown, tries: next.tries + 1, unasked: false, ...NOTHING_YET };
+    this.clock = next.clock;
+    this.clock?.askedNow();
     this.requireEditor().setReplyState(next.replyId, 'writing');
     this.startSayingHowLong();
     // The reply arrives as events; the promise settles when it has finished, which replyFinished also reports.
@@ -783,6 +800,8 @@ export class Loom {
         editor.setReplyState(next.replyId, 'writing');
       });
       this.writing = { replyId: next.replyId, sent: next.markdown, tries: next.tries + 1, unasked: false, ...NOTHING_YET };
+      this.clock = next.clock;
+      this.clock?.askedNow();
       this.writingSince = next.since;
       this.startSayingHowLong();
       this.saveNow();
@@ -801,9 +820,11 @@ export class Loom {
       this.renderScheduled = false;
       const writing = this.writing;
       if (writing === undefined) return;
+      const before = performance.now();
       this.withoutMovingTheWriting(() => {
         this.requireEditor().setReply(writing.replyId, writing.markdown, 'writing');
       });
+      this.clock?.drew(performance.now() - before);
     });
   }
 
@@ -896,9 +917,26 @@ export class Loom {
     void this.library.cite(answered, referencesIn(writing.markdown, this.library.addresses)).then(() => {
       this.referenceBar.drawSoon();
     });
+    this.writeDownWhatItCost();
     this.hideAsks();
     this.saveNow();
     this.sendNext();
+  }
+
+  /**
+   * Writes down what the turn cost: a row in Data/Logs/timings.tsv, and a line beside the conversation.
+   *
+   * Measuring is never allowed to be the reason something fails — a turn that was answered is answered whether or
+   * not its timing could be written, so anything that goes wrong here is passed over in silence, which is the one
+   * place in this program where that is the right thing to do.
+   */
+  private writeDownWhatItCost(): void {
+    const clock = this.clock;
+    this.clock = undefined;
+    if (clock === undefined) return;
+    const timing = clock.finished();
+    this.thoughts.saySomethingAboutTheTurn(timingSaid(timing));
+    void this.timings.record(timingRow(timing, this.assistantSaid)).catch(() => undefined);
   }
 
   /** A reply cut off by a lost connection or a new conversation is ended the same way any unanswered turn is. */
@@ -922,7 +960,16 @@ export class Loom {
     const unanswered = wentUnheard(writing, state);
     const again = sendAgain(writing, state);
     // Put back before ending: ending sends whatever is queued, and this turn is ahead of anything said after it.
-    if (again) this.waiting.unshift({ replyId: writing.replyId, markdown: writing.sent, tries: writing.tries, since: this.writingSince });
+    if (again) {
+      // Sent again: timed again from now, because what the first attempt cost says nothing about what this one will.
+      this.waiting.unshift({
+        replyId: writing.replyId,
+        markdown: writing.sent,
+        tries: writing.tries,
+        since: this.writingSince,
+        clock: new TurnClock(this.requireEditor().turnAnswering(writing.replyId), writing.sent.length),
+      });
+    }
     this.finishWriting(again ? 'waiting' : state);
     if (!again && unanswered) {
       this.showNotice('That turn could not be got through to the assistant. It is kept here; send it again when the assistant is back.');
@@ -935,6 +982,7 @@ export class Loom {
     switch (event.type) {
       case 'status':
         this.state = event.state;
+        if (event.state === 'connected') this.assistantSaid = event.detail;
         this.elements.statusText.textContent = event.detail;
         this.elements.statusText.dataset['state'] = event.state;
         this.elements.reconnect.hidden = event.state === 'connected' || event.state === 'connecting' || event.state === 'signedOut';
@@ -987,6 +1035,7 @@ export class Loom {
           unasked: this.writing.unasked,
           ...withPiece(this.writing, event.text, event.messageId),
         };
+        this.clock?.piece();
         // Nothing will come to say an unasked reply is over, so its own silence says it.
         if (this.writing.unasked) this.endAnUnaskedReplyAfterSilence();
         this.elements.activity.textContent = '';

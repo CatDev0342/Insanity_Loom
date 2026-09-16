@@ -26,6 +26,8 @@ import { findWindow, openFindWindow } from './find-window';
 import { WINDOW_BACKGROUND_COLOR } from './index';
 import { PAGE_PREFERENCES } from './security';
 import { LAYOUT_CHANNELS } from '../shared/layout';
+import { TIMING_CHANNELS } from '../shared/timings';
+import { recordTiming } from './timings';
 import { UPDATE_CHANNELS } from '../shared/updates';
 import {
   fetchTheNewest,
@@ -329,6 +331,9 @@ export function startServices(dataFolder: string, logsFolder: string, journal: J
   ipcMain.handle(LAYOUT_CHANNELS.panelWidths, () => preferences.panelWidths);
   ipcMain.handle(LAYOUT_CHANNELS.savePanelWidths, (_event, widths: unknown) => {
     preferences.setPanelWidths(readPanelWidths(widths));
+  });
+  ipcMain.handle(TIMING_CHANNELS.record, (_event, row: unknown) => {
+    recordTiming(logsFolder, text(row, 'timing', MAXIMUM_IDENTIFIER_LENGTH));
   });
   ipcMain.handle(LAYOUT_CHANNELS.comfortableMeasure, () => preferences.comfortableMeasure);
   ipcMain.handle(LAYOUT_CHANNELS.saveComfortableMeasure, (_event, on: unknown) => {

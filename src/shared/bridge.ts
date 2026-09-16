@@ -6,6 +6,7 @@ import type { EditingBridge } from './editing';
 import type { GreatHallBridge } from './greathall';
 import type { FindWindowBridge, HallBridge } from './hall';
 import type { LayoutBridge } from './layout';
+import type { TimingsBridge } from './timings';
 import type { UpdatesBridge } from './updates';
 import type { LinksBridge } from './links';
 import type { WhispersBridge } from './whispers';
@@ -47,6 +48,9 @@ export interface InsanityLoomBridge {
 
   /** How the author divided the window between its three sections. */
   readonly layout: LayoutBridge;
+
+  /** Writing down what a turn cost, so where the seconds go is measured rather than argued about. */
+  readonly timings: TimingsBridge;
 
   /** Becoming a newer Insanity_Loom from inside this one. */
   readonly updates: UpdatesBridge;

@@ -10,6 +10,7 @@ import { EDITING_CHANNELS, type ContextDetails } from '../shared/editing';
 import { GREATHALL_CHANNELS } from '../shared/greathall';
 import { HALL_CHANNELS, type HallChosen } from '../shared/hall';
 import { LAYOUT_CHANNELS } from '../shared/layout';
+import { TIMING_CHANNELS } from '../shared/timings';
 import { UPDATE_CHANNELS } from '../shared/updates';
 import { LINK_CHANNELS } from '../shared/links';
 import { WHISPER_CHANNELS } from '../shared/whispers';
@@ -135,6 +136,10 @@ const bridge: InsanityLoomBridge = {
     savePanelWidths: (widths) => ipcRenderer.invoke(LAYOUT_CHANNELS.savePanelWidths, widths),
     comfortableMeasure: () => ipcRenderer.invoke(LAYOUT_CHANNELS.comfortableMeasure),
     saveComfortableMeasure: (on) => ipcRenderer.invoke(LAYOUT_CHANNELS.saveComfortableMeasure, on),
+  },
+
+  timings: {
+    record: (row) => ipcRenderer.invoke(TIMING_CHANNELS.record, row),
   },
 
   greatHall: {

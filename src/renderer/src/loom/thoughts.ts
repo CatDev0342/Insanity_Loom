@@ -176,6 +176,20 @@ export class Thoughts {
     this.writeSoon();
   }
 
+  /**
+   * A line about the turn itself rather than about its subject — what it cost, in milliseconds (timings.ts). It is
+   * kept with the thinking, because it belongs to the record of the turn and not to the author's prose.
+   */
+  saySomethingAboutTheTurn(said: string): void {
+    const line = document.createElement('p');
+    line.className = 'thought-about-the-turn';
+    line.textContent = said;
+    this.elements.thoughtsStream.append(line);
+    this.goToTheEnd();
+    this.unwritten += `\n\n_${said}_\n`;
+    this.flush();
+  }
+
   /** What the panel says when nothing is being thought. */
   say(message: string): void {
     this.elements.thoughtsSaid.textContent = message;

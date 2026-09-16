@@ -75,6 +75,7 @@ const loom = new Loom(
   bridge.links,
   bridge.greatHall,
   bridge.journal,
+  bridge.timings,
 );
 
 const preferences = new PreferencesPanel(required<HTMLDialogElement>('#preferences-dialog'), bridge.editing, bridge.whispers);
