@@ -94,6 +94,9 @@ const UNTITLED = 'Untitled whisper';
 
 
 /** A finished section, with its reply already in place, waiting to be sent. */
+/** The reply being written now: which reply it is, what was sent to get it, and what has arrived of it. */
+type Writing = { replyId: string; sent: string; tries: number; unasked: boolean } & ReplyBeingWritten;
+
 interface Waiting {
   readonly replyId: string;
   readonly markdown: string;
@@ -135,7 +138,7 @@ export class Loom {
   private whisperName = '';
 
   /** The reply being written: its own identity, what has arrived, and which message the last piece belonged to. */
-  private writing: ({ replyId: string; sent: string; tries: number; unasked: boolean } & ReplyBeingWritten) | undefined;
+  private writing: Writing | undefined;
   private renderScheduled = false;
   /** Whether this assistant takes a turn into the reply it is writing, rather than only behind it (95.42). */
   private canSteer = false;
@@ -787,29 +790,49 @@ export class Loom {
     const next = this.waiting[0];
     if (next === undefined) return;
     this.steering = true;
+    // Closed BEFORE the steer goes out, not after it comes back. The assistant answers a steered turn inside the
+    // turn already running, and that answer starts arriving while the steering request is still outstanding — so a
+    // program that waited for the answer before moving would write the first words of the new reply into the old one.
+    this.waiting.shift();
+    const wasWriting = writing.markdown;
+    this.withoutMovingTheWriting(() => {
+      const editor = this.requireEditor();
+      if (wasWriting === '') editor.setReplyState(writing.replyId, 'steered');
+      else editor.setReply(writing.replyId, wasWriting, 'steered');
+      editor.setReplyState(next.replyId, 'writing');
+    });
+    this.writing = { replyId: next.replyId, sent: next.markdown, tries: next.tries + 1, unasked: false, ...NOTHING_YET };
+    this.clock = next.clock;
+    this.clock?.askedNow();
+    this.writingSince = next.since;
+    this.startSayingHowLong();
+    this.saveNow();
     try {
-      const wentIn = await this.assistant.steer(next.markdown);
-      // It could not be steered after all — the turn stays where it is, and goes when this reply is done.
-      if (!wentIn) return;
-      if (this.writing !== writing) return;
-      this.waiting.shift();
-      this.withoutMovingTheWriting(() => {
-        const editor = this.requireEditor();
-        if (writing.markdown === '') editor.setReplyState(writing.replyId, 'steered');
-        else editor.setReply(writing.replyId, writing.markdown, 'steered');
-        editor.setReplyState(next.replyId, 'writing');
-      });
-      this.writing = { replyId: next.replyId, sent: next.markdown, tries: next.tries + 1, unasked: false, ...NOTHING_YET };
-      this.clock = next.clock;
-      this.clock?.askedNow();
-      this.writingSince = next.since;
-      this.startSayingHowLong();
-      this.saveNow();
+      if (await this.assistant.steer(next.markdown)) return;
+      // There was no turn to steer after all — it had just finished. Everything is put back as it was, and the turn
+      // goes the ordinary way.
+      this.putTheSteerBack(writing, wasWriting, next);
     } catch (problem) {
       this.showProblem(problem instanceof Error ? problem.message : String(problem));
+      this.putTheSteerBack(writing, wasWriting, next);
     } finally {
       this.steering = false;
     }
+  }
+
+  /** Undoes a steer that did not go in: the reply it closed is open again, and the turn waits its turn. */
+  private putTheSteerBack(writing: Writing, wasWriting: string, next: Waiting): void {
+    if (this.writing?.replyId !== next.replyId) return;
+    this.withoutMovingTheWriting(() => {
+      const editor = this.requireEditor();
+      if (wasWriting === '') editor.setReplyState(writing.replyId, 'writing');
+      else editor.setReply(writing.replyId, wasWriting, 'writing');
+      editor.setReplyState(next.replyId, 'waiting');
+    });
+    this.writing = writing;
+    this.clock = undefined;
+    this.waiting.unshift(next);
+    this.saveNow();
   }
 
   /** Redraws the reply being written at most once per frame, however fast its text arrives. */

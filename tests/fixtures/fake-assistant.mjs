@@ -273,9 +273,11 @@ function startAgent() {
           if (text.includes('slow')) {
             for (let piece = 0; piece < SLOW_PIECES_LIMIT; piece++) {
               if (cancelled.has(sessionId)) return { stopReason: 'cancelled' };
-              // A steered turn pre-empts what was being written, as the real adapter's `now` priority does.
+              // A steered turn pre-empts what was being written, as the real adapter's `now` priority does — but the
+              // turn itself runs on while the steered message is answered, which is the window the client acts in.
               if (steered.has(sessionId)) {
                 steered.delete(sessionId);
+                await wait(PIECE_INTERVAL_MS * 2);
                 return { stopReason: 'end_turn' };
               }
               await say(sessionId, 'still writing… ');
