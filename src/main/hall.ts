@@ -114,9 +114,19 @@ function whisperOfThoughts(path: string): string {
   return `${path.slice(0, -THOUGHTS_SUFFIX.length)}${WHISPER_SUFFIX}`;
 }
 
-/** The library's own documents, looked through as well, when the author asks and a hall is open. */
-function searchLibrary(hall: GreatHall, looking: RegExp): { readonly hits: HallHit[]; readonly looked: number; readonly found: number } {
+/**
+ * The library's own documents, looked through as well, when the author asks and a hall is open. They are looked
+ * through in the order the hall lists them, which is the author's own order, and kept in it.
+ *
+ * A document that cannot be read is not passed over in silence: a hall pointing at a library that has moved would
+ * otherwise answer every search with "nothing found", which is a different thing from "it is not there".
+ */
+function searchLibrary(
+  hall: GreatHall,
+  looking: RegExp,
+): { readonly hits: HallHit[]; readonly looked: number; readonly found: number; readonly unread: string[] } {
   const hits: HallHit[] = [];
+  const unread: string[] = [];
   let looked = 0;
   let found = 0;
   for (const document of hall.documents) {
@@ -125,6 +135,7 @@ function searchLibrary(hall: GreatHall, looking: RegExp): { readonly hits: HallH
     try {
       contents = readFileSync(path, 'utf8');
     } catch {
+      unread.push(document.file);
       continue;
     }
     looked += 1;
@@ -141,7 +152,7 @@ function searchLibrary(hall: GreatHall, looking: RegExp): { readonly hits: HallH
       found: places.total,
     });
   }
-  return { hits, looked, found };
+  return { hits, looked, found, unread };
 }
 
 export function searchHall(alcoves: readonly string[], asked: HallSearch, hall?: GreatHall): HallFound {
@@ -156,11 +167,13 @@ export function searchHall(alcoves: readonly string[], asked: HallSearch, hall?:
   const hits: HallHit[] = [];
   let looked = 0;
   let found = 0;
+  let unread: readonly string[] = [];
   if (asked.includeLibrary && hall !== undefined) {
     const library = searchLibrary(hall, looking);
     hits.push(...library.hits);
     looked += library.looked;
     found += library.found;
+    unread = library.unread;
   }
   // Every alcove of the hall, one after another: a hall is a collection of connected alcoves. Each file is kept with
   // the alcove it came from, so a result can say which folder of which alcove it stands in.
@@ -198,7 +211,18 @@ export function searchHall(alcoves: readonly string[], asked: HallSearch, hall?:
   hits.sort((left, right) => {
     if (left.kind === 'library' && right.kind !== 'library') return -1;
     if (right.kind === 'library' && left.kind !== 'library') return 1;
+    // Two documents of the library keep the order the hall lists them in: sorting is stable, and that order is the
+    // author's own. Two whispers read newest first, as the alcove does, with a whisper before the thinking beside it.
+    if (left.kind === 'library' && right.kind === 'library') return 0;
     return right.title.localeCompare(left.title) || left.kind.localeCompare(right.kind);
   });
-  return { hits, found, looked, problem: '' };
+  return {
+    hits,
+    found,
+    looked,
+    problem:
+      unread.length === 0
+        ? ''
+        : `Some of the library could not be read, and was not looked through: ${unread.join(', ')}.`,
+  };
 }

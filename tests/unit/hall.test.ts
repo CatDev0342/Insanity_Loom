@@ -186,3 +186,33 @@ describe('a hall of several alcoves', () => {
     expect(found.hits.map((hit) => hit.title).sort()).toEqual(['2026-09-14 1200 In the first', '2026-09-14 1300 In the second']);
   });
 });
+
+describe('a library that cannot be read is said to be unread', () => {
+  it('says which documents were missed, and keeps the hall’s own order for the rest', () => {
+    const folder = mkdtempSync(join(tmpdir(), 'insanity-loom-hall-'));
+    made.push(folder);
+    const library = join(folder, 'Library');
+    mkdirSync(library, { recursive: true });
+    writeFileSync(join(library, '40_DOCUMENT.md'), '# 40 Document\n\nA whisper is a file.\n');
+    writeFileSync(join(library, '10_VISION.md'), '# 10 Vision\n\nA whisper is the author’s own.\n');
+    const hall: GreatHall = {
+      name: 'A hall',
+      form: 'TOML',
+      trouble: [],
+      path: join(folder, 'A hall.greathall'),
+      alcoves: [folder],
+      library,
+      libraryName: 'Test Library',
+      documents: [
+        { address: '40', file: '40_DOCUMENT.md', title: 'The document' },
+        { address: '99', file: '99_GONE.md', title: 'Gone' },
+        { address: '10', file: '10_VISION.md', title: 'The vision' },
+      ],
+    };
+    const found = searchHall([folder], { ...PLAIN, looked: 'whisper', includeLibrary: true }, hall);
+    // Nothing found is one thing; not being able to look is another, and the author is told which.
+    expect(found.problem).toMatch(/99_GONE\.md/);
+    // And what was read keeps the order the hall lists it in, rather than an order of the program's own choosing.
+    expect(found.hits.map((hit) => hit.address)).toEqual(['40', '10']);
+  });
+});

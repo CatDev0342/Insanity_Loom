@@ -153,11 +153,15 @@ export class HallPanel {
       this.show([], problem instanceof Error ? problem.message : String(problem));
       return;
     }
-    if (found.problem !== '') {
+    // A search that could not be made at all says only what went wrong. A search that went through, but could not
+    // read part of what it was asked to read, shows what it found AND says what it missed: throwing away real
+    // results because one file of a library has moved would be the worse answer.
+    if (found.problem !== '' && found.hits.length === 0) {
       this.show([], found.problem);
       return;
     }
-    this.show(found.hits, HallPanel.describe(found, asked));
+    const said = HallPanel.describe(found, asked);
+    this.show(found.hits, found.problem === '' ? said : `${said} ${found.problem}`);
     if (found.hits.length > 0) this.results.focus();
   }
 
