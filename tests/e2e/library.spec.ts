@@ -17,6 +17,16 @@ test.afterEach(async () => {
   await application.close();
 });
 
+/**
+ * The addresses listed in the Library tab, in order. Asserted instead of a count: a list that holds the wrong thing
+ * then says what it holds, which a count cannot — this failed once on CI with two entries where one was expected,
+ * and nothing in the failure said which second address had appeared.
+ */
+async function citedAddresses(): Promise<readonly string[]> {
+  const entries = await page.locator('#library-pane .library-entry').allInnerTexts();
+  return entries.map((entry) => entry.split('\n')[0]?.trim() ?? '');
+}
+
 /** The stand-in assistant replies with what it was sent, so what the author writes is what the reply cites. */
 async function ask(text: string): Promise<void> {
   await page.locator('.whisper-editor').click();
@@ -60,10 +70,7 @@ test('keeps everything cited, turn after turn, and marks them on the bar between
   await expect(page.locator('.reply')).toHaveCount(2);
 
   // The list keeps what was cited in both turns, in the order cited.
-  const entries = page.locator('#library-pane .library-entry');
-  await expect(entries).toHaveCount(2);
-  await expect(entries.nth(0)).toContainText('40.6.2');
-  await expect(entries.nth(1)).toContainText('40.8');
+  await expect.poll(citedAddresses).toEqual(['40.6.2', '40.8']);
 
   // The bar between the panels carries a mark for each turn that cited something.
   await expect(page.locator('#reference-bar .reference-mark')).toHaveCount(2);
@@ -73,16 +80,14 @@ test('shows what this whisper cited, and what another whisper cited when it is o
   await page.getByRole('tab', { name: 'Library' }).click();
   await ask('The first whisper, about 40.6.2.');
   await expect(page.locator('.reply')).toHaveCount(1);
-  await expect(page.locator('#library-pane .library-entry')).toHaveCount(1);
+  await expect.poll(citedAddresses).toEqual(['40.6.2']);
 
   // Another whisper is another conversation: its own citations, and none of the last one's.
   await page.keyboard.press('Control+n');
-  await expect(page.locator('#library-pane .library-entry')).toHaveCount(0);
+  await expect.poll(citedAddresses).toEqual([]);
   await ask('The second whisper, about 40.8.');
   await expect(page.locator('.reply')).toHaveCount(1);
-  const entries = page.locator('#library-pane .library-entry');
-  await expect(entries).toHaveCount(1);
-  await expect(entries.first()).toContainText('40.8');
+  await expect.poll(citedAddresses).toEqual(['40.8']);
 });
 
 test('says so plainly when no GreatHall is open', async () => {
