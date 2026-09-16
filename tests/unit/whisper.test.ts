@@ -214,6 +214,17 @@ describe('turns that were never answered', () => {
     expect(w.unansweredTurns()).toHaveLength(0);
   });
 
+  it('counts a turn answered once it has been steered: the author overtook it themselves', () => {
+    const { whisper: w, sections } = whisper('<p>The thing I asked.</p>');
+    finishSection(w);
+    const replyId = w.placeReply(sections[0]?.sectionId ?? '');
+    w.setReplyState(replyId, 'steered');
+    // The reply holds no words because the author wrote their next turn over the top of it, and it was answered
+    // inside that one. Counted as unanswered, this turn went to the assistant a second time and came back at the
+    // author out of nowhere (the designer, 2026-Sep-16).
+    expect(w.unansweredTurns()).toHaveLength(0);
+  });
+
   it('leaves alone a reply the author stopped, and offers again one that ended in a problem', () => {
     const { whisper: w, sections } = whisper('<p>The thing I asked.</p>');
     finishSection(w);

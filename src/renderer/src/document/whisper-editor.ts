@@ -399,6 +399,11 @@ export class WhisperEditor {
    * the line closing it is followed by nothing, by a reply still waiting to be written, or by one that ended in a
    * problem. A reply the author **stopped** is not unanswered: they stopped it themselves, and being asked whether
    * they meant it is not help.
+   *
+   * Nor is a reply the author **steered**. It holds no words because the author overtook it with their own next
+   * turn, which is the whole point of steering — the turn was heard, and answered inside the one that followed it.
+   * Counted as unanswered, those turns were sent to the assistant a second time, and the designer watched two of
+   * their own lines come back at them out of nowhere (2026-Sep-16).
    */
   unansweredTurns(): readonly { readonly sectionId: string; readonly replyId: string; readonly markdown: string }[] {
     const found: { sectionId: string; replyId: string; markdown: string }[] = [];
@@ -411,7 +416,7 @@ export class WhisperEditor {
       const after = children[index + 1];
       const reply = after?.type.name === 'reply' ? after : undefined;
       const state = reply?.attrs['state'];
-      if (state === 'finished' || state === 'stopped') return;
+      if (state === 'finished' || state === 'stopped' || state === 'steered') return;
       const waiting = reply;
       const written = sectionContent(this.doc, sectionId);
       if (written === undefined) return;
