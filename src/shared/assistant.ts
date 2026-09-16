@@ -49,6 +49,8 @@ export type AssistantEvent =
   /** A conversation began or was resumed; what follows belongs to it. `replaying` is true while its history is replayed. */
   | { readonly type: 'conversation'; readonly id: string; readonly title: string; readonly replaying: boolean }
   | { readonly type: 'replayFinished' }
+  /** Whether this assistant can be steered — told once a connection has been made and the handshake read. */
+  | { readonly type: 'steering'; readonly supported: boolean }
   /** Text the author sent, as the assistant recorded it (seen while a resumed conversation's history is replayed). */
   | { readonly type: 'authorText'; readonly text: string }
   /**
@@ -88,6 +90,11 @@ export interface AssistantBridge {
   resumeConversation(id: string): Promise<void>;
   /** Sends one finished section of the author's writing. Resolves when the reply is finished. */
   send(text: string): Promise<void>;
+  /**
+   * Puts a turn into the reply already being written, rather than behind it. True when it went in; false when this
+   * assistant cannot be steered, or was not writing anything after all, and the turn must be sent the ordinary way.
+   */
+  steer(text: string): Promise<boolean>;
   /** Stops the reply being written. */
   stop(): Promise<void>;
   /**
@@ -149,6 +156,7 @@ export const ASSISTANT_CHANNELS = {
   start: 'insanity-loom:assistant-start',
   resume: 'insanity-loom:assistant-resume',
   send: 'insanity-loom:assistant-send',
+  steer: 'insanity-loom:assistant-steer',
   stop: 'insanity-loom:assistant-stop',
   answer: 'insanity-loom:assistant-answer',
   event: 'insanity-loom:assistant-event',

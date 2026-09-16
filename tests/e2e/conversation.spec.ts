@@ -91,6 +91,24 @@ test('Esc stops a reply being written, and it is marked as stopped', async () =>
   await expect(replies().first()).toHaveAttribute('data-state', 'stopped');
 });
 
+test('a turn written while the assistant is writing goes into that turn at once', async () => {
+  await whisper().click();
+  await page.keyboard.type('write something slow');
+  await page.keyboard.press('Control+Enter');
+  await expect(replies().first()).toContainText('still writing');
+
+  // Written while the reply is still coming: it is not queued behind it, it goes in (95.42).
+  await page.keyboard.type('actually, answer this instead');
+  await page.keyboard.press('Control+Enter');
+
+  // The reply it interrupted keeps what it had, and says where the steer went in.
+  await expect(replies().first()).toHaveAttribute('data-state', 'steered');
+  await expect(replies().first()).toContainText('still writing');
+  // The steered turn is a turn of its own, with its own reply, answered inside the turn already running.
+  await expect(replies()).toHaveCount(2);
+  await expect(replies().nth(1)).toContainText('Steered: actually, answer this instead');
+});
+
 test("the author's Ctrl+Z never takes back the assistant's reply", async () => {
   await finishSection('A question.');
   await expect(replies().first()).toHaveAttribute('data-state', 'finished');

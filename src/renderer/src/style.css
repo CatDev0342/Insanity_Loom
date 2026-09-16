@@ -829,11 +829,18 @@ body {
   content: 'The assistant is writing…' attr(data-waited);
 }
 
+.whisper-editor section.reply[data-state='steered']::after,
 .whisper-editor section.reply[data-state='stopped']::after,
 .whisper-editor section.reply[data-state='failed']::after {
   display: block;
   color: var(--ink-quiet);
   font-size: 0.8rem;
+}
+
+/* A reply the author wrote over the top of: they sent a turn while it was being written, and it went into that
+   turn (95.42). What the assistant had said by then is kept, and the mark says where the change of course went in. */
+.whisper-editor section.reply[data-state='steered']::after {
+  content: 'You steered here — what you wrote next went into this turn.';
 }
 
 .whisper-editor section.reply[data-state='stopped']::after {

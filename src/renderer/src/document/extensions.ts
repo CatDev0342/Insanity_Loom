@@ -20,7 +20,7 @@ import type { Node as ProseMirrorNode } from '@tiptap/pm/model';
 import { wordsSinceTheLastTurn } from './sections';
 
 /** How a reply stands. Only a finished (or stopped, or failed) reply may be edited by the author. */
-export type ReplyState = 'waiting' | 'writing' | 'finished' | 'stopped' | 'failed';
+export type ReplyState = 'waiting' | 'writing' | 'finished' | 'stopped' | 'failed' | 'steered';
 
 /** Marks a transaction as the assistant's: it may change a reply being written, and never enters the author's undo. */
 export const ASSISTANT_META = 'insanity-loom:assistant';

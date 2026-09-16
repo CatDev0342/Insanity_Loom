@@ -31,6 +31,7 @@ const bridge: InsanityLoomBridge = {
     startConversation: () => ipcRenderer.invoke(ASSISTANT_CHANNELS.start),
     resumeConversation: (id) => ipcRenderer.invoke(ASSISTANT_CHANNELS.resume, id),
     send: (text) => ipcRenderer.invoke(ASSISTANT_CHANNELS.send, text),
+    steer: (text) => ipcRenderer.invoke(ASSISTANT_CHANNELS.steer, text),
     stop: () => ipcRenderer.invoke(ASSISTANT_CHANNELS.stop),
     answerPermission: (requestId, choiceId) => ipcRenderer.invoke(ASSISTANT_CHANNELS.answer, requestId, choiceId),
     onEvent: (listener) => {

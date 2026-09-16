@@ -60,6 +60,10 @@ function startAgent() {
 
   let conversationNumber = 0;
   const cancelled = new Set();
+  /** The conversations with a turn being answered right now: only those can be steered. */
+  const turnsRunning = new Set();
+  /** The conversations a steered message has just gone into, so what was being written gives way to it. */
+  const steered = new Set();
 
   // The ways of working it offers, as Claude's adapter does: asking every time, or deciding by itself.
   const MODES = {
@@ -119,7 +123,21 @@ function startAgent() {
             authMethods: offersTerminal
               ? [{ id: 'fake-login', name: 'Fake Account', description: 'Sign in to the fake account', type: 'terminal', args: ['--login'] }]
               : [],
+            // Steering, as Claude's own adapter advertises it: a client may put a turn into the one already running.
+            // Told not to, it says nothing about it, which is how a client learns it must queue instead.
+            _meta: process.argv.includes('--no-steering') ? {} : { steering: { supported: true } },
           };
+        },
+        // The steering extension: the message goes into the turn already running, and is answered inside it.
+        extMethod: async (method, params) => {
+          if (method !== '_session/steering') throw new Error(`No such method: ${method}`);
+          const sessionId = params.sessionId;
+          const text = (params.prompt ?? []).map((block) => (block.type === 'text' ? block.text : '')).join('');
+          // Nothing is running: the host asked to be told so, rather than have a turn begun behind its back.
+          if (!turnsRunning.has(sessionId)) return { outcome: 'promptRequired', reason: 'noRunningTurn' };
+          steered.add(sessionId);
+          await say(sessionId, `Steered: ${text}`);
+          return { outcome: 'injected' };
         },
         authenticate: () => ({}),
         logout: async () => {
@@ -165,6 +183,17 @@ function startAgent() {
         },
         prompt: async ({ sessionId, prompt }) => {
           cancelled.delete(sessionId);
+          turnsRunning.add(sessionId);
+          try {
+            return await answerTheTurn(sessionId, prompt);
+          } finally {
+            turnsRunning.delete(sessionId);
+          }
+        },
+      };
+
+      /** What one turn is answered with. Kept apart so a turn can be known to be running while it is answered. */
+      async function answerTheTurn(sessionId, prompt) {
           const text = prompt.map((block) => (block.type === 'text' ? block.text : '')).join('');
 
           if (text.trim() === '/compact') {
@@ -244,6 +273,11 @@ function startAgent() {
           if (text.includes('slow')) {
             for (let piece = 0; piece < SLOW_PIECES_LIMIT; piece++) {
               if (cancelled.has(sessionId)) return { stopReason: 'cancelled' };
+              // A steered turn pre-empts what was being written, as the real adapter's `now` priority does.
+              if (steered.has(sessionId)) {
+                steered.delete(sessionId);
+                return { stopReason: 'end_turn' };
+              }
               await say(sessionId, 'still writing… ');
               await wait(PIECE_INTERVAL_MS);
             }
@@ -260,8 +294,7 @@ function startAgent() {
           contextUsed = Math.min(CONTEXT_SIZE, contextUsed + CONTEXT_PER_TURN);
           await reportContext(sessionId);
           return { stopReason: 'end_turn' };
-        },
-      };
+      }
     },
     stream,
   );

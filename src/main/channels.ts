@@ -177,6 +177,9 @@ export function startServices(dataFolder: string, logsFolder: string, journal: J
   ipcMain.handle(ASSISTANT_CHANNELS.send, (_event, section: unknown) =>
     assistant.send(text(section, 'section of writing', MAXIMUM_SECTION_LENGTH)),
   );
+  ipcMain.handle(ASSISTANT_CHANNELS.steer, (_event, section: unknown) =>
+    assistant.steer(text(section, 'section of writing', MAXIMUM_SECTION_LENGTH)),
+  );
   ipcMain.handle(ASSISTANT_CHANNELS.stop, () => assistant.stop());
   ipcMain.handle(ASSISTANT_CHANNELS.answer, (_event, requestId: unknown, choiceId: unknown) =>
     assistant.answerPermission(

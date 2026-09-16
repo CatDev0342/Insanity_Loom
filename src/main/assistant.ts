@@ -147,6 +147,8 @@ interface OpenHost {
   /** The ways the assistant offers to sign in. */
   readonly signInMethods: readonly acp.AuthMethod[];
   readonly canSignOut: boolean;
+  /** Whether a turn may be put into the reply already being written (the ACP steering extension). */
+  readonly canSteer: boolean;
   /** Rejects, with the reason in words, when the host stops or fails; it never resolves. */
   readonly lost: Promise<never>;
 }
@@ -223,6 +225,7 @@ async function openHost(
       agentTitle: greeting.agentInfo?.title ?? greeting.agentInfo?.name ?? 'the assistant',
       signInMethods: greeting.authMethods ?? [],
       canSignOut: greeting.agentCapabilities?.auth?.logout !== undefined && greeting.agentCapabilities.auth.logout !== null,
+      canSteer: saysItCanBeSteered(greeting),
     };
   } catch (cause) {
     await stopHost(host);
@@ -230,6 +233,28 @@ async function openHost(
   } finally {
     clearTimeout(timer);
   }
+}
+
+/**
+ * The request a client makes to put a message into the turn already running, rather than behind it — the ACP
+ * steering extension. An assistant that has it says so in the handshake, under `_meta.steering.supported`.
+ *
+ * `idleBehavior: 'promptRequired'` asks the assistant NOT to start a turn of its own when nothing is running: it
+ * answers `promptRequired` instead and the message stays ours, to be sent the ordinary way. Insanity_Loom keeps its
+ * own queue of unanswered turns, and a turn started behind its back would not be in it.
+ */
+const STEER_METHOD = '_session/steering';
+const STEER_WHEN_IDLE = { steering: { idleBehavior: 'promptRequired' } };
+
+/** What the assistant answers a steer with: it went into the running turn, or there was no turn to put it in. */
+const STEER_WENT_IN: ReadonlySet<unknown> = new Set(['injected', 'startedNewTurn']);
+
+/** Whether the handshake says this assistant can be steered. */
+function saysItCanBeSteered(greeting: acp.InitializeResponse): boolean {
+  const meta = greeting._meta;
+  if (typeof meta !== 'object' || meta === null) return false;
+  const steering = (meta as { steering?: unknown }).steering;
+  return typeof steering === 'object' && steering !== null && (steering as { supported?: unknown }).supported === true;
 }
 
 /** What Claude Code calls the command that makes room in its context window. */
@@ -322,6 +347,8 @@ export class Assistant {
     });
 
     this.status('connected', `Connected to ${opened.agentTitle} ${place}.`);
+    // Whether a turn written while the assistant is writing goes in at once or waits its turn (95.42).
+    this.emit({ type: 'steering', supported: opened.canSteer });
     try {
       const last = this.journal.loadConversationId();
       if (last === undefined) await this.startConversation();
@@ -712,6 +739,28 @@ export class Assistant {
       this.awaiting = undefined;
       this.watchdog.idle();
     }
+  }
+
+  /**
+   * Puts a turn into the reply already being written.
+   *
+   * The ordinary way to send is one turn, one reply, one after another: a turn written while the assistant is
+   * writing waits for it to finish. Steering is the other way — the words go into the turn already running, and the
+   * assistant answers them at once, which is what the author means by writing while it writes.
+   *
+   * Answers true when the turn went in. False means it must be sent the ordinary way: this assistant cannot be
+   * steered, or it turned out to be writing nothing, in which case there was no turn to put anything into.
+   */
+  async steer(text: string): Promise<boolean> {
+    const { connection, conversationId } = this.requireConversation();
+    if (this.open?.canSteer !== true) return false;
+    const answer = await connection.extMethod(STEER_METHOD, {
+      sessionId: conversationId,
+      prompt: [{ type: 'text', text }],
+      _meta: STEER_WHEN_IDLE,
+    });
+    // A steered turn is answered inside the turn already being watched, so nothing new is waited for here.
+    return STEER_WENT_IN.has(answer['outcome']);
   }
 
   /**

@@ -133,6 +133,10 @@ export class Loom {
   /** The reply being written: its own identity, what has arrived, and which message the last piece belonged to. */
   private writing: ({ replyId: string; sent: string; tries: number; unasked: boolean } & ReplyBeingWritten) | undefined;
   private renderScheduled = false;
+  /** Whether this assistant takes a turn into the reply it is writing, rather than only behind it (95.42). */
+  private canSteer = false;
+  /** True while a steer is being asked for, so one turn is not steered in twice. */
+  private steering = false;
   /** When the reply being written was asked for, and the timer that keeps saying how long it has been. */
   private writingSince = 0;
   private writingTimer: ReturnType<typeof setInterval> | undefined;
@@ -725,8 +729,20 @@ export class Loom {
     this.sendNext();
   }
 
+  /**
+   * Sends what is waiting — into the reply being written when the assistant can be steered, otherwise after it.
+   *
+   * Steering is what the author means by writing while the assistant writes: the words go into the turn already
+   * running and are answered at once, rather than sitting in a queue that looks, from the author's side, exactly
+   * like being ignored (95.42). The turn is a turn like any other — its own number, its own time, its own reply —
+   * and the reply it interrupted keeps what it had, marked where the steer went in.
+   */
   private sendNext(): void {
-    if (this.writing !== undefined || this.state !== 'connected' || this.replay !== undefined) return;
+    if (this.state !== 'connected' || this.replay !== undefined) return;
+    if (this.writing !== undefined) {
+      void this.steerNext();
+      return;
+    }
     const next = this.waiting.shift();
     if (next === undefined) return;
     this.writingSince = next.since;
@@ -738,6 +754,43 @@ export class Loom {
       this.showProblem(problem instanceof Error ? problem.message : String(problem));
       this.endWriting('failed');
     });
+  }
+
+  /**
+   * Puts the next waiting turn into the reply being written, when this assistant can be steered.
+   *
+   * The reply being written is closed where it stands — what the assistant had said by then is the author's to keep
+   * reading — and the steered turn's own reply becomes the one being written, so what comes back lands under the
+   * turn that asked for it.
+   */
+  private async steerNext(): Promise<void> {
+    if (!this.canSteer || this.steering) return;
+    const writing = this.writing;
+    if (writing === undefined || this.waiting.length === 0) return;
+    const next = this.waiting[0];
+    if (next === undefined) return;
+    this.steering = true;
+    try {
+      const wentIn = await this.assistant.steer(next.markdown);
+      // It could not be steered after all — the turn stays where it is, and goes when this reply is done.
+      if (!wentIn) return;
+      if (this.writing !== writing) return;
+      this.waiting.shift();
+      this.withoutMovingTheWriting(() => {
+        const editor = this.requireEditor();
+        if (writing.markdown === '') editor.setReplyState(writing.replyId, 'steered');
+        else editor.setReply(writing.replyId, writing.markdown, 'steered');
+        editor.setReplyState(next.replyId, 'writing');
+      });
+      this.writing = { replyId: next.replyId, sent: next.markdown, tries: next.tries + 1, unasked: false, ...NOTHING_YET };
+      this.writingSince = next.since;
+      this.startSayingHowLong();
+      this.saveNow();
+    } catch (problem) {
+      this.showProblem(problem instanceof Error ? problem.message : String(problem));
+    } finally {
+      this.steering = false;
+    }
   }
 
   /** Redraws the reply being written at most once per frame, however fast its text arrives. */
@@ -894,6 +947,10 @@ export class Loom {
         return;
       case 'conversation':
         this.onConversation(event.id, event.replaying);
+        return;
+      case 'steering':
+        // Whether a turn written while the assistant is writing goes into that turn, or waits behind it (95.42).
+        this.canSteer = event.supported;
         return;
       case 'replayFinished':
         this.flushReplay();

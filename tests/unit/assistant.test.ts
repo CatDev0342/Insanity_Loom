@@ -285,3 +285,37 @@ const LONG_ENOUGH_FOR_A_QUIET_HOST_MS = 40_000;
 /** Three rounds of the same silence: quiet, check, connect again, and again, until it is left to the author. */
 const GIVING_UP_MS = 45_000;
 const LONG_ENOUGH_TO_GIVE_UP_MS = 120_000;
+
+describe('a turn written while the assistant is writing', () => {
+  it('goes into the turn already running, and is answered inside it', async () => {
+    const { assistant, events } = start();
+    await assistant.connect();
+    // The assistant says so in its handshake; a client that is not told does not try.
+    expect(events).toContainEqual({ type: 'steering', supported: true });
+
+    const slow = assistant.send('write something slow');
+    await new Promise((resolve) => setTimeout(resolve, ENOUGH_TO_BEGIN_MS));
+    expect(await assistant.steer('actually, do this instead')).toBe(true);
+    await slow;
+
+    // Answered inside the running turn, rather than after it.
+    expect(replyText(events)).toContain('Steered: actually, do this instead');
+  });
+
+  it('says so plainly when there is no turn to steer, so the turn is sent the ordinary way', async () => {
+    const { assistant } = start();
+    await assistant.connect();
+    // Nothing is running: the assistant is asked not to begin a turn behind the program's back, and does not.
+    expect(await assistant.steer('nothing is running')).toBe(false);
+  });
+
+  it('does not try to steer an assistant that does not offer it', async () => {
+    const { assistant, events } = start([process.execPath, FAKE_ASSISTANT, '--no-steering']);
+    await assistant.connect();
+    expect(events).toContainEqual({ type: 'steering', supported: false });
+    expect(await assistant.steer('this must wait its turn')).toBe(false);
+  });
+});
+
+/** Long enough for a slow reply to have begun writing, so there is a turn running to steer. */
+const ENOUGH_TO_BEGIN_MS = 300;
